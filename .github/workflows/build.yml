@@ -1,0 +1,114 @@
+name: Build MiuiserPeruser
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-java-helper:
+    runs-on: ubuntu-latest
+    outputs:
+      dex-hash: ${{ steps.hash.outputs.hash }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Download Shizuku API
+        run: |
+          wget https://repo1.maven.org/maven2/dev/rikka/shizuku/api/13.1.5/api-13.1.5.aar
+          unzip api-13.1.5.aar -d shizuku-temp
+          cp shizuku-temp/classes.jar shizuku-api.jar
+          rm -rf shizuku-temp
+
+      - name: Compile Java helper
+        run: |
+          javac -cp shizuku-api.jar -d . java-helper/src/main/java/ShizukuHelper.java
+          jar cf shizuku-helper.jar *.class
+
+      - name: Convert to DEX
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+      - run: |
+          d8 --lib $ANDROID_HOME/platforms/android-35/android.jar --output . shizuku-helper.jar
+          mv classes.dex shizuku-helper.dex
+
+      - name: Upload DEX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shizuku-helper
+          path: shizuku-helper.dex
+
+      - name: Compute hash for cache
+        id: hash
+        run: echo "hash=$(sha256sum shizuku-helper.dex | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+  build-daemon:
+    needs: build-java-helper
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [aarch64, arm, i686, x86_64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download DEX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: shizuku-helper
+          path: src/daemon/
+
+      - name: Set up NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r27
+
+      - name: Build for ${{ matrix.arch }}
+        run: |
+          mkdir -p build-${{ matrix.arch }}
+          cd build-${{ matrix.arch }}
+          cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+                -DANDROID_ABI=${{ matrix.arch == 'aarch64' && 'arm64-v8a' || matrix.arch == 'arm' && 'armeabi-v7a' || matrix.arch == 'i686' && 'x86' || 'x86_64' }} \
+                -DANDROID_PLATFORM=android-24 ..
+          make
+
+      - name: Package for ${{ matrix.arch }}
+        run: |
+          mkdir -p package-${{ matrix.arch }}/lib/miuiserperuser
+          cp build-${{ matrix.arch }}/src/daemon/miuiserperuser-daemon package-${{ matrix.arch }}/
+          cp src/daemon/shizuku-helper.dex package-${{ matrix.arch }}/lib/miuiserperuser/
+          cp tools/miuiserperuser package-${{ matrix.arch }}/
+          cp tools/miuiserperuser-client package-${{ matrix.arch }}/
+          cd package-${{ matrix.arch }}
+          tar czf ../miuiserperuser-${{ matrix.arch }}.tar.gz *
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: miuiserperuser-${{ matrix.arch }}
+          path: miuiserperuser-${{ matrix.arch }}.tar.gz
+
+  create-release:
+    needs: build-daemon
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download all packages
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.tar.gz
+          token: ${{ secrets.GITHUB_TOKEN }}
