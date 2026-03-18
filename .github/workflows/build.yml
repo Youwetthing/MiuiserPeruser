@@ -9,8 +9,6 @@ on:
 jobs:
   build-java-helper:
     runs-on: ubuntu-latest
-    outputs:
-      dex-hash: ${{ steps.hash.outputs.hash }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -23,8 +21,10 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: 11076708
+
+      - name: Install Android platform 35
+        run: |
+          sdkmanager "platforms;android-35"
 
       - name: Download Shizuku API
         run: |
@@ -48,10 +48,6 @@ jobs:
         with:
           name: shizuku-helper
           path: shizuku-helper.dex
-
-      - name: Compute hash for cache
-        id: hash
-        run: echo "hash=$(sha256sum shizuku-helper.dex | cut -d' ' -f1)" >> $GITHUB_OUTPUT
 
   build-daemon:
     needs: build-java-helper
@@ -110,6 +106,10 @@ jobs:
           path: artifacts
 
       - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.tar.gz
+          token: ${{ secrets.GITHUB_TOKEN }}
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/**/*.tar.gz
