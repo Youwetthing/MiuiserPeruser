@@ -31,3 +31,6 @@ target_link_libraries(sensei_core
     PRIVATE
         crypto
 )
+
+# Ensure a single canonical C logger implementation is built into core
+target_sources(sensei_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/fugitoid_log_impl.c ${CMAKE_CURRENT_SOURCE_DIR}/resource_snapshot.c)
