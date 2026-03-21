@@ -1,6 +1,8 @@
 #include "daemon_common.h"
 /* put shared helpers here if needed; keep minimal for now */
 #include <stdio.h>
+__attribute__((weak))
+__attribute__((weak))
 const char *device_get_property(const char *key) {
     (void)key;
     return "";

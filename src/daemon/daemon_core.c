@@ -1,5 +1,8 @@
 #include "fugitoid_log.h"
-#include "fugitoid_log.h"
+/* Single static prototype for heartbeat handler */
+static void handle_rocksteady_heartbeat(const char *line);
+
+/* Forward declarations for handlers used below */
 /*
  * MiuiserPeruser – Daemon core implementation with rish pipe
  */
@@ -23,33 +26,6 @@ static volatile bool g_running = false;
 static bool g_console_mode = false;
 
 /* Logging function – writes to file and optionally console */
-static void fugitoid_log(const char *level, const char *format, ...) {
-    va_list args;
-    va_start(args, format);
-
-    time_t now;
-    time(&now);
-    struct tm *tm = localtime(&now);
-    char timestamp[32];
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", tm);
-
-    FILE *log = fopen("/data/data/com.termux/files/home/miuiserperuser.log", "a");
-    if (log) {
-        fprintf(log, "[%s] [%s] ", timestamp, level);
-        vfprintf(log, format, args);
-        fprintf(log, "\n");
-        fclose(log);
-    }
-
-    if (g_console_mode) {
-        printf("[%s] [%s] ", timestamp, level);
-        vprintf(format, args);
-        printf("\n");
-    }
-
-    va_end(args);
-}
-
 static void handle_detection(const SENSEI_DETECTION *det, void *user_data) {
     (void)user_data;
     fugitoid_log("ALERT", "[%s] %s (score %u)",
@@ -141,33 +117,20 @@ int miuiserperuser_main_loop(bool console_mode) {
     return 0;
 }
 
-// ------------------------------------------------------------
-// Splinter Listener: Rocksteady Heartbeat
-// ------------------------------------------------------------
-static void handle_rocksteady_heartbeat(const char *line) {
-    if (strstr(line, "rocksteady_heartbeat")) {
-        fugitoid_log("INFO", "[SPLINTER] Rocksteady heartbeat received");
-        // TODO: Update dashboard state here
-    }
-}
-
-
-    // Rocksteady heartbeat detection
-    handle_rocksteady_heartbeat(line);
-
-
-// TODO: Mark Rocksteady as online in dashboard state
-// dashboard_set_worker_online("rocksteady");
-
-
+// // ------------------------------------------------------------
+// // Splinter Listener: Rocksteady Heartbeat
+// // ------------------------------------------------------------
+//         // TODO: Update dashboard state here
+// 
+// 
+//     // Rocksteady heartbeat detection
+//     handle_rocksteady_heartbeat(line);
+// 
+// 
+// // TODO: Mark Rocksteady as online in dashboard state
+// // dashboard_set_worker_online("rocksteady");
+// 
+// 
+// // Forward declaration for heartbeat handler
 // Forward declaration for heartbeat handler
-static void handle_rocksteady_heartbeat(const char *line);
-
-
-// Forward declaration for heartbeat handler
-static void handle_rocksteady_heartbeat(const char *line);
-
-
 // Forward declaration
-static void handle_rocksteady_heartbeat(const char *line);
-

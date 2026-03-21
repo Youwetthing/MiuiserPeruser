@@ -36,3 +36,17 @@ void fugitoid_log_json(const char *level, const char *domain, const char *compon
           ts, esc_level, esc_domain, esc_component, esc_event, esc_cid, esc_msg, meta);
   fflush(stderr);
 }
+/* Compatibility wrapper for legacy fugitoid_log calls.
+   Forwards formatted text into the structured fugitoid_log_json API. */
+#include <stdarg.h>
+#include <stdio.h>
+
+void fugitoid_log(const char *level, const char *fmt, ...) {
+    char buf[1024];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    /* Use UNKNOWN domain/component/event for legacy calls; meta empty. */
+    fugitoid_log_json(level, "unknown", "legacy", "log", "", buf, "{}");
+}
