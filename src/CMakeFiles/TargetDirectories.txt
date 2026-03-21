@@ -1,0 +1,4 @@
+/data/data/com.termux/files/home/MiuiserPeruser/src/CMakeFiles/thermald.dir
+/data/data/com.termux/files/home/MiuiserPeruser/src/CMakeFiles/storaged.dir
+/data/data/com.termux/files/home/MiuiserPeruser/src/CMakeFiles/edit_cache.dir
+/data/data/com.termux/files/home/MiuiserPeruser/src/CMakeFiles/rebuild_cache.dir

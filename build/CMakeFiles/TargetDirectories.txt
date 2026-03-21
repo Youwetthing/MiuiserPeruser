@@ -1,0 +1,9 @@
+/data/data/com.termux/files/home/MiuiserPeruser/build/CMakeFiles/edit_cache.dir
+/data/data/com.termux/files/home/MiuiserPeruser/build/CMakeFiles/rebuild_cache.dir
+/data/data/com.termux/files/home/MiuiserPeruser/build/src/core/CMakeFiles/sensei_core.dir
+/data/data/com.termux/files/home/MiuiserPeruser/build/src/core/CMakeFiles/edit_cache.dir
+/data/data/com.termux/files/home/MiuiserPeruser/build/src/core/CMakeFiles/rebuild_cache.dir
+/data/data/com.termux/files/home/MiuiserPeruser/build/src/daemon/CMakeFiles/daemon_common.dir
+/data/data/com.termux/files/home/MiuiserPeruser/build/src/daemon/CMakeFiles/burne.dir
+/data/data/com.termux/files/home/MiuiserPeruser/build/src/daemon/CMakeFiles/edit_cache.dir
+/data/data/com.termux/files/home/MiuiserPeruser/build/src/daemon/CMakeFiles/rebuild_cache.dir

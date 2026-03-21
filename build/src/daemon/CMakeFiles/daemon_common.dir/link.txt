@@ -1,0 +1,2 @@
+/data/data/com.termux/files/usr/bin/llvm-ar qc libdaemon_common.a CMakeFiles/daemon_common.dir/daemon_common.c.o CMakeFiles/daemon_common.dir/stubs.c.o CMakeFiles/daemon_common.dir/miui_xiaomi.c.o
+/data/data/com.termux/files/usr/bin/llvm-ranlib libdaemon_common.a
