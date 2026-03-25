@@ -1,0 +1,20 @@
+# Build artifacts
+/build/
+/cmake-build-*/
+/CMakeFiles/
+CMakeCache.txt
+Makefile
+cmake_install.cmake
+
+# Logs
+*.log
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Binaries
+*.out
+*.exe

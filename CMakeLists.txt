@@ -1,6 +1,20 @@
 cmake_minimum_required(VERSION 3.10)
 project(MiuiserPeruser C)
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
+option(ENABLE_SUPERHERO "Build Superhero Mode scanner" ON)
+
+include_directories(
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+add_subdirectory(src)
+
+cmake_minimum_required(VERSION 3.10)
+project(MiuiserPeruser C)
+
 set(CMAKE_C_STANDARD 99)
 
 # Global include path so all modules see core headers
