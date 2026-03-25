@@ -1,87 +1,95 @@
-#include "fugitoid_log.h"
-
-
-/*
- * bebopd – monitors wake locks and alarms (Bebop style) – DEBUG VERSION
- */
-
-#include "krang.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <time.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <fcntl.h>
 
-#define LOG_FILE "/data/data/com.termux/files/home/miuiserperuser.log"
+#define SOCK_PATH "/data/data/com.termux/files/home/tmp/turtlecom.sock"
+#define BUF_SIZE 2048
 
+static int connect_to_turtlecom(void) {
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) { perror("socket"); exit(1); }
 
-/* Check kernel wake locks (active locks) */
-static void check_wake_locks(void) {
-    printf("[DEBUG] check_wake_locks started\n");
-    char *resp = krang_send_command("cat /sys/power/wake_lock");
-    if (!resp) {
-        fugitoid_log("WARN", "krang_send_command failed for wake_lock");
-        return;
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, SOCK_PATH);
+
+    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("connect");
+        close(fd);
+        exit(1);
     }
-    printf("[DEBUG] krang_send_command returned: %s\n", resp);
-    if (strlen(resp) > 0 && strcmp(resp, "ERROR") != 0 && resp[0] != '\0') {
-        char buf[256];
-        snprintf(buf, sizeof(buf), "Bebop sniffs active wake locks: %s", resp);
-        fugitoid_log("INFO", buf);
-    }
-    free(resp);
-    printf("[DEBUG] check_wake_locks finished\n");
+
+    fcntl(fd, F_SETFL, O_NONBLOCK);
+    return fd;
 }
 
-/* Check alarm stats (top offenders) */
-static void check_alarms(void) {
-    printf("[DEBUG] check_alarms started\n");
-    char *resp = krang_send_command("dumpsys alarm | grep -E 'package:|Alarm Stats' | head -5");
-    if (!resp) {
-        fugitoid_log("WARN", "krang_send_command failed for alarms");
-        return;
+static char* run_cmd(const char *cmd) {
+    FILE *f = popen(cmd, "r");
+    if (!f) return NULL;
+
+    char *buf = malloc(1024);
+    if (!buf) { pclose(f); return NULL; }
+
+    if (!fgets(buf, 1024, f)) {
+        free(buf);
+        pclose(f);
+        return NULL;
     }
-    printf("[DEBUG] check_alarms got response\n");
-    if (strlen(resp) > 0) {
-        fugitoid_log("INFO", "Bebop senses alarm activity – check log for details");
-    }
-    free(resp);
-    printf("[DEBUG] check_alarms finished\n");
+
+    buf[strcspn(buf, "\n")] = 0;
+    pclose(f);
+    return buf;
 }
 
-/* Check partial wake locks from batterystats */
-static void check_batterystats_wakelocks(void) {
-    printf("[DEBUG] check_batterystats_wakelocks started\n");
-    char *resp = krang_send_command("dumpsys batterystats | grep -E 'Wake lock|Partial wake lock' | head -5");
-    if (!resp) return;
-    printf("[DEBUG] check_batterystats_wakelocks got response\n");
-    if (strlen(resp) > 0) {
-        fugitoid_log("INFO", "Bebop detects partial wake locks – possible battery drain");
+static int count_lines(const char *cmd) {
+    FILE *f = popen(cmd, "r");
+    if (!f) return -1;
+
+    int c, lines = 0;
+    while ((c = fgetc(f)) != EOF) {
+        if (c == '\n') lines++;
     }
-    free(resp);
-    printf("[DEBUG] check_batterystats_wakelocks finished\n");
+    pclose(f);
+    return lines;
 }
 
-int main() {
-    printf("[DEBUG] Bebop main started\n");
-    fugitoid_log("INFO", "Bebop reporting for duty...");
-    printf("[DEBUG] about to krang_connect\n");
-    if (krang_connect() < 0) {
-        fugitoid_log("ERROR", "Bebop can't reach Krang – is the sewer open?");
-        printf("[DEBUG] krang_connect failed\n");
-        return 1;
-    }
-    printf("[DEBUG] krang_connect succeeded\n");
-    fugitoid_log("INFO", "Bebop connected to Krang.");
+int main(void) {
+    int fd = connect_to_turtlecom();
+    char out[BUF_SIZE];
 
-    while (1) {
-        printf("[DEBUG] main loop iteration\n");
-        check_wake_locks();
-        check_alarms();
-        check_batterystats_wakelocks();
+    printf("bebopd (Bebop Wakelock Daemon): ONLINE\n");
+    write(fd, "HELLO WORKER BEBOP\n", 20);
+
+    for (;;) {
+        /* Try to get a “top” wakelock-ish line from batterystats */
+        char *top = run_cmd(
+            "dumpsys batterystats 2>/dev/null | grep -i \"wake lock\" | head -n 1"
+        );
+
+        /* Rough count of wakelock-related lines */
+        int total = count_lines(
+            "dumpsys batterystats 2>/dev/null | grep -i \"wake lock\""
+        );
+
+        if (total < 0) total = 0;
+
+        snprintf(out, sizeof(out),
+                 "STATUS BEBOP "
+                 "WAKELOCK_LINES=%d "
+                 "TOP=\"%s\"\n",
+                 total,
+                 top ? top : "unavailable");
+
+        write(fd, out, strlen(out));
+
+        free(top);
         sleep(60);
     }
 
-    krang_disconnect();
     return 0;
 }

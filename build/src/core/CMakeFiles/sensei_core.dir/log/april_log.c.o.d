@@ -13,7 +13,6 @@ src/core/CMakeFiles/sensei_core.dir/log/april_log.c.o: \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_size_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_wchar_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_null.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_max_align_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_offsetof.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/stdint.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/stdint.h \

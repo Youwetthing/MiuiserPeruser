@@ -4,7 +4,7 @@
 # compile C with /data/data/com.termux/files/usr/bin/cc
 C_DEFINES = 
 
-C_INCLUDES = -I/data/data/com.termux/files/home/MiuiserPeruser/src/core/include -I/data/data/com.termux/files/home/MiuiserPeruser/src/core -I/data/data/com.termux/files/home/MiuiserPeruser/src/daemon
+C_INCLUDES = -I/data/data/com.termux/files/home/MiuiserPeruser/src/core/include -I/data/data/com.termux/files/home/MiuiserPeruser/src/core
 
-C_FLAGS = -O2 -g -DNDEBUG -std=gnu11
+C_FLAGS = -O2 -g -DNDEBUG -std=gnu99
 

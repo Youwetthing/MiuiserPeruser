@@ -1,0 +1,1 @@
+/data/data/com.termux/files/usr/bin/cc -O2 -g -DNDEBUG -Xlinker --dependency-file=CMakeFiles/shredderd.dir/link.d CMakeFiles/shredderd.dir/shredderd.c.o -o shredderd  ../core/libsensei_core.a libkrang.a ../core/libsensei_core.a /data/data/com.termux/files/usr/lib/libcrypto.so

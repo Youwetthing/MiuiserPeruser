@@ -1,91 +1,112 @@
-#include "fugitoid_log.h"
-#include "fugitoid_log.h"
-#include "krang.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
+#include <stdint.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <arpa/inet.h>
 
-#define SEWER_SOCKET "/data/data/com.termux/files/usr/tmp/miuiserperuser_sewer.sock"
+#include "krang.h"
+#include "ipc_globals.h"  // for SEWER_SOCKET
 
-static ssize_t read_full(int fd, void *buf, size_t len) {
+/* Path to the UNIX socket Krang talks to (Turtle Power sewer) */
+#define KRANG_SOCKET_PATH SEWER_SOCKET
+
+static ssize_t write_full(int fd, const void *buf, size_t len)
+{
     size_t off = 0;
     while (off < len) {
-        ssize_t n = read(fd, (char*)buf + off, len - off);
-        if (n <= 0) return n;
-        off += n;
+        ssize_t n = write(fd, (const char *)buf + off, len - off);
+        if (n <= 0) {
+            return -1;
+        }
+        off += (size_t)n;
     }
-    return off;
+    return (ssize_t)off;
 }
 
-static ssize_t write_full(int fd, const void *buf, size_t len) {
+static ssize_t read_full(int fd, void *buf, size_t len)
+{
     size_t off = 0;
     while (off < len) {
-        ssize_t n = write(fd, (const char*)buf + off, len - off);
-        if (n <= 0) return n;
-        off += n;
+        ssize_t n = read(fd, (char *)buf + off, len - off);
+        if (n <= 0) {
+            return -1;
+        }
+        off += (size_t)n;
     }
-    return off;
+    return (ssize_t)off;
 }
 
-int krang_connect(void) {
-    return 0; // one-shot mode
-}
-
-char* krang_send_command(const char* cmd) {
+/* Connect to Krang's UNIX socket (Turtle Power sewer) */
+int krang_connect(void)
+{
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return strdup("ERROR: socket failed");
+    if (fd < 0) {
+        fprintf(stderr, "KRANG: socket() failed errno=%d\n", errno);
+        return -1;
+    }
 
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, SEWER_SOCKET, sizeof(addr.sun_path)-1);
+    strncpy(addr.sun_path, KRANG_SOCKET_PATH, sizeof(addr.sun_path) - 1);
 
-    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        fprintf(stderr, "KRANG: connect() failed errno=%d\n", errno);
         close(fd);
-        return strdup("ERROR: connect failed");
+        return -1;
     }
 
-    uint32_t cmd_len = strlen(cmd);
+    return fd;
+}
+
+char *krang_send_command(const char *cmd)
+{
+    if (!cmd) {
+        return NULL;
+    }
+
+    int fd = krang_connect();
+    if (fd < 0) {
+        return NULL;
+    }
+
+    uint32_t cmd_len = (uint32_t)strlen(cmd);
     uint32_t net_cmd_len = htonl(cmd_len);
 
-    fprintf(stderr, "[krang] sending '%s' (%u bytes)\n", cmd, cmd_len);
-    if (write_full(fd, &net_cmd_len, sizeof(net_cmd_len)) <= 0 ||
-        write_full(fd, cmd, cmd_len) <= 0) {
+    if (write_full(fd, &net_cmd_len, sizeof(net_cmd_len)) <= 0) {
         close(fd);
-        return strdup("ERROR: write failed");
+        return NULL;
     }
 
-    uint32_t net_resp_len;
+    if (write_full(fd, cmd, cmd_len) <= 0) {
+        close(fd);
+        return NULL;
+    }
+
+    uint32_t net_resp_len = 0;
     if (read_full(fd, &net_resp_len, sizeof(net_resp_len)) <= 0) {
         close(fd);
-        return strdup("ERROR: read length failed");
-    }
-    uint32_t resp_len = ntohl(net_resp_len);
-    if (resp_len == 0 || resp_len > 1024*1024) {
-        close(fd);
-        return strdup("ERROR: invalid response length");
+        return NULL;
     }
 
-    char *resp = malloc(resp_len + 1);
+    uint32_t resp_len = ntohl(net_resp_len);
+    char *resp = malloc((size_t)resp_len + 1);
     if (!resp) {
         close(fd);
-        return strdup("ERROR: malloc failed");
+        return NULL;
     }
+
     if (read_full(fd, resp, resp_len) <= 0) {
         free(resp);
         close(fd);
-        return strdup("ERROR: read response failed");
+        return NULL;
     }
+
     resp[resp_len] = '\0';
     close(fd);
-    fprintf(stderr, "[krang] received %u bytes\n", resp_len);
     return resp;
-}
-
-void krang_disconnect(void) {
-    // no-op
 }

@@ -1,44 +1,45 @@
-# src/daemon/CMakeLists.txt — wired for miuiserperuser build
+# TMNT DAEMON BUILD SYSTEM — CLEAN, SPLINTER‑FREE EDITION
 
-# --- Self-healing guard: required sources must exist ---
-set(REQUIRED_DAEMON_SRCS
-    daemon_common.c
-    service.c
-    rish_pipe.c
-)
-
-foreach(f ${REQUIRED_DAEMON_SRCS})
-    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${f}")
-        message(FATAL_ERROR "Required daemon source missing: ${f}. Build halted.")
-    endif()
-endforeach()
-
-# Sources for the main miuiserperuser daemon
-set(MIUISERPERUSER_SRCS
-    main.c
-    daemon_core.c
+# IPC Library (Krang)
+add_library(krang STATIC
     ipc.c
-
-    # Provides miuiserperuser_service_start()
-    service.c
-
-    # Provides rish_pipe_start/stop/command()
-    rish_pipe.c
+    krang.c
 )
 
-# Build daemon_common as a static library
-add_library(daemon_common STATIC
-    daemon_common.c
-)
+target_include_directories(krang PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(krang PUBLIC sensei_core)
 
-# Build the executable
-add_executable(miuiserperuser ${MIUISERPERUSER_SRCS})
+# ----------------------------
+# TMNT DAEMONS
+# ----------------------------
+add_executable(splinterd splinterd.c)
+target_link_libraries(splinterd krang)
 
-# Link against core libraries
-target_link_libraries(miuiserperuser
-    PRIVATE
-        sensei_core
-        daemon_common
-        pthread
-        dl
-)
+add_executable(metalhead metalhead.c)
+target_link_libraries(metalhead PRIVATE sensei_core krang)
+
+add_executable(leatherheadd leatherheadd.c)
+target_link_libraries(leatherheadd PRIVATE sensei_core krang)
+
+add_executable(bebopd bebopd.c)
+target_link_libraries(bebopd PRIVATE sensei_core krang)
+
+add_executable(rocksteadyd rocksteadyd.c)
+target_link_libraries(rocksteadyd PRIVATE sensei_core krang)
+
+add_executable(ratkingd ratkingd.c)
+target_link_libraries(ratkingd PRIVATE sensei_core krang)
+
+add_executable(shredderd shredderd.c)
+target_link_libraries(shredderd PRIVATE sensei_core krang)
+
+add_executable(fugitoidd fugitoidd.c)
+target_link_libraries(fugitoidd PRIVATE sensei_core krang)
+
+add_executable(krangd krangd.c)
+target_link_libraries(krangd krang)
+
+add_executable(turtlecomd turtlecomd.c)
+# Splinter Selector stays as a header-only helper (NOT a build target)
+# splinter_selector.c / .h are included by daemons but not compiled as a target
+

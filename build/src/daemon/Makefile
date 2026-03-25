@@ -117,87 +117,213 @@ depend:
 .PHONY : depend
 
 # Convenience name for target.
-src/daemon/CMakeFiles/daemon_common.dir/rule:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/daemon_common.dir/rule
-.PHONY : src/daemon/CMakeFiles/daemon_common.dir/rule
+src/daemon/CMakeFiles/krang.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/krang.dir/rule
+.PHONY : src/daemon/CMakeFiles/krang.dir/rule
 
 # Convenience name for target.
-daemon_common: src/daemon/CMakeFiles/daemon_common.dir/rule
-.PHONY : daemon_common
+krang: src/daemon/CMakeFiles/krang.dir/rule
+.PHONY : krang
 
 # fast build rule for target.
-daemon_common/fast:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/daemon_common.dir/build.make src/daemon/CMakeFiles/daemon_common.dir/build
-.PHONY : daemon_common/fast
+krang/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krang.dir/build.make src/daemon/CMakeFiles/krang.dir/build
+.PHONY : krang/fast
 
 # Convenience name for target.
-src/daemon/CMakeFiles/miuiserperuser.dir/rule:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/miuiserperuser.dir/rule
-.PHONY : src/daemon/CMakeFiles/miuiserperuser.dir/rule
+src/daemon/CMakeFiles/splinterd.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/splinterd.dir/rule
+.PHONY : src/daemon/CMakeFiles/splinterd.dir/rule
 
 # Convenience name for target.
-miuiserperuser: src/daemon/CMakeFiles/miuiserperuser.dir/rule
-.PHONY : miuiserperuser
+splinterd: src/daemon/CMakeFiles/splinterd.dir/rule
+.PHONY : splinterd
 
 # fast build rule for target.
-miuiserperuser/fast:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/build
-.PHONY : miuiserperuser/fast
+splinterd/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/splinterd.dir/build.make src/daemon/CMakeFiles/splinterd.dir/build
+.PHONY : splinterd/fast
 
-daemon_common.o: daemon_common.c.o
-.PHONY : daemon_common.o
+# Convenience name for target.
+src/daemon/CMakeFiles/metalhead.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/metalhead.dir/rule
+.PHONY : src/daemon/CMakeFiles/metalhead.dir/rule
+
+# Convenience name for target.
+metalhead: src/daemon/CMakeFiles/metalhead.dir/rule
+.PHONY : metalhead
+
+# fast build rule for target.
+metalhead/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/metalhead.dir/build.make src/daemon/CMakeFiles/metalhead.dir/build
+.PHONY : metalhead/fast
+
+# Convenience name for target.
+src/daemon/CMakeFiles/leatherheadd.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/leatherheadd.dir/rule
+.PHONY : src/daemon/CMakeFiles/leatherheadd.dir/rule
+
+# Convenience name for target.
+leatherheadd: src/daemon/CMakeFiles/leatherheadd.dir/rule
+.PHONY : leatherheadd
+
+# fast build rule for target.
+leatherheadd/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/leatherheadd.dir/build.make src/daemon/CMakeFiles/leatherheadd.dir/build
+.PHONY : leatherheadd/fast
+
+# Convenience name for target.
+src/daemon/CMakeFiles/bebopd.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/bebopd.dir/rule
+.PHONY : src/daemon/CMakeFiles/bebopd.dir/rule
+
+# Convenience name for target.
+bebopd: src/daemon/CMakeFiles/bebopd.dir/rule
+.PHONY : bebopd
+
+# fast build rule for target.
+bebopd/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/bebopd.dir/build.make src/daemon/CMakeFiles/bebopd.dir/build
+.PHONY : bebopd/fast
+
+# Convenience name for target.
+src/daemon/CMakeFiles/rocksteadyd.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/rocksteadyd.dir/rule
+.PHONY : src/daemon/CMakeFiles/rocksteadyd.dir/rule
+
+# Convenience name for target.
+rocksteadyd: src/daemon/CMakeFiles/rocksteadyd.dir/rule
+.PHONY : rocksteadyd
+
+# fast build rule for target.
+rocksteadyd/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/rocksteadyd.dir/build.make src/daemon/CMakeFiles/rocksteadyd.dir/build
+.PHONY : rocksteadyd/fast
+
+# Convenience name for target.
+src/daemon/CMakeFiles/ratkingd.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/ratkingd.dir/rule
+.PHONY : src/daemon/CMakeFiles/ratkingd.dir/rule
+
+# Convenience name for target.
+ratkingd: src/daemon/CMakeFiles/ratkingd.dir/rule
+.PHONY : ratkingd
+
+# fast build rule for target.
+ratkingd/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/ratkingd.dir/build.make src/daemon/CMakeFiles/ratkingd.dir/build
+.PHONY : ratkingd/fast
+
+# Convenience name for target.
+src/daemon/CMakeFiles/shredderd.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/shredderd.dir/rule
+.PHONY : src/daemon/CMakeFiles/shredderd.dir/rule
+
+# Convenience name for target.
+shredderd: src/daemon/CMakeFiles/shredderd.dir/rule
+.PHONY : shredderd
+
+# fast build rule for target.
+shredderd/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/shredderd.dir/build.make src/daemon/CMakeFiles/shredderd.dir/build
+.PHONY : shredderd/fast
+
+# Convenience name for target.
+src/daemon/CMakeFiles/fugitoidd.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/fugitoidd.dir/rule
+.PHONY : src/daemon/CMakeFiles/fugitoidd.dir/rule
+
+# Convenience name for target.
+fugitoidd: src/daemon/CMakeFiles/fugitoidd.dir/rule
+.PHONY : fugitoidd
+
+# fast build rule for target.
+fugitoidd/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/fugitoidd.dir/build.make src/daemon/CMakeFiles/fugitoidd.dir/build
+.PHONY : fugitoidd/fast
+
+# Convenience name for target.
+src/daemon/CMakeFiles/krangd.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/krangd.dir/rule
+.PHONY : src/daemon/CMakeFiles/krangd.dir/rule
+
+# Convenience name for target.
+krangd: src/daemon/CMakeFiles/krangd.dir/rule
+.PHONY : krangd
+
+# fast build rule for target.
+krangd/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krangd.dir/build.make src/daemon/CMakeFiles/krangd.dir/build
+.PHONY : krangd/fast
+
+# Convenience name for target.
+src/daemon/CMakeFiles/turtlecomd.dir/rule:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/daemon/CMakeFiles/turtlecomd.dir/rule
+.PHONY : src/daemon/CMakeFiles/turtlecomd.dir/rule
+
+# Convenience name for target.
+turtlecomd: src/daemon/CMakeFiles/turtlecomd.dir/rule
+.PHONY : turtlecomd
+
+# fast build rule for target.
+turtlecomd/fast:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/turtlecomd.dir/build.make src/daemon/CMakeFiles/turtlecomd.dir/build
+.PHONY : turtlecomd/fast
+
+bebopd.o: bebopd.c.o
+.PHONY : bebopd.o
 
 # target to build an object file
-daemon_common.c.o:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/daemon_common.dir/build.make src/daemon/CMakeFiles/daemon_common.dir/daemon_common.c.o
-.PHONY : daemon_common.c.o
+bebopd.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/bebopd.dir/build.make src/daemon/CMakeFiles/bebopd.dir/bebopd.c.o
+.PHONY : bebopd.c.o
 
-daemon_common.i: daemon_common.c.i
-.PHONY : daemon_common.i
+bebopd.i: bebopd.c.i
+.PHONY : bebopd.i
 
 # target to preprocess a source file
-daemon_common.c.i:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/daemon_common.dir/build.make src/daemon/CMakeFiles/daemon_common.dir/daemon_common.c.i
-.PHONY : daemon_common.c.i
+bebopd.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/bebopd.dir/build.make src/daemon/CMakeFiles/bebopd.dir/bebopd.c.i
+.PHONY : bebopd.c.i
 
-daemon_common.s: daemon_common.c.s
-.PHONY : daemon_common.s
+bebopd.s: bebopd.c.s
+.PHONY : bebopd.s
 
 # target to generate assembly for a file
-daemon_common.c.s:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/daemon_common.dir/build.make src/daemon/CMakeFiles/daemon_common.dir/daemon_common.c.s
-.PHONY : daemon_common.c.s
+bebopd.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/bebopd.dir/build.make src/daemon/CMakeFiles/bebopd.dir/bebopd.c.s
+.PHONY : bebopd.c.s
 
-daemon_core.o: daemon_core.c.o
-.PHONY : daemon_core.o
+fugitoidd.o: fugitoidd.c.o
+.PHONY : fugitoidd.o
 
 # target to build an object file
-daemon_core.c.o:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/daemon_core.c.o
-.PHONY : daemon_core.c.o
+fugitoidd.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/fugitoidd.dir/build.make src/daemon/CMakeFiles/fugitoidd.dir/fugitoidd.c.o
+.PHONY : fugitoidd.c.o
 
-daemon_core.i: daemon_core.c.i
-.PHONY : daemon_core.i
+fugitoidd.i: fugitoidd.c.i
+.PHONY : fugitoidd.i
 
 # target to preprocess a source file
-daemon_core.c.i:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/daemon_core.c.i
-.PHONY : daemon_core.c.i
+fugitoidd.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/fugitoidd.dir/build.make src/daemon/CMakeFiles/fugitoidd.dir/fugitoidd.c.i
+.PHONY : fugitoidd.c.i
 
-daemon_core.s: daemon_core.c.s
-.PHONY : daemon_core.s
+fugitoidd.s: fugitoidd.c.s
+.PHONY : fugitoidd.s
 
 # target to generate assembly for a file
-daemon_core.c.s:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/daemon_core.c.s
-.PHONY : daemon_core.c.s
+fugitoidd.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/fugitoidd.dir/build.make src/daemon/CMakeFiles/fugitoidd.dir/fugitoidd.c.s
+.PHONY : fugitoidd.c.s
 
 ipc.o: ipc.c.o
 .PHONY : ipc.o
 
 # target to build an object file
 ipc.c.o:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/ipc.c.o
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krang.dir/build.make src/daemon/CMakeFiles/krang.dir/ipc.c.o
 .PHONY : ipc.c.o
 
 ipc.i: ipc.c.i
@@ -205,7 +331,7 @@ ipc.i: ipc.c.i
 
 # target to preprocess a source file
 ipc.c.i:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/ipc.c.i
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krang.dir/build.make src/daemon/CMakeFiles/krang.dir/ipc.c.i
 .PHONY : ipc.c.i
 
 ipc.s: ipc.c.s
@@ -213,80 +339,224 @@ ipc.s: ipc.c.s
 
 # target to generate assembly for a file
 ipc.c.s:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/ipc.c.s
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krang.dir/build.make src/daemon/CMakeFiles/krang.dir/ipc.c.s
 .PHONY : ipc.c.s
 
-main.o: main.c.o
-.PHONY : main.o
+krang.o: krang.c.o
+.PHONY : krang.o
 
 # target to build an object file
-main.c.o:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/main.c.o
-.PHONY : main.c.o
+krang.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krang.dir/build.make src/daemon/CMakeFiles/krang.dir/krang.c.o
+.PHONY : krang.c.o
 
-main.i: main.c.i
-.PHONY : main.i
+krang.i: krang.c.i
+.PHONY : krang.i
 
 # target to preprocess a source file
-main.c.i:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/main.c.i
-.PHONY : main.c.i
+krang.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krang.dir/build.make src/daemon/CMakeFiles/krang.dir/krang.c.i
+.PHONY : krang.c.i
 
-main.s: main.c.s
-.PHONY : main.s
+krang.s: krang.c.s
+.PHONY : krang.s
 
 # target to generate assembly for a file
-main.c.s:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/main.c.s
-.PHONY : main.c.s
+krang.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krang.dir/build.make src/daemon/CMakeFiles/krang.dir/krang.c.s
+.PHONY : krang.c.s
 
-rish_pipe.o: rish_pipe.c.o
-.PHONY : rish_pipe.o
+krangd.o: krangd.c.o
+.PHONY : krangd.o
 
 # target to build an object file
-rish_pipe.c.o:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/rish_pipe.c.o
-.PHONY : rish_pipe.c.o
+krangd.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krangd.dir/build.make src/daemon/CMakeFiles/krangd.dir/krangd.c.o
+.PHONY : krangd.c.o
 
-rish_pipe.i: rish_pipe.c.i
-.PHONY : rish_pipe.i
+krangd.i: krangd.c.i
+.PHONY : krangd.i
 
 # target to preprocess a source file
-rish_pipe.c.i:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/rish_pipe.c.i
-.PHONY : rish_pipe.c.i
+krangd.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krangd.dir/build.make src/daemon/CMakeFiles/krangd.dir/krangd.c.i
+.PHONY : krangd.c.i
 
-rish_pipe.s: rish_pipe.c.s
-.PHONY : rish_pipe.s
+krangd.s: krangd.c.s
+.PHONY : krangd.s
 
 # target to generate assembly for a file
-rish_pipe.c.s:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/rish_pipe.c.s
-.PHONY : rish_pipe.c.s
+krangd.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krangd.dir/build.make src/daemon/CMakeFiles/krangd.dir/krangd.c.s
+.PHONY : krangd.c.s
 
-service.o: service.c.o
-.PHONY : service.o
+leatherheadd.o: leatherheadd.c.o
+.PHONY : leatherheadd.o
 
 # target to build an object file
-service.c.o:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/service.c.o
-.PHONY : service.c.o
+leatherheadd.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/leatherheadd.dir/build.make src/daemon/CMakeFiles/leatherheadd.dir/leatherheadd.c.o
+.PHONY : leatherheadd.c.o
 
-service.i: service.c.i
-.PHONY : service.i
+leatherheadd.i: leatherheadd.c.i
+.PHONY : leatherheadd.i
 
 # target to preprocess a source file
-service.c.i:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/service.c.i
-.PHONY : service.c.i
+leatherheadd.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/leatherheadd.dir/build.make src/daemon/CMakeFiles/leatherheadd.dir/leatherheadd.c.i
+.PHONY : leatherheadd.c.i
 
-service.s: service.c.s
-.PHONY : service.s
+leatherheadd.s: leatherheadd.c.s
+.PHONY : leatherheadd.s
 
 # target to generate assembly for a file
-service.c.s:
-	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/service.c.s
-.PHONY : service.c.s
+leatherheadd.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/leatherheadd.dir/build.make src/daemon/CMakeFiles/leatherheadd.dir/leatherheadd.c.s
+.PHONY : leatherheadd.c.s
+
+metalhead.o: metalhead.c.o
+.PHONY : metalhead.o
+
+# target to build an object file
+metalhead.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/metalhead.dir/build.make src/daemon/CMakeFiles/metalhead.dir/metalhead.c.o
+.PHONY : metalhead.c.o
+
+metalhead.i: metalhead.c.i
+.PHONY : metalhead.i
+
+# target to preprocess a source file
+metalhead.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/metalhead.dir/build.make src/daemon/CMakeFiles/metalhead.dir/metalhead.c.i
+.PHONY : metalhead.c.i
+
+metalhead.s: metalhead.c.s
+.PHONY : metalhead.s
+
+# target to generate assembly for a file
+metalhead.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/metalhead.dir/build.make src/daemon/CMakeFiles/metalhead.dir/metalhead.c.s
+.PHONY : metalhead.c.s
+
+ratkingd.o: ratkingd.c.o
+.PHONY : ratkingd.o
+
+# target to build an object file
+ratkingd.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/ratkingd.dir/build.make src/daemon/CMakeFiles/ratkingd.dir/ratkingd.c.o
+.PHONY : ratkingd.c.o
+
+ratkingd.i: ratkingd.c.i
+.PHONY : ratkingd.i
+
+# target to preprocess a source file
+ratkingd.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/ratkingd.dir/build.make src/daemon/CMakeFiles/ratkingd.dir/ratkingd.c.i
+.PHONY : ratkingd.c.i
+
+ratkingd.s: ratkingd.c.s
+.PHONY : ratkingd.s
+
+# target to generate assembly for a file
+ratkingd.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/ratkingd.dir/build.make src/daemon/CMakeFiles/ratkingd.dir/ratkingd.c.s
+.PHONY : ratkingd.c.s
+
+rocksteadyd.o: rocksteadyd.c.o
+.PHONY : rocksteadyd.o
+
+# target to build an object file
+rocksteadyd.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/rocksteadyd.dir/build.make src/daemon/CMakeFiles/rocksteadyd.dir/rocksteadyd.c.o
+.PHONY : rocksteadyd.c.o
+
+rocksteadyd.i: rocksteadyd.c.i
+.PHONY : rocksteadyd.i
+
+# target to preprocess a source file
+rocksteadyd.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/rocksteadyd.dir/build.make src/daemon/CMakeFiles/rocksteadyd.dir/rocksteadyd.c.i
+.PHONY : rocksteadyd.c.i
+
+rocksteadyd.s: rocksteadyd.c.s
+.PHONY : rocksteadyd.s
+
+# target to generate assembly for a file
+rocksteadyd.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/rocksteadyd.dir/build.make src/daemon/CMakeFiles/rocksteadyd.dir/rocksteadyd.c.s
+.PHONY : rocksteadyd.c.s
+
+shredderd.o: shredderd.c.o
+.PHONY : shredderd.o
+
+# target to build an object file
+shredderd.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/shredderd.dir/build.make src/daemon/CMakeFiles/shredderd.dir/shredderd.c.o
+.PHONY : shredderd.c.o
+
+shredderd.i: shredderd.c.i
+.PHONY : shredderd.i
+
+# target to preprocess a source file
+shredderd.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/shredderd.dir/build.make src/daemon/CMakeFiles/shredderd.dir/shredderd.c.i
+.PHONY : shredderd.c.i
+
+shredderd.s: shredderd.c.s
+.PHONY : shredderd.s
+
+# target to generate assembly for a file
+shredderd.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/shredderd.dir/build.make src/daemon/CMakeFiles/shredderd.dir/shredderd.c.s
+.PHONY : shredderd.c.s
+
+splinterd.o: splinterd.c.o
+.PHONY : splinterd.o
+
+# target to build an object file
+splinterd.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/splinterd.dir/build.make src/daemon/CMakeFiles/splinterd.dir/splinterd.c.o
+.PHONY : splinterd.c.o
+
+splinterd.i: splinterd.c.i
+.PHONY : splinterd.i
+
+# target to preprocess a source file
+splinterd.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/splinterd.dir/build.make src/daemon/CMakeFiles/splinterd.dir/splinterd.c.i
+.PHONY : splinterd.c.i
+
+splinterd.s: splinterd.c.s
+.PHONY : splinterd.s
+
+# target to generate assembly for a file
+splinterd.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/splinterd.dir/build.make src/daemon/CMakeFiles/splinterd.dir/splinterd.c.s
+.PHONY : splinterd.c.s
+
+turtlecomd.o: turtlecomd.c.o
+.PHONY : turtlecomd.o
+
+# target to build an object file
+turtlecomd.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/turtlecomd.dir/build.make src/daemon/CMakeFiles/turtlecomd.dir/turtlecomd.c.o
+.PHONY : turtlecomd.c.o
+
+turtlecomd.i: turtlecomd.c.i
+.PHONY : turtlecomd.i
+
+# target to preprocess a source file
+turtlecomd.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/turtlecomd.dir/build.make src/daemon/CMakeFiles/turtlecomd.dir/turtlecomd.c.i
+.PHONY : turtlecomd.c.i
+
+turtlecomd.s: turtlecomd.c.s
+.PHONY : turtlecomd.s
+
+# target to generate assembly for a file
+turtlecomd.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/turtlecomd.dir/build.make src/daemon/CMakeFiles/turtlecomd.dir/turtlecomd.c.s
+.PHONY : turtlecomd.c.s
 
 # Help Target
 help:
@@ -296,26 +566,53 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... daemon_common"
-	@echo "... miuiserperuser"
-	@echo "... daemon_common.o"
-	@echo "... daemon_common.i"
-	@echo "... daemon_common.s"
-	@echo "... daemon_core.o"
-	@echo "... daemon_core.i"
-	@echo "... daemon_core.s"
+	@echo "... bebopd"
+	@echo "... fugitoidd"
+	@echo "... krang"
+	@echo "... krangd"
+	@echo "... leatherheadd"
+	@echo "... metalhead"
+	@echo "... ratkingd"
+	@echo "... rocksteadyd"
+	@echo "... shredderd"
+	@echo "... splinterd"
+	@echo "... turtlecomd"
+	@echo "... bebopd.o"
+	@echo "... bebopd.i"
+	@echo "... bebopd.s"
+	@echo "... fugitoidd.o"
+	@echo "... fugitoidd.i"
+	@echo "... fugitoidd.s"
 	@echo "... ipc.o"
 	@echo "... ipc.i"
 	@echo "... ipc.s"
-	@echo "... main.o"
-	@echo "... main.i"
-	@echo "... main.s"
-	@echo "... rish_pipe.o"
-	@echo "... rish_pipe.i"
-	@echo "... rish_pipe.s"
-	@echo "... service.o"
-	@echo "... service.i"
-	@echo "... service.s"
+	@echo "... krang.o"
+	@echo "... krang.i"
+	@echo "... krang.s"
+	@echo "... krangd.o"
+	@echo "... krangd.i"
+	@echo "... krangd.s"
+	@echo "... leatherheadd.o"
+	@echo "... leatherheadd.i"
+	@echo "... leatherheadd.s"
+	@echo "... metalhead.o"
+	@echo "... metalhead.i"
+	@echo "... metalhead.s"
+	@echo "... ratkingd.o"
+	@echo "... ratkingd.i"
+	@echo "... ratkingd.s"
+	@echo "... rocksteadyd.o"
+	@echo "... rocksteadyd.i"
+	@echo "... rocksteadyd.s"
+	@echo "... shredderd.o"
+	@echo "... shredderd.i"
+	@echo "... shredderd.s"
+	@echo "... splinterd.o"
+	@echo "... splinterd.i"
+	@echo "... splinterd.s"
+	@echo "... turtlecomd.o"
+	@echo "... turtlecomd.i"
+	@echo "... turtlecomd.s"
 .PHONY : help
 
 

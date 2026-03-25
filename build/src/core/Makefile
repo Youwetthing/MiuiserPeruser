@@ -130,6 +130,30 @@ sensei_core/fast:
 	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/build
 .PHONY : sensei_core/fast
 
+build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.o: build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.o
+.PHONY : build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.o
+
+# target to build an object file
+build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.o
+.PHONY : build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.o
+
+build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.i: build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.i
+.PHONY : build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.i
+
+# target to preprocess a source file
+build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.i
+.PHONY : build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.i
+
+build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.s: build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.s
+.PHONY : build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.s
+
+# target to generate assembly for a file
+build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.s
+.PHONY : build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.c.s
+
 detection/casey_hook.o: detection/casey_hook.c.o
 .PHONY : detection/casey_hook.o
 
@@ -418,6 +442,30 @@ log/april_log.c.s:
 	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/log/april_log.c.s
 .PHONY : log/april_log.c.s
 
+log_safe.o: log_safe.c.o
+.PHONY : log_safe.o
+
+# target to build an object file
+log_safe.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/log_safe.c.o
+.PHONY : log_safe.c.o
+
+log_safe.i: log_safe.c.i
+.PHONY : log_safe.i
+
+# target to preprocess a source file
+log_safe.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/log_safe.c.i
+.PHONY : log_safe.c.i
+
+log_safe.s: log_safe.c.s
+.PHONY : log_safe.s
+
+# target to generate assembly for a file
+log_safe.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/log_safe.c.s
+.PHONY : log_safe.c.s
+
 platform/april_common.o: platform/april_common.c.o
 .PHONY : platform/april_common.o
 
@@ -466,6 +514,78 @@ platform/april_linux.c.s:
 	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/platform/april_linux.c.s
 .PHONY : platform/april_linux.c.s
 
+platform/capabilities.o: platform/capabilities.c.o
+.PHONY : platform/capabilities.o
+
+# target to build an object file
+platform/capabilities.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/platform/capabilities.c.o
+.PHONY : platform/capabilities.c.o
+
+platform/capabilities.i: platform/capabilities.c.i
+.PHONY : platform/capabilities.i
+
+# target to preprocess a source file
+platform/capabilities.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/platform/capabilities.c.i
+.PHONY : platform/capabilities.c.i
+
+platform/capabilities.s: platform/capabilities.c.s
+.PHONY : platform/capabilities.s
+
+# target to generate assembly for a file
+platform/capabilities.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/platform/capabilities.c.s
+.PHONY : platform/capabilities.c.s
+
+platform/rish_pipe.o: platform/rish_pipe.c.o
+.PHONY : platform/rish_pipe.o
+
+# target to build an object file
+platform/rish_pipe.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/platform/rish_pipe.c.o
+.PHONY : platform/rish_pipe.c.o
+
+platform/rish_pipe.i: platform/rish_pipe.c.i
+.PHONY : platform/rish_pipe.i
+
+# target to preprocess a source file
+platform/rish_pipe.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/platform/rish_pipe.c.i
+.PHONY : platform/rish_pipe.c.i
+
+platform/rish_pipe.s: platform/rish_pipe.c.s
+.PHONY : platform/rish_pipe.s
+
+# target to generate assembly for a file
+platform/rish_pipe.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/platform/rish_pipe.c.s
+.PHONY : platform/rish_pipe.c.s
+
+platform/rish_pipe_stub.o: platform/rish_pipe_stub.c.o
+.PHONY : platform/rish_pipe_stub.o
+
+# target to build an object file
+platform/rish_pipe_stub.c.o:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/platform/rish_pipe_stub.c.o
+.PHONY : platform/rish_pipe_stub.c.o
+
+platform/rish_pipe_stub.i: platform/rish_pipe_stub.c.i
+.PHONY : platform/rish_pipe_stub.i
+
+# target to preprocess a source file
+platform/rish_pipe_stub.c.i:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/platform/rish_pipe_stub.c.i
+.PHONY : platform/rish_pipe_stub.c.i
+
+platform/rish_pipe_stub.s: platform/rish_pipe_stub.c.s
+.PHONY : platform/rish_pipe_stub.s
+
+# target to generate assembly for a file
+platform/rish_pipe_stub.c.s:
+	cd /data/data/com.termux/files/home/MiuiserPeruser/build && $(MAKE) $(MAKESILENT) -f src/core/CMakeFiles/sensei_core.dir/build.make src/core/CMakeFiles/sensei_core.dir/platform/rish_pipe_stub.c.s
+.PHONY : platform/rish_pipe_stub.c.s
+
 resource_snapshot.o: resource_snapshot.c.o
 .PHONY : resource_snapshot.o
 
@@ -499,6 +619,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... sensei_core"
+	@echo "... build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.o"
+	@echo "... build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.i"
+	@echo "... build/CMakeFiles/4.2.3/CompilerIdC/CMakeCCompilerId.s"
 	@echo "... detection/casey_hook.o"
 	@echo "... detection/casey_hook.i"
 	@echo "... detection/casey_hook.s"
@@ -535,12 +658,24 @@ help:
 	@echo "... log/april_log.o"
 	@echo "... log/april_log.i"
 	@echo "... log/april_log.s"
+	@echo "... log_safe.o"
+	@echo "... log_safe.i"
+	@echo "... log_safe.s"
 	@echo "... platform/april_common.o"
 	@echo "... platform/april_common.i"
 	@echo "... platform/april_common.s"
 	@echo "... platform/april_linux.o"
 	@echo "... platform/april_linux.i"
 	@echo "... platform/april_linux.s"
+	@echo "... platform/capabilities.o"
+	@echo "... platform/capabilities.i"
+	@echo "... platform/capabilities.s"
+	@echo "... platform/rish_pipe.o"
+	@echo "... platform/rish_pipe.i"
+	@echo "... platform/rish_pipe.s"
+	@echo "... platform/rish_pipe_stub.o"
+	@echo "... platform/rish_pipe_stub.i"
+	@echo "... platform/rish_pipe_stub.s"
 	@echo "... resource_snapshot.o"
 	@echo "... resource_snapshot.i"
 	@echo "... resource_snapshot.s"

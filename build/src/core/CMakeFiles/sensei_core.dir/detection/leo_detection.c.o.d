@@ -15,13 +15,12 @@ src/core/CMakeFiles/sensei_core.dir/detection/leo_detection.c.o: \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_size_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_wchar_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_null.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_max_align_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_offsetof.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/stdbool.h \
   /data/data/com.termux/files/home/MiuiserPeruser/src/core/include/sensei_types.h \
   /data/data/com.termux/files/home/MiuiserPeruser/src/core/include/april_platform.h \
   /data/data/com.termux/files/home/MiuiserPeruser/src/core/include/april_event.h \
-  /data/data/com.termux/files/home/MiuiserPeruser/src/daemon/rish_pipe.h \
+  /data/data/com.termux/files/home/MiuiserPeruser/src/core/include/rish_pipe.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/sys/types.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/linux/types.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/aarch64-linux-android/asm/types.h \

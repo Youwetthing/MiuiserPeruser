@@ -1,13 +1,5 @@
 src/core/CMakeFiles/sensei_core.dir/fugitoid_log_impl.c.o: \
   /data/data/com.termux/files/home/MiuiserPeruser/src/core/fugitoid_log_impl.c \
-  /data/data/com.termux/files/home/MiuiserPeruser/src/core/include/fugitoid_log.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/stdarg.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg_header_macro.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg___gnuc_va_list.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg_va_list.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg_va_arg.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg___va_copy.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg_va_copy.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/stdio.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/sys/cdefs.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/android/versioning.h \
@@ -21,7 +13,6 @@ src/core/CMakeFiles/sensei_core.dir/fugitoid_log_impl.c.o: \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_size_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_wchar_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_null.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_max_align_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_offsetof.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/stdint.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/stdint.h \
@@ -39,6 +30,13 @@ src/core/CMakeFiles/sensei_core.dir/fugitoid_log_impl.c.o: \
   /data/data/com.termux/files/usr/bin/../../usr/include/aarch64-linux-android/asm/posix_types.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/asm-generic/posix_types.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/bits/pthread_types.h \
+  /data/data/com.termux/files/usr/lib/clang/21/include/stdarg.h \
+  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg_header_macro.h \
+  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg___gnuc_va_list.h \
+  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg_va_list.h \
+  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg_va_arg.h \
+  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg___va_copy.h \
+  /data/data/com.termux/files/usr/lib/clang/21/include/__stdarg_va_copy.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/string.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/xlocale.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/bits/strcasecmp.h \
@@ -47,27 +45,4 @@ src/core/CMakeFiles/sensei_core.dir/fugitoid_log_impl.c.o: \
   /data/data/com.termux/files/usr/bin/../../usr/include/bits/flock64.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/bits/flock.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/bits/seek_constants.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/time.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/sys/time.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/linux/time.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/bits/timespec.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/linux/time_types.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/sys/select.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/signal.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/aarch64-linux-android/asm/sigcontext.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/aarch64-linux-android/asm/sve_context.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/bits/signal_types.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/limits.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/limits.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/float.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/linux/limits.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/bits/posix_limits.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/linux/signal.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/aarch64-linux-android/asm/signal.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/asm-generic/signal.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/asm-generic/signal-defs.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/aarch64-linux-android/asm/siginfo.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/asm-generic/siginfo.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/sys/ucontext.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/sys/user.h \
-  /data/data/com.termux/files/usr/bin/../../usr/include/bits/page_size.h
+  /data/data/com.termux/files/home/MiuiserPeruser/src/core/fugitoid_log.h

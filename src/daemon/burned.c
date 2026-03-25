@@ -1,96 +1,93 @@
 #include <stdio.h>
-#include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <fcntl.h>
 
-/* Debug flag */
-static int DEBUG_MODE = 0;
+#define SOCK_PATH "/data/data/com.termux/files/home/tmp/turtlecom.sock"
+#define BUF_SIZE 2048
 
-/* Debug helper */
-static void debug(const char *fmt, ...) {
-    if (!DEBUG_MODE) return;
-    va_list args;
-    va_start(args, fmt);
-    fprintf(stderr, "DEBUG: ");
-    vfprintf(stderr, fmt, args);
-    fprintf(stderr, "\n");
-    va_end(args);
-}
+static int connect_to_turtlecom(void) {
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) { perror("socket"); exit(1); }
 
-/* --- Minimal working implementations --- */
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strcpy(addr.sun_path, SOCK_PATH);
 
-int process_running(const char *name) {
-    /* Only tigerclaw is considered alive for now */
-    if (name && strcmp(name, "tigerclaw") == 0)
-        return 1;
-    return 0;
-}
-
-int miui_flag_restricted = 0;
-int thermal_state = 0;
-
-int krang_connect(void) { return 0; }
-int krang_send_command(const char *cmd) { (void)cmd; return 0; }
-
-/* --- Main --- */
-
-int main(int argc, char **argv) {
-
-    /* Parse args */
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--debug") == 0) {
-            DEBUG_MODE = 1;
-            fprintf(stderr, "DEBUG MODE ENABLED\n");
-        }
+    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("connect");
+        close(fd);
+        exit(1);
     }
 
-    printf("INFO Burne Thompson starting…\n");
+    fcntl(fd, F_SETFL, O_NONBLOCK);
+    return fd;
+}
 
-    debug("Attempting to connect to Krang…");
-    if (krang_connect() < 0) {
-        debug("Krang connection failed");
-        fprintf(stderr, "ERROR Failed to connect to Krang\n");
-        return 1;
+static char* run_cmd(const char *cmd) {
+    FILE *f = popen(cmd, "r");
+    if (!f) return NULL;
+
+    char *buf = malloc(256);
+    if (!buf) { pclose(f); return NULL; }
+
+    if (!fgets(buf, 256, f)) {
+        free(buf);
+        pclose(f);
+        return NULL;
     }
-    debug("Connected to Krang successfully");
 
-    int anomaly = 0;
+    buf[strcspn(buf, "\n")] = 0;
+    pclose(f);
+    return buf;
+}
 
-    if (!process_running("tigerclaw")) {
-        debug("Tigerclaw is NOT running");
-        anomaly = 1;
-    } else debug("Tigerclaw OK");
+int main(void) {
+    int fd = connect_to_turtlecom();
+    char out[BUF_SIZE];
 
-    if (!process_running("rocksteady")) {
-        debug("Rocksteady is NOT running");
-        anomaly = 1;
-    } else debug("Rocksteady OK");
+    printf("burned (Burne Thompson MIUI Policy Daemon): ONLINE\n");
+    write(fd, "HELLO WORKER BURNE\n", 20);
 
-    if (!process_running("bebopd")) {
-        debug("Bebopd is NOT running");
-        anomaly = 1;
-    } else debug("Bebopd OK");
+    for (;;) {
+        char *opt = run_cmd("getprop persist.sys.miui_optimization");
+        char *bgs = run_cmd("getprop persist.sys.background_data");
+        char *pwr = run_cmd("getprop persist.sys.powerkeeper");
+        char *auto_start = run_cmd("getprop persist.sys.autostart");
+        char *restrict_flag = run_cmd("getprop persist.sys.miui_restricted_mode");
+        char *clean = run_cmd("getprop persist.sys.cleaner_level");
 
-    if (!process_running("leatherhead")) {
-        debug("Leatherhead is NOT running");
-        anomaly = 1;
-    } else debug("Leatherhead OK");
+        snprintf(out, sizeof(out),
+            "STATUS BURNE "
+            "OPTIMIZE=%s "
+            "BG_DATA=%s "
+            "POWERKEEPER=%s "
+            "AUTOSTART=%s "
+            "RESTRICT=%s "
+            "CLEANER=%s\n",
 
-    if (miui_flag_restricted) {
-        debug("MIUI restricted-mode flag detected");
-        anomaly = 1;
-    } else debug("MIUI restricted-mode flag not set");
+            opt ? opt : "unknown",
+            bgs ? bgs : "unknown",
+            pwr ? pwr : "unknown",
+            auto_start ? auto_start : "unknown",
+            restrict_flag ? restrict_flag : "unknown",
+            clean ? clean : "unknown"
+        );
 
-    if (thermal_state == 3) {
-        debug("Thermal HAL reports CRITICAL state");
-        anomaly = 1;
-    } else debug("Thermal state: %d", thermal_state);
+        write(fd, out, strlen(out));
 
-    if (anomaly) {
-        debug("Anomaly detected — Burne will issue warning");
-        printf("WARN MIUI may have killed one or more TMNT daemons.\n");
-    } else {
-        debug("No anomalies detected — all daemons healthy");
-        printf("INFO All monitored daemons are running normally.\n");
+        free(opt);
+        free(bgs);
+        free(pwr);
+        free(auto_start);
+        free(restrict_flag);
+        free(clean);
+
+        sleep(60);
     }
 
     return 0;

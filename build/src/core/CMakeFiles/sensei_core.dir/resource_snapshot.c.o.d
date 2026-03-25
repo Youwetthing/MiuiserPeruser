@@ -1,6 +1,6 @@
 src/core/CMakeFiles/sensei_core.dir/resource_snapshot.c.o: \
   /data/data/com.termux/files/home/MiuiserPeruser/src/core/resource_snapshot.c \
-  /data/data/com.termux/files/home/MiuiserPeruser/src/core/include/fugitoid_log.h \
+  /data/data/com.termux/files/home/MiuiserPeruser/src/core/fugitoid_log.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/stdio.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/sys/cdefs.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/android/versioning.h \
@@ -14,7 +14,6 @@ src/core/CMakeFiles/sensei_core.dir/resource_snapshot.c.o: \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_size_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_wchar_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_null.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_max_align_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_offsetof.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/stdint.h \
   /data/data/com.termux/files/usr/bin/../../usr/include/stdint.h \

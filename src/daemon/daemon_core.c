@@ -1,8 +1,8 @@
-#include "fugitoid_log.h"
+#include "daemon_core_includes.h"
+#include "../core/log_safe.h"
 /* Single static prototype for heartbeat handler */
 static void handle_rocksteady_heartbeat(const char *line);
 
-/* Forward declarations for handlers used below */
 /*
  * MiuiserPeruser – Daemon core implementation with rish pipe
  */
@@ -21,17 +21,21 @@ static void handle_rocksteady_heartbeat(const char *line);
 #include <signal.h>
 #include <pthread.h>
 #include <time.h>
+#include <stdbool.h>
 
 static volatile bool g_running = false;
 static bool g_console_mode = false;
 
-/* Logging function – writes to file and optionally console */
+/* Detection callback – logs summary only, then broadcasts via IPC */
 static void handle_detection(const SENSEI_DETECTION *det, void *user_data) {
     (void)user_data;
-    fugitoid_log("ALERT", "[%s] %s (score %u)",
-                leo_detection_class_to_string(det->detection_class),
-                det->description,
-                leo_calculate_score(det));
+
+    log_event(LOG_LEVEL_WARN,
+              "DETECTION",
+              "detection class=%s score=%u",
+              leo_detection_class_to_string(det->detection_class),
+              leo_calculate_score(det));
+
     miuiserperuser_ipc_broadcast(det);
 }
 
@@ -44,22 +48,26 @@ int miuiserperuser_main_loop(bool console_mode) {
     g_console_mode = console_mode;
     g_running = true;
 
+    /* Unified logging: sensei.log */
+    log_init("sensei");
+    log_set_level(console_mode ? LOG_LEVEL_DEBUG : LOG_LEVEL_INFO);
+
     signal(SIGINT, miuiserperuser_stop_signal);
     signal(SIGTERM, miuiserperuser_stop_signal);
     signal(SIGPIPE, SIG_IGN);
 
-    fugitoid_log("INFO", "MiuiserPeruser daemon starting...");
+    log_event(LOG_LEVEL_INFO, "CORE", "daemon_start");
 
     if (april_platform_init() != SENSEI_STATUS_OK) {
-        fugitoid_log("CRIT", "Platform init failed");
+        log_event(LOG_LEVEL_ERROR, "CORE", "platform_init_failed");
         return 1;
     }
 
     /* Start rish pipe for privileged commands */
     if (rish_pipe_start() == 0) {
-        fugitoid_log("INFO", "Rish pipe started successfully");
+        log_event(LOG_LEVEL_INFO, "RISH", "rish_pipe_start_success");
     } else {
-        fugitoid_log("WARN", "Failed to start rish pipe – will fall back to direct forks");
+        log_event(LOG_LEVEL_WARN, "RISH", "rish_pipe_start_failed_fallback");
     }
 
     SENSEI_DETECTION_CONFIG config = {
@@ -73,25 +81,25 @@ int miuiserperuser_main_loop(bool console_mode) {
     };
 
     if (leo_init(&config) != SENSEI_STATUS_OK) {
-        fugitoid_log("CRIT", "Detection engine init failed");
+        log_event(LOG_LEVEL_ERROR, "CORE", "detection_engine_init_failed");
         april_platform_cleanup();
         return 1;
     }
 
     if (miuiserperuser_ipc_init() != SENSEI_STATUS_OK) {
-        fugitoid_log("WARN", "IPC init failed – continuing without IPC");
+        log_event(LOG_LEVEL_WARN, "IPC", "ipc_init_failed_continue_without_ipc");
     }
 
     /* Register callback for detection events */
     april_event_register_callback(SENSEI_EVENT_PRIORITY_LOW,
                                   handle_detection, NULL);
 
-    fugitoid_log("INFO", "Engine ready. Starting scan loop.");
+    log_event(LOG_LEVEL_INFO, "CORE", "scan_loop_start");
 
     SENSEI_DETECTION_LIST results = {0};
 
     while (g_running) {
-        fugitoid_log("INFO", "Performing full system scan...");
+        log_event(LOG_LEVEL_DEBUG, "SCAN", "scan_start");
         leo_full_scan(&results);
 
         /* Process any queued events (though handle_detection already logs) */
@@ -103,12 +111,14 @@ int miuiserperuser_main_loop(bool console_mode) {
         leo_detection_list_free(&results);
         results.head = NULL;
 
+        log_event(LOG_LEVEL_DEBUG, "SCAN", "scan_end");
+
         /* Sleep in 1‑second chunks to allow quick shutdown */
         for (int i = 0; i < 5 && g_running; i++)
             sleep(1);
     }
 
-    fugitoid_log("INFO", "MiuiserPeruser daemon stopping...");
+    log_event(LOG_LEVEL_INFO, "CORE", "daemon_stop");
     rish_pipe_stop();
     miuiserperuser_ipc_shutdown();
     leo_shutdown();
@@ -117,20 +127,8 @@ int miuiserperuser_main_loop(bool console_mode) {
     return 0;
 }
 
-// // ------------------------------------------------------------
-// // Splinter Listener: Rocksteady Heartbeat
-// // ------------------------------------------------------------
-//         // TODO: Update dashboard state here
-// 
-// 
-//     // Rocksteady heartbeat detection
-//     handle_rocksteady_heartbeat(line);
-// 
-// 
-// // TODO: Mark Rocksteady as online in dashboard state
-// // dashboard_set_worker_online("rocksteady");
-// 
-// 
-// // Forward declaration for heartbeat handler
-// Forward declaration for heartbeat handler
-// Forward declaration
+/* Rocksteady heartbeat handler stub – to be wired to IPC/rish as needed */
+static void handle_rocksteady_heartbeat(const char *line) {
+    (void)line;
+    log_event(LOG_LEVEL_DEBUG, "CORE", "rocksteady_heartbeat");
+}

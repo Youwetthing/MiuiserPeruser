@@ -130,30 +130,147 @@ sensei_core/fast:
 .PHONY : sensei_core/fast
 
 #=============================================================================
-# Target rules for targets named daemon_common
+# Target rules for targets named krang
 
 # Build rule for target.
-daemon_common: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 daemon_common
-.PHONY : daemon_common
+krang: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 krang
+.PHONY : krang
 
 # fast build rule for target.
-daemon_common/fast:
-	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/daemon_common.dir/build.make src/daemon/CMakeFiles/daemon_common.dir/build
-.PHONY : daemon_common/fast
+krang/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krang.dir/build.make src/daemon/CMakeFiles/krang.dir/build
+.PHONY : krang/fast
 
 #=============================================================================
-# Target rules for targets named miuiserperuser
+# Target rules for targets named splinterd
 
 # Build rule for target.
-miuiserperuser: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 miuiserperuser
-.PHONY : miuiserperuser
+splinterd: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 splinterd
+.PHONY : splinterd
 
 # fast build rule for target.
-miuiserperuser/fast:
-	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/miuiserperuser.dir/build.make src/daemon/CMakeFiles/miuiserperuser.dir/build
-.PHONY : miuiserperuser/fast
+splinterd/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/splinterd.dir/build.make src/daemon/CMakeFiles/splinterd.dir/build
+.PHONY : splinterd/fast
+
+#=============================================================================
+# Target rules for targets named metalhead
+
+# Build rule for target.
+metalhead: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 metalhead
+.PHONY : metalhead
+
+# fast build rule for target.
+metalhead/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/metalhead.dir/build.make src/daemon/CMakeFiles/metalhead.dir/build
+.PHONY : metalhead/fast
+
+#=============================================================================
+# Target rules for targets named leatherheadd
+
+# Build rule for target.
+leatherheadd: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 leatherheadd
+.PHONY : leatherheadd
+
+# fast build rule for target.
+leatherheadd/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/leatherheadd.dir/build.make src/daemon/CMakeFiles/leatherheadd.dir/build
+.PHONY : leatherheadd/fast
+
+#=============================================================================
+# Target rules for targets named bebopd
+
+# Build rule for target.
+bebopd: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 bebopd
+.PHONY : bebopd
+
+# fast build rule for target.
+bebopd/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/bebopd.dir/build.make src/daemon/CMakeFiles/bebopd.dir/build
+.PHONY : bebopd/fast
+
+#=============================================================================
+# Target rules for targets named rocksteadyd
+
+# Build rule for target.
+rocksteadyd: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 rocksteadyd
+.PHONY : rocksteadyd
+
+# fast build rule for target.
+rocksteadyd/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/rocksteadyd.dir/build.make src/daemon/CMakeFiles/rocksteadyd.dir/build
+.PHONY : rocksteadyd/fast
+
+#=============================================================================
+# Target rules for targets named ratkingd
+
+# Build rule for target.
+ratkingd: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ratkingd
+.PHONY : ratkingd
+
+# fast build rule for target.
+ratkingd/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/ratkingd.dir/build.make src/daemon/CMakeFiles/ratkingd.dir/build
+.PHONY : ratkingd/fast
+
+#=============================================================================
+# Target rules for targets named shredderd
+
+# Build rule for target.
+shredderd: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 shredderd
+.PHONY : shredderd
+
+# fast build rule for target.
+shredderd/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/shredderd.dir/build.make src/daemon/CMakeFiles/shredderd.dir/build
+.PHONY : shredderd/fast
+
+#=============================================================================
+# Target rules for targets named fugitoidd
+
+# Build rule for target.
+fugitoidd: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 fugitoidd
+.PHONY : fugitoidd
+
+# fast build rule for target.
+fugitoidd/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/fugitoidd.dir/build.make src/daemon/CMakeFiles/fugitoidd.dir/build
+.PHONY : fugitoidd/fast
+
+#=============================================================================
+# Target rules for targets named krangd
+
+# Build rule for target.
+krangd: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 krangd
+.PHONY : krangd
+
+# fast build rule for target.
+krangd/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/krangd.dir/build.make src/daemon/CMakeFiles/krangd.dir/build
+.PHONY : krangd/fast
+
+#=============================================================================
+# Target rules for targets named turtlecomd
+
+# Build rule for target.
+turtlecomd: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 turtlecomd
+.PHONY : turtlecomd
+
+# fast build rule for target.
+turtlecomd/fast:
+	$(MAKE) $(MAKESILENT) -f src/daemon/CMakeFiles/turtlecomd.dir/build.make src/daemon/CMakeFiles/turtlecomd.dir/build
+.PHONY : turtlecomd/fast
 
 # Help Target
 help:
@@ -163,9 +280,18 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... daemon_common"
-	@echo "... miuiserperuser"
+	@echo "... bebopd"
+	@echo "... fugitoidd"
+	@echo "... krang"
+	@echo "... krangd"
+	@echo "... leatherheadd"
+	@echo "... metalhead"
+	@echo "... ratkingd"
+	@echo "... rocksteadyd"
 	@echo "... sensei_core"
+	@echo "... shredderd"
+	@echo "... splinterd"
+	@echo "... turtlecomd"
 .PHONY : help
 
 

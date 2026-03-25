@@ -16,7 +16,6 @@ src/core/CMakeFiles/sensei_core.dir/platform/april_common.c.o: \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_size_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_wchar_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_null.h \
-  /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_max_align_t.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/__stddef_offsetof.h \
   /data/data/com.termux/files/usr/lib/clang/21/include/stdbool.h \
   /data/data/com.termux/files/home/MiuiserPeruser/src/core/include/leo_detection.h \

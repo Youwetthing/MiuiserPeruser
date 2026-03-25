@@ -6,7 +6,7 @@
 #include <leo_detection.h>
 #include <april_platform.h>
 #include <sensei_types.h>
-#include "../daemon/rish_pipe.h"
+#include "rish_pipe.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

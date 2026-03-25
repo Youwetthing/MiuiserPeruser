@@ -1,5 +1,5 @@
 #include "fugitoid_log.h"
-#include "fugitoid_log.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +8,7 @@
 #include <errno.h>
 #include <ctype.h>
 
-#include "fugitoid_log.h"
+
 #include "krang.h"
 
 #define PROC_PATH "/proc"

@@ -1,41 +1,45 @@
-#include "fugitoid_log.h"
-#include "fugitoid_log.h"
+#include "../core/log_safe.h"
 #include "dex_client.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/un.h>
-
-#define SHREDDER_SOCKET "/data/data/com.termux/files/usr/tmp/miuiserperuser_shredder.sock"
-#define BUFFER_SIZE 16384
+#include <errno.h>
 
 char* dex_command(const char* cmd) {
     int sock = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (sock < 0) return strdup("ERROR: socket failed");
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
+    if (sock < 0) {
+        log_event(LOG_LEVEL_ERROR, "DEX", "socket_failed errno=%d", errno);
+        return strdup("ERROR: socket failed");
+    }
+
+    struct sockaddr_un addr = {0};
     addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, SHREDDER_SOCKET, sizeof(addr.sun_path)-1);
+    strncpy(addr.sun_path, DEX_SOCKET_PATH, sizeof(addr.sun_path)-1);
+
     if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         close(sock);
+        log_event(LOG_LEVEL_ERROR, "DEX", "connect_failed errno=%d", errno);
         return strdup("ERROR: cannot connect to Shredder");
     }
-    dprintf(sock, "%s\n", cmd);
-    shutdown(sock, SHUT_WR);
+
+    log_event(LOG_LEVEL_DEBUG, "DEX", "sending_command");
+    dprintf(sock, "%s\n", cmd);  // keep logic identical
+
     char *resp = malloc(BUFFER_SIZE);
     if (!resp) {
         close(sock);
+        log_event(LOG_LEVEL_ERROR, "DEX", "malloc_failed");
         return strdup("ERROR: malloc failed");
     }
-    int pos = 0;
+
+    size_t pos = 0;
     while (pos < BUFFER_SIZE-1) {
         ssize_t n = read(sock, resp + pos, BUFFER_SIZE-1-pos);
         if (n <= 0) break;
         pos += n;
     }
-    resp[pos] = '\0';
+
     close(sock);
+    log_event(LOG_LEVEL_DEBUG, "DEX", "response_received bytes=%d", pos);
     return resp;
 }

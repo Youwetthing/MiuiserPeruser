@@ -9,12 +9,14 @@
 #include "krang.h"
 
 static void rocksteady_heartbeat(void) {
-    krang_send_command("echo rocksteady_heartbeat");
+    
+char resp[256];
+krang_send_command("echo rocksteady_heartbeat", resp, sizeof(resp));
     fugitoid_log("INFO", "[ROCKSTEADY] Heartbeat sent");
 }
 
 int main(void) {
-    fugitoid_init("rocksteady");
+fugitoid_init();
 
     fugitoid_log("INFO", "[ROCKSTEADY] Starting...");
 
