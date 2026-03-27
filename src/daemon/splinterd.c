@@ -1,3 +1,4 @@
+#include "daemon_core.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,19 +42,23 @@ static void start_worker(const char *name) {
 }
 
 int main(void) {
+    if (!daemon_core_init("splinterd")) {
+        return 1;
+    }
+
     int fd_bus   = connect_sock(SOCK_PATH);
     int fd_krang = connect_sock(KRANG_PATH);
 
     char buf[BUF_SIZE];
 
     write(fd_bus, "HELLO DISPATCH SPLINTER\n", 25);
-    printf("splinterd: ONLINE\n");
+    daemon_log_info("ONLINE");
 
     for (;;) {
         int n = read(fd_bus, buf, sizeof(buf) - 1);
         if (n > 0) {
             buf[n] = 0;
-            printf("splinterd: Received: %s", buf);
+            daemon_log_info("Received: %s", buf);
 
             char cmd[32], action[32], target[64];
 
@@ -61,7 +66,7 @@ int main(void) {
                 strcmp(cmd, "CMD") == 0 &&
                 strcmp(action, "START") == 0) {
 
-                printf("splinterd: starting worker '%s'\n", target);
+                daemon_log_info("starting worker '%s'", target);
                 start_worker(target);
                 continue;
             }
@@ -75,5 +80,6 @@ int main(void) {
         usleep(100000);
     }
 
+    daemon_core_shutdown();
     return 0;
 }
