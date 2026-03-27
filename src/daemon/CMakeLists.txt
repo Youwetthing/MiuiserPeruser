@@ -1,4 +1,16 @@
 # TMNT DAEMON BUILD SYSTEM — CLEAN, SPLINTER‑FREE EDITION
+function(add_tmnt_daemon NAME)
+    add_executable(${NAME}
+        ${NAME}.c
+        ipc.c
+        daemon_core.c
+    )
+
+    target_link_libraries(${NAME}
+        sensei_core
+        pthread
+    )
+endfunction()
 
 # IPC Library (Krang)
 add_library(krang STATIC
@@ -12,34 +24,30 @@ target_link_libraries(krang PUBLIC sensei_core)
 # ----------------------------
 # TMNT DAEMONS
 # ----------------------------
-add_executable(splinterd splinterd.c)
-target_link_libraries(splinterd krang)
+add_tmnt_daemon(splinterd)
 
-add_executable(metalhead metalhead.c)
-target_link_libraries(metalhead PRIVATE sensei_core krang)
 
-add_executable(leatherheadd leatherheadd.c)
-target_link_libraries(leatherheadd PRIVATE sensei_core krang)
+add_tmnt_daemon (metalhead)
 
-add_executable(bebopd bebopd.c)
-target_link_libraries(bebopd PRIVATE sensei_core krang)
+add_tmnt_daemon (leatherheadd)
 
-add_executable(rocksteadyd rocksteadyd.c)
-target_link_libraries(rocksteadyd PRIVATE sensei_core krang)
+add_tmnt_daemon (bebopd)
 
-add_executable(ratkingd ratkingd.c)
-target_link_libraries(ratkingd PRIVATE sensei_core krang)
+add_tmnt_daemon (rocksteadyd)
 
-add_executable(shredderd shredderd.c)
-target_link_libraries(shredderd PRIVATE sensei_core krang)
+add_tmnt_daemon (ratkingd)
 
-add_executable(fugitoidd fugitoidd.c)
-target_link_libraries(fugitoidd PRIVATE sensei_core krang)
+add_tmnt_daemon (shredderd)
 
-add_executable(krangd krangd.c)
-target_link_libraries(krangd krang)
+add_tmnt_daemon (fugitoidd)
 
-add_executable(turtlecomd turtlecomd.c)
+add_tmnt_daemon (krangd)
+target_sources(krangd PRIVATE krang.c)
+
+
+add_tmnt_daemon (turtlecomd)
+
+
 # Splinter Selector stays as a header-only helper (NOT a build target)
 # splinter_selector.c / .h are included by daemons but not compiled as a target
 
