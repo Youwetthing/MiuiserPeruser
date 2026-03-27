@@ -1,1 +1,0 @@
-/data/data/com.termux/files/usr/bin/cc -O2 -g -DNDEBUG -Xlinker --dependency-file=CMakeFiles/ratkingd.dir/link.d CMakeFiles/ratkingd.dir/ratkingd.c.o -o ratkingd  ../core/libsensei_core.a libkrang.a ../core/libsensei_core.a /data/data/com.termux/files/usr/lib/libcrypto.so

@@ -1,1 +1,0 @@
-/data/data/com.termux/files/usr/bin/cc -O2 -g -DNDEBUG -Xlinker --dependency-file=CMakeFiles/turtlecomd.dir/link.d CMakeFiles/turtlecomd.dir/turtlecomd.c.o -o turtlecomd
