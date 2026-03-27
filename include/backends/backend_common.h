@@ -20,11 +20,14 @@ typedef struct {
     bool via_network;
 } backend_info_t;
 
+/* Unified backend vtable */
 typedef struct {
     int (*init)(void);
     int (*shutdown)(void);
-    int (*read_file)(const char *path, char *buf, int buf_size);
-    int (*run_command)(const char *cmd, char *buf, int buf_size);
+
+    int (*read_thermal)(int *out);
+    int (*read_battery)(int *out);
+    int (*read_cpu_freq)(int *out);
 } backend_vtable_t;
 
 const backend_info_t *backend_get_active_info(void);

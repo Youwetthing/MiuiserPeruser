@@ -6,28 +6,15 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 option(ENABLE_SUPERHERO "Build Superhero Mode scanner" ON)
 
+# Global include path
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
-)
-
-add_subdirectory(src)
-
-cmake_minimum_required(VERSION 3.10)
-project(MiuiserPeruser C)
-
-set(CMAKE_C_STANDARD 99)
-
-# Global include path so all modules see core headers
-include_directories(
     ${CMAKE_SOURCE_DIR}/src/core/include
 )
 
-add_subdirectory(src/core)
-add_subdirectory(src/daemon)
-
 #
 # ────────────────────────────────────────────────────────────────
-#  Self‑healing guard system (runs automatically on cmake ..)
+#  Self‑healing guard system
 # ────────────────────────────────────────────────────────────────
 #
 
@@ -44,4 +31,19 @@ if(NOT GUARD_RESULT EQUAL 0)
 endif()
 
 message(STATUS "Guard completed successfully.")
+
+#
+# ────────────────────────────────────────────────────────────────
+#  Subdirectories
+# ────────────────────────────────────────────────────────────────
+#
+
+# Core library
+add_subdirectory(src/core)
+
+# Daemon components
+add_subdirectory(src/daemon)
+
+# Main backend + superhero build
+add_subdirectory(src)
 

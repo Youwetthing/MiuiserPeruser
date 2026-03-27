@@ -1,28 +1,16 @@
 #ifndef BACKEND_STRATEGY_H
 #define BACKEND_STRATEGY_H
 
-#include <stdint.h>
 #include "sensei_types.h"
+#include "backend_common.h"
 
-/* Available backend types */
-typedef enum {
-    BACKEND_NONE = 0,
-    BACKEND_SYSPORT,
-    BACKEND_RISH,
-    BACKEND_SHIZUKU,
-    BACKEND_ADB
-} BACKEND_TYPE;
+/* Public alias for higher layers */
+typedef backend_type_t BACKEND_TYPE;
 
-/* Result of backend selection */
-typedef struct {
-    BACKEND_TYPE type;
-    int score;
-} BACKEND_SELECTION;
+/* Human-readable backend name */
+const char *backend_name(BACKEND_TYPE t);
 
-/* Detect and score all backends, return the best one. */
-BACKEND_SELECTION backend_select_best(void);
-
-/* Convert backend enum to string */
-const char* backend_name(BACKEND_TYPE type);
+/* Select the best backend and return its type */
+BACKEND_TYPE backend_strategy_select(void);
 
 #endif /* BACKEND_STRATEGY_H */

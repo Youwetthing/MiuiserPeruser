@@ -1,9 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/data/data/com.termux/files/home/MiuiserPeruser/build/cmake_install.cmake",
-		"/data/data/com.termux/files/home/MiuiserPeruser/build/src/core/cmake_install.cmake",
-		"/data/data/com.termux/files/home/MiuiserPeruser/build/src/daemon/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
