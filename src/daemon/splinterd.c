@@ -1,85 +1,74 @@
-#include "daemon_core.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/wait.h>
+#include <poll.h>
+#include <errno.h>
 
-#define SOCK_PATH "/data/data/com.termux/files/home/tmp/turtlecom.sock"
-#define KRANG_PATH "/data/data/com.termux/files/home/tmp/krang.sock"
-#define BUF_SIZE 512
+#define HUB_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/turtlecom.sock"
+#define KRANG_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/krang.sock"
 
-static int connect_sock(const char *path) {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) { perror("socket"); exit(1); }
-
+// Simple "Fire-and-Forget" Dispatch
+void dispatch_to_worker(const char* worker_path, const char* command) {
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, path);
+    strncpy(addr.sun_path, worker_path, sizeof(addr.sun_path)-1);
 
-    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        perror("connect");
-        close(fd);
-        exit(1);
+    if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+        write(sock, command, strlen(command));
     }
-
-    fcntl(fd, F_SETFL, O_NONBLOCK);
-    return fd;
+    close(sock); // Instant release - No waiting!
 }
 
-static void start_worker(const char *name) {
-    pid_t pid = fork();
-    if (pid == 0) {
-        execlp(name, name, NULL);
-        perror("execlp");
-        _exit(1);
-    }
-}
+int main() {
+    int hub_fd = -1;
+    struct sockaddr_un h_addr;
+    memset(&h_addr, 0, sizeof(h_addr));
+    h_addr.sun_family = AF_UNIX;
+    strncpy(h_addr.sun_path, HUB_PATH, sizeof(h_addr.sun_path)-1);
 
-int main(void) {
-    if (!daemon_core_init("splinterd")) {
-        return 1;
-    }
+    printf("BRAIN: Initializing Async Router...\n");
 
-    int fd_bus   = connect_sock(SOCK_PATH);
-    int fd_krang = connect_sock(KRANG_PATH);
+    while (1) {
+        // 1. Connection Logic (Retry Loop)
+        if (hub_fd < 0) {
+            hub_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+            if (connect(hub_fd, (struct sockaddr*)&h_addr, sizeof(h_addr)) < 0) {
+                close(hub_fd);
+                hub_fd = -1;
+                usleep(500000); // Wait 500ms before retrying
+                continue;
+            }
+            printf("BRAIN: Connected to Sewer Hub.\n");
+        }
 
-    char buf[BUF_SIZE];
+        // 2. The Non-Blocking Poll
+        struct pollfd pfd;
+        pfd.fd = hub_fd;
+        pfd.events = POLLIN;
 
-    write(fd_bus, "HELLO DISPATCH SPLINTER\n", 25);
-    daemon_log_info("ONLINE");
-
-    for (;;) {
-        int n = read(fd_bus, buf, sizeof(buf) - 1);
-        if (n > 0) {
-            buf[n] = 0;
-            daemon_log_info("Received: %s", buf);
-
-            char cmd[32], action[32], target[64];
-
-            if (sscanf(buf, "%31s %31s %63s", cmd, action, target) == 3 &&
-                strcmp(cmd, "CMD") == 0 &&
-                strcmp(action, "START") == 0) {
-
-                daemon_log_info("starting worker '%s'", target);
-                start_worker(target);
+        int ret = poll(&pfd, 1, 100); // 100ms timeout
+        if (ret > 0 && (pfd.revents & POLLIN)) {
+            char buf[1024] = {0};
+            ssize_t n = read(hub_fd, buf, sizeof(buf)-1);
+            if (n <= 0) {
+                printf("BRAIN: Hub disconnected. Reconnecting...\n");
+                close(hub_fd);
+                hub_fd = -1;
                 continue;
             }
 
-            /* Forward ALL other messages to Krang ONLY */
-            write(fd_krang, buf, strlen(buf));
+            // 3. Routing Logic
+            if (strstr(buf, "SCAN")) {
+                printf("BRAIN: Routing SCAN request to KRANG.\n");
+                dispatch_to_worker(KRANG_PATH, "SCAN");
+            } 
+            // Future "Hello" or Capability Logic goes here
         }
-
-        while (waitpid(-1, NULL, WNOHANG) > 0) {}
-
-        usleep(100000);
     }
-
-    daemon_core_shutdown();
     return 0;
 }

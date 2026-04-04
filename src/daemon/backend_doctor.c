@@ -65,3 +65,10 @@ char *backend_doctor(void)
 
     return out;
 }
+
+int backend_doctor_status(char *buf, int len) {
+    if (!buf || len < 10) return -1;
+    // Simple healthy status return
+    snprintf(buf, len, "HEALTHY");
+    return 0;
+}

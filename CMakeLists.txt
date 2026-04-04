@@ -38,12 +38,7 @@ message(STATUS "Guard completed successfully.")
 # ────────────────────────────────────────────────────────────────
 #
 
-# Core library
 add_subdirectory(src/core)
-
-# Daemon components
 add_subdirectory(src/daemon)
-
-# Main backend + superhero build
 add_subdirectory(src)
 

@@ -1,53 +1,15 @@
-# TMNT DAEMON BUILD SYSTEM — CLEAN, SPLINTER‑FREE EDITION
-function(add_tmnt_daemon NAME)
-    add_executable(${NAME}
-        ${NAME}.c
-        ipc.c
-        daemon_core.c
-    )
-
-    target_link_libraries(${NAME}
-        sensei_core
-        pthread
-    )
-endfunction()
-
-# IPC Library (Krang)
-add_library(krang STATIC
-    ipc.c
-    krang.c
+set(POWERHOUSE_SOURCES
+    powerhouse_daemon.c
+    rocksteady_parser.c
+    leatherheadd_parser.c
+    metalheadd_parser.c
+    bebopd_parser.c
+    ratkingd_parser.c
+    shredderd_parser.c
+    fugitoidd_parser.c
+    krangd_parser.c
+    splinterd_parser.c
 )
-
-target_include_directories(krang PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(krang PUBLIC sensei_core)
-
-# ----------------------------
-# TMNT DAEMONS
-# ----------------------------
-add_tmnt_daemon(splinterd)
-
-
-add_tmnt_daemon (metalhead)
-
-add_tmnt_daemon (leatherheadd)
-
-add_tmnt_daemon (bebopd)
-
-add_tmnt_daemon (rocksteadyd)
-
-add_tmnt_daemon (ratkingd)
-
-add_tmnt_daemon (shredderd)
-
-add_tmnt_daemon (fugitoidd)
-
-add_tmnt_daemon (krangd)
-target_sources(krangd PRIVATE krang.c)
-
-
-add_tmnt_daemon (turtlecomd)
-
-
-# Splinter Selector stays as a header-only helper (NOT a build target)
-# splinter_selector.c / .h are included by daemons but not compiled as a target
-
+add_executable(powerhouse_daemon ${POWERHOUSE_SOURCES})
+target_include_directories(powerhouse_daemon PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src/core)
+target_link_libraries(powerhouse_daemon sensei_core m)
