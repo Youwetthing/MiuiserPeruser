@@ -1,1 +1,0 @@
-/data/data/com.termux/files/usr/bin/c++ -O2 -g -DNDEBUG -Xlinker --dependency-file=CMakeFiles/storaged.dir/link.d CMakeFiles/storaged.dir/storaged.cpp.o CMakeFiles/storaged.dir/fugitoid_logger.cpp.o -o storaged  -lpthread

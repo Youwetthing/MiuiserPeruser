@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdlib.h>
 
 static const char *g_daemon_name = "daemon";
 static int g_pid_fd = -1;
@@ -30,10 +31,14 @@ static void install_signal_handlers(void) {
     sigaction(SIGTERM, &sa, NULL);
 }
 
-/* Create /tmp/<daemon>.pid */
+/* Create $HOME/tmp/<daemon>.pid */
 static bool create_pid_file(void) {
     char path[256];
-    snprintf(path, sizeof(path), "/tmp/%s.pid", g_daemon_name);
+
+    const char *home = getenv("HOME");
+    if (!home) home = "/data/data/com.termux/files/home";
+
+    snprintf(path, sizeof(path), "%s/tmp/%s.pid", home, g_daemon_name);
 
     g_pid_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (g_pid_fd < 0) {
@@ -45,9 +50,14 @@ static bool create_pid_file(void) {
     return true;
 }
 
-/* Ensure /tmp exists (MIUI sometimes nukes it) */
+/* Ensure ~/tmp exists */
 static void ensure_tmp_exists(void) {
-    mkdir("/tmp", 0755);
+    const char *home = getenv("HOME");
+    if (!home) home = "/data/data/com.termux/files/home";
+
+    char dir[256];
+    snprintf(dir, sizeof(dir), "%s/tmp", home);
+    mkdir(dir, 0755);
 }
 
 /* ------------------------------

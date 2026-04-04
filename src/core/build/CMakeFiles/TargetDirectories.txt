@@ -1,3 +1,0 @@
-/data/data/com.termux/files/home/MiuiserPeruser/src/core/build/CMakeFiles/sensei_core.dir
-/data/data/com.termux/files/home/MiuiserPeruser/src/core/build/CMakeFiles/edit_cache.dir
-/data/data/com.termux/files/home/MiuiserPeruser/src/core/build/CMakeFiles/rebuild_cache.dir

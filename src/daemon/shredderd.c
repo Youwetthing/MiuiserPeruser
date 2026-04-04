@@ -1,46 +1,41 @@
+#include "daemon_core.h"
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <fcntl.h>
 
-#define SOCK_PATH "/data/data/com.termux/files/home/tmp/turtlecom.sock"
+#define BUS_PATH "/data/data/com.termux/files/home/tmp/turtlecom.sock"
 #define BUF_SIZE 2048
 
-static int connect_to_turtlecom(void) {
+static int connect_bus(void) {
     int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) { perror("socket"); exit(1); }
+    if (fd < 0) return -1;
 
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, SOCK_PATH);
+    strcpy(addr.sun_path, BUS_PATH);
 
     if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        perror("connect");
         close(fd);
-        exit(1);
+        return -1;
     }
 
     fcntl(fd, F_SETFL, O_NONBLOCK);
     return fd;
 }
 
-static char* run_cmd(const char *cmd) {
+static char* run(const char *cmd) {
     FILE *f = popen(cmd, "r");
     if (!f) return NULL;
-
-    char *buf = malloc(256);
-    if (!buf) { pclose(f); return NULL; }
-
-    if (!fgets(buf, 256, f)) {
-        free(buf);
+    static char buf[256];
+    if (!fgets(buf, sizeof(buf), f)) {
         pclose(f);
         return NULL;
     }
-
     buf[strcspn(buf, "\n")] = 0;
     pclose(f);
     return buf;
@@ -51,55 +46,77 @@ static int file_exists(const char *path) {
 }
 
 int main(void) {
-    int fd = connect_to_turtlecom();
-    char out[BUF_SIZE];
+    if (!daemon_core_init("shredderd")) return 1;
 
-    printf("shredderd (Shredder Integrity Daemon): ONLINE\n");
+    int fd = connect_bus();
+    if (fd < 0) return 1;
+
     write(fd, "HELLO WORKER SHREDDER\n", 23);
+    daemon_log_info("shredderd ONLINE");
+
+    char buf[BUF_SIZE];
 
     for (;;) {
-        char *selinux = run_cmd("getenforce 2>/dev/null");
-        char *vb_state = run_cmd("getprop ro.boot.verifiedbootstate 2>/dev/null");
-        char *vb_mode  = run_cmd("getprop ro.boot.veritymode 2>/dev/null");
-        char *flash_locked = run_cmd("getprop ro.boot.flash.locked 2>/dev/null");
-        char *ro_secure = run_cmd("getprop ro.secure 2>/dev/null");
-        char *ro_debuggable = run_cmd("getprop ro.debuggable 2>/dev/null");
-        char *su_path = run_cmd("which su 2>/dev/null");
-        int magisk_hint =
-            file_exists("/sbin/.magisk") ||
-            file_exists("/data/adb/magisk") ||
-            file_exists("/data/adb/modules");
+        int n = read(fd, buf, sizeof(buf)-1);
+        if (n <= 0) {
+            usleep(100000);
+            continue;
+        }
+        buf[n] = 0;
 
-        snprintf(out, sizeof(out),
-                 "STATUS SHREDDER "
-                 "SELINUX=%s "
-                 "VB_STATE=%s "
-                 "VB_MODE=%s "
-                 "FLASH_LOCKED=%s "
-                 "SECURE=%s "
-                 "DEBUGGABLE=%s "
-                 "SU=%s "
-                 "MAGISK_HINT=%d\n",
-                 selinux ? selinux : "unknown",
-                 vb_state ? vb_state : "unknown",
-                 vb_mode ? vb_mode : "unknown",
-                 flash_locked ? flash_locked : "unknown",
-                 ro_secure ? ro_secure : "unknown",
-                 ro_debuggable ? ro_debuggable : "unknown",
-                 su_path && strlen(su_path) > 0 ? "present" : "none",
-                 magisk_hint ? 1 : 0);
+        /* Capability discovery */
+        if (strncmp(buf, "CAPABILITY?", 11) == 0) {
+            write(fd, "CAPABILITY SECURITY STATUS\n", 28);
+            write(fd, "CAPABILITY ROOT CHECK\n", 23);
+            write(fd, "CAPABILITY BOOTSTATE CHECK\n", 28);
+            continue;
+        }
 
-        write(fd, out, strlen(out));
+        /* SECURITY STATUS */
+        if (strncmp(buf, "SECURITY STATUS", 15) == 0) {
+            char *selinux = run("getenforce 2>/dev/null");
+            char *vb_state = run("getprop ro.boot.verifiedbootstate 2>/dev/null");
+            char *vb_mode  = run("getprop ro.boot.veritymode 2>/dev/null");
+            char *flash_locked = run("getprop ro.boot.flash.locked 2>/dev/null");
+            char *ro_secure = run("getprop ro.secure 2>/dev/null");
+            char *ro_debuggable = run("getprop ro.debuggable 2>/dev/null");
+            char *su_path = run("which su 2>/dev/null");
 
-        free(selinux);
-        free(vb_state);
-        free(vb_mode);
-        free(flash_locked);
-        free(ro_secure);
-        free(ro_debuggable);
-        free(su_path);
+            int magisk_hint =
+                file_exists("/sbin/.magisk") ||
+                file_exists("/data/adb/magisk") ||
+                file_exists("/data/adb/modules");
 
-        sleep(60);
+            dprintf(fd,
+                "SECURITY STATUS SELINUX=%s VB_STATE=%s VB_MODE=%s FLASH_LOCKED=%s "
+                "SECURE=%s DEBUGGABLE=%s SU=%s MAGISK_HINT=%d\n",
+                selinux ? selinux : "unknown",
+                vb_state ? vb_state : "unknown",
+                vb_mode ? vb_mode : "unknown",
+                flash_locked ? flash_locked : "unknown",
+                ro_secure ? ro_secure : "unknown",
+                ro_debuggable ? ro_debuggable : "unknown",
+                (su_path && strlen(su_path) > 0) ? "present" : "none",
+                magisk_hint ? 1 : 0
+            );
+            continue;
+        }
+
+        /* ROOT CHECK */
+        if (strncmp(buf, "ROOT CHECK", 10) == 0) {
+            char *su_path = run("which su 2>/dev/null");
+            dprintf(fd, "ROOT CHECK %s\n",
+                (su_path && strlen(su_path) > 0) ? "present" : "none");
+            continue;
+        }
+
+        /* BOOTSTATE CHECK */
+        if (strncmp(buf, "BOOTSTATE CHECK", 15) == 0) {
+            char *vb_state = run("getprop ro.boot.verifiedbootstate 2>/dev/null");
+            dprintf(fd, "BOOTSTATE CHECK %s\n",
+                vb_state ? vb_state : "unknown");
+            continue;
+        }
     }
 
     return 0;

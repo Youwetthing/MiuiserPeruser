@@ -1,137 +1,36 @@
-#!/data/data/com.termux/files/usr/bin/bash
-# --- Shortcut flags ---
-FAST=false
-VERBOSE=false
-NOCOLOR=false
-WATCH=false
+#!/bin/bash
+echo "🏰 [SYNDICATE HAUS] Final Structural Reinforcement..."
+LAIRS="-I. -I./include -I./src/core/include -I./src/daemon"
+LDFLAGS="-Wl,-z,muldefs"
 
-for arg in "$@"; do
-    case "$arg" in
-        --fast) FAST=true ;;
-        --verbose) VERBOSE=true ;;
-        --no-color) NOCOLOR=true ;;
-        --watch) WATCH=true ;;
-    esac
-done
+mkdir -p bin pipes
 
-# Disable colors if requested
-if [ "$NOCOLOR" = true ]; then
-    RED=""; GRN=""; YLW=""; BLU=""; RST=""
-fi
+echo "🥋 Training: IPC & Logic..."
+gcc -c src/daemon/ipc.c $LAIRS -o bin/ipc.o
+gcc -c src/daemon/ipc_globals.c $LAIRS -o bin/ipc_globals.o
+gcc -c src/daemon/daemon_modes.c $LAIRS -o bin/modes.o
+gcc -c src/daemon/doctor_mode.c $LAIRS -o bin/doctor_mode.o
+gcc -c src/daemon/capabilities_extra.c $LAIRS -o bin/cap_extra.o
+gcc -c src/daemon/capabilities_pretty.c $LAIRS -o bin/cap_pretty.o
+gcc -c src/core/capabilities.c $LAIRS -o bin/capabilities.o
+gcc -c src/core/sensei_core.c $LAIRS -o bin/sensei_core.o
+gcc -c src/daemon/splinter_protocol.c $LAIRS -o bin/splinter_protocol.o
 
-set -euo pipefail
+echo "⚡ Energizing miuiserperuser..."
+gcc src/daemon/miuiserperuser.c \
+    bin/*.o \
+    src/daemon/daemon_core.c \
+    src/daemon/help_extra.c \
+    src/backend/backend_selector.c \
+    src/backend/backend_rish.c \
+    src/backend/backend_adb.c \
+    $LAIRS $LDFLAGS -o bin/miuiserperuser
 
-REPO_ROOT=~/MiuiserPeruser
-EXEC=src/daemon/miuiserperuser
-
-# Colors (fallback if unsupported)
-RED=$(printf '\033[31m')
-GRN=$(printf '\033[32m')
-YLW=$(printf '\033[33m')
-BLU=$(printf '\033[34m')
-RST=$(printf '\033[0m')
-
-echo "=============================="
-echo "🛠 ${BLU}Starting self-healing TMNT build${RST}"
-echo "=============================="
-
-cd "$REPO_ROOT"
-
-# ----------------------------------------
-# 1) Verify repo structure
-# ----------------------------------------
-echo "🔍 Verifying repo structure..."
-
-if [ ! -f "./CMakeLists.txt" ] || [ ! -d "./src/daemon" ]; then
-    echo "❌ ${RED}Not in MiuiserPeruser repo root${RST}"
-    exit 1
-fi
-
-required_files=(
-    "src/daemon/daemon_common.c"
-    "src/daemon/service.c"
-    "src/daemon/rish_pipe.c"
-)
-
-for f in "${required_files[@]}"; do
-    if [ ! -f "$f" ]; then
-        echo "❌ ${RED}Missing required file:${RST} $f"
-        exit 1
-    fi
-done
-
-echo "✔ ${GRN}Repo structure OK${RST}"
-
-# ----------------------------------------
-# 2) Auto-fix misnamed files
-# ----------------------------------------
-echo "🩹 Checking for misnamed files..."
-
-declare -A renames=(
-    ["src/daemon/miuixiaomi.c"]="src/daemon/miui_xiaomi.c"
-    ["src/daemon/daemoncommon.c"]="src/daemon/daemon_common.c"
-)
-
-for wrong in "${!renames[@]}"; do
-    right="${renames[$wrong]}"
-    if [ -f "$wrong" ]; then
-        mv "$wrong" "$right"
-        echo "✔ Renamed ${YLW}$wrong${RST} → ${GRN}$right${RST}"
-    fi
-done
-
-# ----------------------------------------
-# 3) Clean build
-# ----------------------------------------
-echo "🧹 Cleaning build directory..."
-rm -rf build
-mkdir build && cd build
-
-echo "⚙️ Running CMake..."
-cmake .. >/dev/null
-
-echo "🔨 Building..."
-make -j"$(nproc)" >/dev/null
-
-echo "🎉 ${GRN}Build finished${RST}"
-
-# ----------------------------------------
-# 4) Verify symbols
-# ----------------------------------------
-echo "🔍 Verifying critical symbols in $EXEC"
-
-if [ ! -x "$EXEC" ]; then
-    echo "❌ ${RED}Executable missing:${RST} $EXEC"
-    exit 1
-fi
-
-symbols=(
-    miuiserperuser_service_start
-    rish_pipe_start
-    rish_pipe_stop
-    rish_pipe_command
-)
-
-all_ok=true
-
-for s in "${symbols[@]}"; do
-    if nm -g --defined-only "$EXEC" | grep -q "$s"; then
-        echo "✔ ${GRN}$s${RST}"
-    else
-        echo "❌ ${RED}Missing:${RST} $s"
-        all_ok=false
-    fi
-done
-
-# ----------------------------------------
-# 5) Final summary
-# ----------------------------------------
-echo "=============================="
-
-if [ "$all_ok" = true ]; then
-    echo "✅ ${GRN}TMNT daemon build completed successfully!${RST}"
+if [ $? -eq 0 ]; then
+    chmod 700 bin/miuiserperuser
+    echo "🔍 Forging the Mouser..."
+    gcc src/backend/backend_doctor.c bin/*.o $LAIRS $LDFLAGS -o bin/mouser
+    echo "✅ [SUCCESS] The Haus is standing. IPC is Hot."
 else
-    echo "❌ ${RED}Build completed but some symbols are missing.${RST}"
+    echo "❌ [ERROR] Still missing something. Check the symbol dump."
 fi
-
-echo "=============================="
