@@ -1,0 +1,236 @@
+#include "fugitoid_log.h"
+#include "krang.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>
+
+/*
+ * Burne Thompson – MIUI Behaviour Monitor
+ * Watches MIUI/HyperOS quirks, restrictions, and power policies.
+ * Reports anomalies to Krang and logs warnings for Shredder.
+ */
+
+// Add at top of file
+static int debug_mode = 0;
+
+static void debug(const char *fmt, ...) {
+    if (!debug_mode) return;
+    va_list args;
+    va_start(args, fmt);
+    fprintf(stderr, "DEBUG: ");
+    vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n");
+    va_end(args);
+}
+
+#define STATE_FILE "/data/data/com.termux/files/home/.local/tmnt/state/burne.state"
+
+static void write_state(const char *key, const char *value) {
+    FILE *f = fopen(STATE_FILE, "a");
+    if (!f) return;
+    fprintf(f, "%s=%s\n", key, value);
+    fclose(f);
+}
+
+static void reset_state() {
+    FILE *f = fopen(STATE_FILE, "w");
+    if (f) fclose(f);
+}
+
+/* ------------------------------
+   1. Detect MIUI killing daemons
+   ------------------------------ */
+static void check_process_survival() {
+    char *resp = krang_send_command("ps -A | grep tmnt");
+    if (!resp) return;
+
+    int count = 0;
+    char *line = strtok(resp, "\n");
+    while (line) {
+        if (strstr(line, "d")) count++;
+        line = strtok(NULL, "\n");
+    }
+
+    if (count < 6) {
+        fugitoid_log("WARN", "MIUI may have killed one or more TMNT daemons.");
+        write_state("daemon_kill", "1");
+    } else {
+        write_state("daemon_kill", "0");
+    }
+
+    free(resp);
+}
+
+/* ------------------------------
+   2. Detect MIUI power policy
+   ------------------------------ */
+static void check_power_mode() {
+    FILE *f = fopen("/sys/kernel/miui_battery/power_mode", "r");
+    if (!f) {
+        write_state("power_mode", "unknown");
+        return;
+    }
+
+    char buf[32];
+    fgets(buf, sizeof(buf), f);
+    fclose(f);
+
+    write_state("power_mode", buf);
+}
+
+/* ------------------------------
+   3. Detect MIUI AppOps changes
+   ------------------------------ */
+static void check_appops() {
+    char cmd[128];
+    snprintf(cmd, sizeof(cmd), "appops get %d RUN_IN_BACKGROUND", getuid());
+
+    char *resp = krang_send_command(cmd);
+    if (!resp) return;
+
+    if (strstr(resp, "deny")) {
+        fugitoid_log("WARN", "MIUI restricted RUN_IN_BACKGROUND.");
+        write_state("appops_bg", "denied");
+    } else {
+        write_state("appops_bg", "allowed");
+    }
+
+    free(resp);
+}
+
+/* ------------------------------
+   4. Detect MIUI thermal policy
+   ------------------------------ */
+static void check_thermal_policy() {
+    FILE *f = fopen("/sys/class/thermal/thermal_message/level", "r");
+    if (!f) {
+        write_state("thermal_policy", "restricted");
+        return;
+    }
+
+    char buf[32];
+    fgets(buf, sizeof(buf), f);
+    fclose(f);
+
+    write_state("thermal_policy", buf);
+}
+
+/* ------------------------------
+   5. Detect MIUI Smart Scenes
+   ------------------------------ */
+static void check_scenes() {
+    FILE *f = fopen("/sys/module/mi_thermal/parameters/scene", "r");
+    if (!f) {
+        write_state("scene_mode", "unknown");
+        return;
+    }
+
+    char buf[32];
+    fgets(buf, sizeof(buf), f);
+    fclose(f);
+
+    write_state("scene_mode", buf);
+}
+
+/* ------------------------------
+   6. Detect MIUI battery saver
+   ------------------------------ */
+static void check_battery_saver() {
+    FILE *f = fopen("/sys/kernel/miui_battery/thermal_mode", "r");
+    if (!f) {
+        write_state("battery_saver", "unknown");
+        return;
+    }
+
+    char buf[32];
+    fgets(buf, sizeof(buf), f);
+    fclose(f);
+
+    write_state("battery_saver", buf);
+}
+
+/* ------------------------------
+   7. Detect MIUI app freeze
+   ------------------------------ */
+static void check_freeze() {
+    FILE *f = fopen("/dev/stune/background/tasks", "r");
+    if (!f) {
+        write_state("freeze", "unknown");
+        return;
+    }
+
+    char buf[256];
+    int frozen = 0;
+
+    while (fgets(buf, sizeof(buf), f)) {
+        frozen++;
+    }
+
+    fclose(f);
+
+    if (frozen > 0) {
+        write_state("freeze", "1");
+        fugitoid_log("WARN", "MIUI may be freezing background tasks.");
+    } else {
+        write_state("freeze", "0");
+    }
+}
+
+/* ------------------------------
+   Main loop
+   ------------------------------ */
+/* --- Burne argument parsing (clean rewrite) --- */
+int main(int argc, char **argv) {
+
+    /* Parse command‑line arguments */
+    DEBUG_MODE = 0;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--debug") == 0) {
+            DEBUG_MODE = 1;
+            fprintf(stderr, "DEBUG MODE ENABLED\n");
+        }
+    }
+
+    /* Burne startup banner */
+    printf("Burne Thompson starting…\n");
+
+    /* ...rest of your existing code continues here... */
+int main() {
+    fugitoid_log("INFO", "Burne Thompson starting…");
+
+for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "--debug") == 0) {
+        debug_mode = 1;
+        fprintf(stderr, "DEBUG MODE ENABLED\n");
+    }
+}
+
+    if (krang_connect() < 0) {
+        fugitoid_log("ERROR", "Cannot connect to Krang.");
+        return 1;
+    }
+
+    fugitoid_log("INFO", "Connected to Krang.");
+
+    while (1) {
+        reset_state();
+
+        check_process_survival();
+        check_power_mode();
+        check_appops();
+        check_thermal_policy();
+        check_scenes();
+        check_battery_saver();
+        check_freeze();
+
+        sleep(30);
+    }
+
+    krang_disconnect();
+    return 0;
+}
+
+

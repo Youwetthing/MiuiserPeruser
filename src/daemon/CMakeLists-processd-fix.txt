@@ -1,0 +1,22 @@
+# Rat King – process monitor
+add_executable(processd
+    processd.c
+    fugitoid_log.c
+    krang.c
+)
+
+target_include_directories(processd
+    PRIVATE
+        ${CMAKE_SOURCE_DIR}/src/core/include
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+target_link_libraries(processd
+    PRIVATE
+        sensei_core
+        crypto
+)
+
+install(TARGETS processd
+    RUNTIME DESTINATION bin
+)
