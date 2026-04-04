@@ -1,0 +1,25 @@
+#!/bin/sh
+BASE_DIR="$HOME/MiuiserPeruser"
+SRC_DIR="$BASE_DIR/src/daemon"
+
+case "$1" in
+    start)
+        echo "[SYNDICATE] Awakening the Ghost Pulse..."
+        nohup sh "$SRC_DIR/ghost_pulse.sh" >/dev/null 2>&1 &
+        ;;
+    stop)
+        echo "[SYNDICATE] Putting the Observer to sleep..."
+        pkill -f ghost_pulse.sh
+        ;;
+    status)
+        if pgrep -f ghost_pulse.sh > /dev/null; then
+            echo "[SYNDICATE] Observer is ACTIVE."
+            tail -n 1 "$HOME/.syndicate_sewer/syndicate.log"
+        else
+            echo "[SYNDICATE] Observer is DARK."
+        fi
+        ;;
+    *)
+        echo "Usage: miuiser {start|stop|status}"
+        ;;
+esac

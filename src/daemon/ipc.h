@@ -10,3 +10,4 @@ void miuiserperuser_ipc_broadcast(const SENSEI_DETECTION *detection);
 bool miuiserperuser_ipc_is_connected(void);
 
 #endif
+int krang_send_command(const char *cmd);

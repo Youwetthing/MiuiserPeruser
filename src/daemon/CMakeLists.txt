@@ -1,36 +1,15 @@
-# ============================================================
-# MiuiserPeruser Daemon
-# ============================================================
-
-set(SENSEI_DAEMON_SOURCES
-    main.c
-    service.c
-    daemon_core.c
-    ipc.c
-    rish_pipe.c
+set(POWERHOUSE_SOURCES
+    powerhouse_daemon.c
+    rocksteady_parser.c
+    leatherheadd_parser.c
+    metalheadd_parser.c
+    bebopd_parser.c
+    ratkingd_parser.c
+    shredderd_parser.c
+    fugitoidd_parser.c
+    krangd_parser.c
+    splinterd_parser.c
 )
-
-add_executable(miuiserperuser-daemon ${SENSEI_DAEMON_SOURCES})
-
-target_include_directories(miuiserperuser-daemon
-    PRIVATE
-        ${CMAKE_SOURCE_DIR}/src/core/include
-)
-
-find_package(OpenSSL REQUIRED)
-target_link_libraries(miuiserperuser-daemon
-    PRIVATE
-        sensei_core
-        crypto
-)
-
-if(WIN32)
-    target_link_libraries(miuiserperuser-daemon
-        PRIVATE
-            advapi32
-    )
-endif()
-
-install(TARGETS miuiserperuser-daemon
-    RUNTIME DESTINATION bin
-)
+add_executable(powerhouse_daemon ${POWERHOUSE_SOURCES})
+target_include_directories(powerhouse_daemon PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src/core)
+target_link_libraries(powerhouse_daemon sensei_core m)

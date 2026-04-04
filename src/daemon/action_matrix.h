@@ -1,0 +1,12 @@
+#ifndef ACTION_MATRIX_H
+#define ACTION_MATRIX_H
+
+typedef enum {
+    ACTION_REPORT_STATUS = 0,
+    ACTION_OPTIMIZE_CORES,
+    ACTION_THERMAL_CHECK,
+    ACTION_GC_WORKERS,
+    ACTION_CUSTOM_CMD
+} action_id_t;
+
+#endif

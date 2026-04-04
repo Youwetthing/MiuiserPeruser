@@ -1,145 +1,119 @@
-/*
- * MiuiserPeruser – Daemon core implementation with rish pipe
- */
-
 #include "daemon_core.h"
-#include "ipc.h"
-#include "../core/include/leo_detection.h"
-#include "../core/include/april_platform.h"
-#include "rish_pipe.h"
-#include "../core/include/april_event.h"
+
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <stdarg.h>
-#include <unistd.h>
 #include <signal.h>
-#include <pthread.h>
-#include <time.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <stdlib.h>
 
-static volatile bool g_running = false;
-static bool g_console_mode = false;
+static const char *g_daemon_name = "daemon";
+static int g_pid_fd = -1;
 
-/* Logging function – writes to file and optionally console */
-static void log_message(const char *level, const char *format, ...) {
-    va_list args;
-    va_start(args, format);
+/* ------------------------------
+ * Internal helpers
+ * ------------------------------ */
 
-    time_t now;
-    time(&now);
-    struct tm *tm = localtime(&now);
-    char timestamp[32];
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", tm);
-
-    FILE *log = fopen("/data/data/com.termux/files/home/miuiserperuser.log", "a");
-    if (log) {
-        fprintf(log, "[%s] [%s] ", timestamp, level);
-        vfprintf(log, format, args);
-        fprintf(log, "\n");
-        fclose(log);
-    }
-
-    if (g_console_mode) {
-        printf("[%s] [%s] ", timestamp, level);
-        vprintf(format, args);
-        printf("\n");
-    }
-
-    va_end(args);
+static void handle_signal(int sig) {
+    daemon_log_info("received signal %d, shutting down", sig);
+    daemon_core_shutdown();
+    _exit(0);
 }
 
-static void handle_detection(const SENSEI_DETECTION *det, void *user_data) {
-    (void)user_data;
-    log_message("ALERT", "[%s] %s (score %u)",
-                leo_detection_class_to_string(det->detection_class),
-                det->description,
-                leo_calculate_score(det));
-    miuiserperuser_ipc_broadcast(det);
+static void install_signal_handlers(void) {
+    struct sigaction sa = {0};
+    sa.sa_handler = handle_signal;
+    sigemptyset(&sa.sa_mask);
+
+    sigaction(SIGINT,  &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
 }
 
-void miuiserperuser_stop_signal(int sig) {
-    (void)sig;
-    g_running = false;
+/* Create $HOME/tmp/<daemon>.pid */
+static bool create_pid_file(void) {
+    char path[256];
+
+    const char *home = getenv("HOME");
+    if (!home) home = "/data/data/com.termux/files/home";
+
+    snprintf(path, sizeof(path), "%s/tmp/%s.pid", home, g_daemon_name);
+
+    g_pid_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (g_pid_fd < 0) {
+        daemon_log_error("failed to create pid file: %s", path);
+        return false;
+    }
+
+    dprintf(g_pid_fd, "%d\n", getpid());
+    return true;
 }
 
-int miuiserperuser_main_loop(bool console_mode) {
-    g_console_mode = console_mode;
-    g_running = true;
+/* Ensure ~/tmp exists */
+static void ensure_tmp_exists(void) {
+    const char *home = getenv("HOME");
+    if (!home) home = "/data/data/com.termux/files/home";
 
-    signal(SIGINT, miuiserperuser_stop_signal);
-    signal(SIGTERM, miuiserperuser_stop_signal);
+    char dir[256];
+    snprintf(dir, sizeof(dir), "%s/tmp", home);
+    mkdir(dir, 0755);
+}
 
-    log_message("INFO", "MiuiserPeruser daemon starting...");
+/* ------------------------------
+ * Public API
+ * ------------------------------ */
 
-    if (april_platform_init() != SENSEI_STATUS_OK) {
-        log_message("CRIT", "Platform init failed");
-        return 1;
+bool daemon_core_init(const char *daemon_name) {
+    g_daemon_name = daemon_name;
+
+    ensure_tmp_exists();
+    install_signal_handlers();
+
+    if (!create_pid_file()) {
+        return false;
     }
 
-    /* Start rish pipe for privileged commands */
-    if (rish_pipe_start() == 0) {
-        log_message("INFO", "Rish pipe started successfully");
-        // Test command – remove later
-        char *test = rish_pipe_command("echo hello from rish");
-        if (test) {
-            log_message("INFO", "Rish test output: %s", test);
-            free(test);
-        }
-    } else {
-        log_message("WARN", "Failed to start rish pipe – will fall back to direct forks");
+    daemon_log_info("initialised");
+    return true;
+}
+
+void daemon_core_shutdown(void) {
+    if (g_pid_fd >= 0) {
+        close(g_pid_fd);
+        g_pid_fd = -1;
     }
 
-    SENSEI_DETECTION_CONFIG config = {
-        .enable_memory_scan = true,
-        .enable_hook_detection = true,
-        .enable_behavior_analysis = true,
-        .enable_kernel_analysis = false,
-        .enable_network_monitor = true,
-        .enable_integrity_monitor = true,
-        .scan_interval_ms = 5000
-    };
+    daemon_log_info("shutdown complete");
+}
 
-    if (leo_init(&config) != SENSEI_STATUS_OK) {
-        log_message("CRIT", "Detection engine init failed");
-        april_platform_cleanup();
-        return 1;
-    }
+/* ------------------------------
+ * Logging wrappers
+ * ------------------------------ */
 
-    if (miuiserperuser_ipc_init() != SENSEI_STATUS_OK) {
-        log_message("WARN", "IPC init failed – continuing without IPC");
-    }
+static void vlog(const char *level, const char *fmt, va_list ap) {
+    fprintf(stderr, "[%s] %s: ", level, g_daemon_name);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+}
 
-    /* Register callback for detection events */
-    april_event_register_callback(SENSEI_EVENT_PRIORITY_LOW,
-                                  handle_detection, NULL);
+void daemon_log_info(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vlog("INFO", fmt, ap);
+    va_end(ap);
+}
 
-    log_message("INFO", "Engine ready. Starting scan loop.");
+void daemon_log_error(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vlog("ERROR", fmt, ap);
+    va_end(ap);
+}
 
-    SENSEI_DETECTION_LIST results = {0};
-
-    while (g_running) {
-        log_message("INFO", "Performing full system scan...");
-        leo_full_scan(&results);
-
-        /* Process any queued events (though handle_detection already logs) */
-        SENSEI_DETECTION *cur = results.head;
-        while (cur) {
-            cur = cur->next;
-        }
-
-        leo_detection_list_free(&results);
-        results.head = NULL;
-
-        /* Sleep in 1‑second chunks to allow quick shutdown */
-        for (int i = 0; i < 5 && g_running; i++)
-            sleep(1);
-    }
-
-    log_message("INFO", "MiuiserPeruser daemon stopping...");
-    rish_pipe_stop();
-    miuiserperuser_ipc_shutdown();
-    leo_shutdown();
-    april_platform_cleanup();
-
-    return 0;
+void daemon_log_debug(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vlog("DEBUG", fmt, ap);
+    va_end(ap);
 }
