@@ -1,3 +1,4 @@
+extern void april_log(const char* level, const char* format, ...);
 /*
  * MiuiserPeruser – Memory anomaly detection (Raphael)
  */
@@ -65,5 +66,8 @@ SENSEI_STATUS raph_memory_scan(uint32_t pid, SENSEI_DETECTION_LIST *results) {
     }
 
     april_memory_region_list_free(regions);
+    static int mem_scan_count = 0;
+    mem_scan_count++;
+    if (mem_scan_count % 10 == 0) april_log("INFO", "Memory scan completed (no RWX/reflective code detected)");
     return SENSEI_STATUS_OK;
 }

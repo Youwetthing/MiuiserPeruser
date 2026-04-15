@@ -1,0 +1,28 @@
+#!/data/data/com.termux/files/usr/bin/bash
+case "$1" in
+    s|status)      ps aux | grep -E 'rocksteadyd|krangd|splinterd|bebopd|leatherheadd|metalheadd|ratkingd|shredderd|tigerclawd|granitord|foot_clan_supreme|sysportd|powerhouse|flip_switch' | grep -v grep ;;
+    sc|scan)       echo "Running Superhero Full Scan..."; nohup bin/tigerclawd > /dev/null 2>&1 & ;;
+    h|heal)        echo "Running full diagnostics + self-heal..."; ps aux | grep -E 'rocksteadyd|krangd|splinterd|bebopd|leatherheadd|metalheadd|ratkingd|shredderd|tigerclawd|granitord|foot_clan_supreme|sysportd|powerhouse|flip_switch' | grep -v grep ;;
+    x|stop)        pkill -9 -f "rocksteadyd|krangd|splinterd|bebopd|leatherheadd|metalheadd|ratkingd|shredderd|tigerclawd|granitord|foot_clan_supreme|sysportd|powerhouse|flip_switch" 2>/dev/null || true; echo "✅ Syndicate stopped gracefully" ;;
+    fx|force-stop) pkill -9 -f "rocksteadyd|krangd|splinterd|bebopd|leatherheadd|metalheadd|ratkingd|shredderd|tigerclawd|granitord|foot_clan_supreme|sysportd|powerhouse|flip_switch" 2>/dev/null || true; echo "✅ Hard kill complete" ;;
+    g|gdpr)        
+        echo "=== GDPR / SUBJECT ACCESS REQUEST EXPORT ===" > gdpr_export.txt
+        echo "Generated on: $(date)" >> gdpr_export.txt
+        echo "This file contains all data stored by MiuiserPeruser (logs, heartbeats, events)." >> gdpr_export.txt
+        echo "" >> gdpr_export.txt
+        echo "=== RUNNING PROCESSES ===" >> gdpr_export.txt
+        ps aux | grep -E 'rocksteadyd|krangd|splinterd|bebopd|leatherheadd|metalheadd|ratkingd|shredderd|tigerclawd|granitord|foot_clan_supreme|sysportd|powerhouse|flip_switch' | grep -v grep >> gdpr_export.txt
+        echo "" >> gdpr_export.txt
+        echo "=== HEARTBEATS TABLE ===" >> gdpr_export.txt
+        sqlite3 logs/syndicate_footclan.db "SELECT * FROM heartbeats;" >> gdpr_export.txt 2>/dev/null
+        echo "" >> gdpr_export.txt
+        echo "=== EVENTS TABLE ===" >> gdpr_export.txt
+        sqlite3 logs/syndicate_footclan.db "SELECT * FROM events ORDER BY id DESC LIMIT 100;" >> gdpr_export.txt 2>/dev/null
+        echo "" >> gdpr_export.txt
+        echo "=== RECENT LOGS (last 100 lines) ===" >> gdpr_export.txt
+        tail -n 100 logs/*.log >> gdpr_export.txt 2>/dev/null
+        echo "✅ Full GDPR / SAR export saved to gdpr_export.txt"
+        ;;
+    d|dashboard)   termux-open-url "http://127.0.0.1:5000" ;;
+    *)             tldr syndicate ;;
+esac

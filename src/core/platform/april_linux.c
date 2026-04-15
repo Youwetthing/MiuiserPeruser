@@ -1,12 +1,7 @@
-/*
- * MiuiserPeruser – Linux platform implementation (April's domain)
- */
-
-#ifdef __linux__
-
 #include <april_platform.h>
 #include <leo_detection.h>
 #include <sensei_types.h>
+#include "rish_pipe.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,9 +18,6 @@ static bool g_initialized = false;
 
 SENSEI_STATUS april_platform_init(void) {
     if (g_initialized) return SENSEI_STATUS_OK;
-    struct stat st;
-    if (stat("/proc/self/status", &st) != 0)
-        return SENSEI_STATUS_ERROR;
     g_initialized = true;
     return SENSEI_STATUS_OK;
 }
@@ -38,103 +30,59 @@ SENSEI_STATUS april_elevate_privileges(void) {
     return (geteuid() == 0) ? SENSEI_STATUS_OK : SENSEI_STATUS_ACCESS_DENIED;
 }
 
-static int read_file_contents(const char *path, char *buf, size_t size) {
-    int fd = open(path, O_RDONLY);
-    if (fd < 0) return -1;
-    ssize_t n = read(fd, buf, size - 1);
-    close(fd);
-    if (n < 0) return -1;
-    buf[n] = '\0';
-    return (int)n;
-}
-
-static int parse_status_field(const char *buf, const char *field,
-                              char *value, size_t valsize) {
-    const char *line = strstr(buf, field);
-    if (!line) return -1;
-    line += strlen(field);
-    while (*line == '\t' || *line == ' ') line++;
-    size_t i = 0;
-    while (*line && *line != '\n' && i < valsize - 1)
-        value[i++] = *line++;
-    value[i] = '\0';
-    return 0;
-}
-
+// Direct RISH process enumeration
 SENSEI_STATUS april_enum_processes(SENSEI_PROCESS_LIST *list) {
-    if (!list || !g_initialized) return SENSEI_STATUS_ERROR;
+    if (!list) return SENSEI_STATUS_ERROR;
     list->head = list->tail = NULL;
     list->count = 0;
 
-    DIR *proc = opendir("/proc");
-    if (!proc) return SENSEI_STATUS_ERROR;
+    char *output = rish_pipe_command("ps -A -o pid,comm");
+    if (!output) {
+        return SENSEI_STATUS_ERROR;
+    }
 
-    struct dirent *entry;
-    while ((entry = readdir(proc))) {
-        if (!isdigit(entry->d_name[0])) continue;
-        uint32_t pid = (uint32_t)atoi(entry->d_name);
-        if (pid == 0) continue;
+    char *line = strtok(output, "\n");
+    int first = 1;
+    while (line) {
+        if (first) { first = 0; line = strtok(NULL, "\n"); continue; }
+        // Skip leading spaces
+        while (*line == ' ') line++;
+        char *pid_str = line;
+        while (*line && !isspace(*line)) line++;
+        if (!*line) break;
+        *line++ = '\0';
+        while (*line == ' ') line++;
+        char *comm = line;
+
+        uint32_t pid = (uint32_t)atoi(pid_str);
+        if (pid == 0) { line = strtok(NULL, "\n"); continue; }
 
         SENSEI_PROCESS_INFO info = {0};
         info.pid = pid;
-
-        char path_buf[512], data_buf[4096];
-        snprintf(path_buf, sizeof(path_buf), "/proc/%u/status", pid);
-        if (read_file_contents(path_buf, data_buf, sizeof(data_buf)) > 0) {
-            char value[256];
-            if (parse_status_field(data_buf, "Name:", value, sizeof(value)) == 0)
-                strncpy(info.name, value, SENSEI_MAX_PROCESS_NAME - 1);
-            if (parse_status_field(data_buf, "PPid:", value, sizeof(value)) == 0)
-                info.ppid = (uint32_t)atoi(value);
-            if (parse_status_field(data_buf, "Threads:", value, sizeof(value)) == 0)
-                info.thread_count = (uint32_t)atoi(value);
-            if (parse_status_field(data_buf, "Uid:", value, sizeof(value)) == 0)
-                info.is_elevated = (atoi(value) == 0);
-            if (parse_status_field(data_buf, "VmRSS:", value, sizeof(value)) == 0)
-                info.memory_usage = (uint64_t)atoll(value) * 1024;
-        }
-
-        snprintf(path_buf, sizeof(path_buf), "/proc/%u/exe", pid);
-        ssize_t link_len = readlink(path_buf, info.path, SENSEI_MAX_PATH - 1);
-        if (link_len > 0) info.path[link_len] = '\0';
-
-        snprintf(path_buf, sizeof(path_buf), "/proc/%u/cmdline", pid);
-        struct stat st;
-        if (stat(path_buf, &st) != 0 && pid > 1)
-            info.is_hidden = true;
-
+        strncpy(info.name, comm, SENSEI_MAX_PROCESS_NAME - 1);
+        info.name[SENSEI_MAX_PROCESS_NAME - 1] = '\0';
         april_process_list_append(list, &info);
+
+        line = strtok(NULL, "\n");
     }
-    closedir(proc);
+    free(output);
     return SENSEI_STATUS_OK;
 }
 
 SENSEI_STATUS april_get_process_info(uint32_t pid, SENSEI_PROCESS_INFO *info) {
-    if (!info || !g_initialized) return SENSEI_STATUS_ERROR;
+    if (!info) return SENSEI_STATUS_ERROR;
     memset(info, 0, sizeof(*info));
     info->pid = pid;
 
-    char path_buf[512], data_buf[4096];
-    snprintf(path_buf, sizeof(path_buf), "/proc/%u/status", pid);
-    if (read_file_contents(path_buf, data_buf, sizeof(data_buf)) < 0)
-        return SENSEI_STATUS_NOT_FOUND;
-
-    char value[256];
-    if (parse_status_field(data_buf, "Name:", value, sizeof(value)) == 0)
-        strncpy(info->name, value, SENSEI_MAX_PROCESS_NAME - 1);
-    if (parse_status_field(data_buf, "PPid:", value, sizeof(value)) == 0)
-        info->ppid = (uint32_t)atoi(value);
-    if (parse_status_field(data_buf, "Threads:", value, sizeof(value)) == 0)
-        info->thread_count = (uint32_t)atoi(value);
-    if (parse_status_field(data_buf, "Uid:", value, sizeof(value)) == 0)
-        info->is_elevated = (atoi(value) == 0);
-    if (parse_status_field(data_buf, "VmRSS:", value, sizeof(value)) == 0)
-        info->memory_usage = (uint64_t)atoll(value) * 1024;
-
-    snprintf(path_buf, sizeof(path_buf), "/proc/%u/exe", pid);
-    ssize_t link_len = readlink(path_buf, info->path, SENSEI_MAX_PATH - 1);
-    if (link_len > 0) info->path[link_len] = '\0';
-
+    char cmd[64];
+    snprintf(cmd, sizeof(cmd), "ps -p %u -o comm=", pid);
+    char *output = rish_pipe_command(cmd);
+    if (output) {
+        char *nl = strchr(output, '\n');
+        if (nl) *nl = '\0';
+        strncpy(info->name, output, SENSEI_MAX_PROCESS_NAME - 1);
+        free(output);
+    }
     return SENSEI_STATUS_OK;
 }
 
@@ -234,5 +182,3 @@ uint64_t april_get_total_memory(void) {
         return (uint64_t)si.totalram * si.mem_unit;
     return 0;
 }
-
-#endif /* __linux__ */

@@ -1,0 +1,2245 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to Destroyer brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+
+# Fallback logging if library missing
+fugitoid_log() { echo "[$(date)] $*" >> logs/daemonhunterd.log; }
+db_log_action() { :; }
+
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# -------------------------------------------------------------------
+#  Daemon Hunter Enforcer — The Destroyer (Double D's)
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# -------------------------------------------------------------------
+#  Enforces brain actions, hunts respawns, accepts manual triggers.
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# -------------------------------------------------------------------
+
+source lib/miuiserperuser_common.sh 2>/dev/null || true
+
+BRAIN="data/daemonhunter_brain.txt"
+PID_FILE="pipes/daemonhunterd.pid"
+LOG="logs/daemonhunterd.log"
+CHECK_INTERVAL=60
+
+mkdir -p data logs pipes
+touch "$BRAIN" "$LOG"
+
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+#  Prevent multiple instances
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+if [[ -f "$PID_FILE" ]]; then
+    old_pid=$(cat "$PID_FILE")
+    if kill -0 "$old_pid" 2>/dev/null; then
+        echo "daemonhunterd already running (PID $old_pid)"
+        exit 1
+    fi
+fi
+echo $$ > "$PID_FILE"
+
+fugitoid_log "DaemonHunter" "START" "Active sentinel initialized"
+
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+#  Shell Dispatcher
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+run_shell() {
+    if [[ -x "$HOME/.shizuku/rish" ]]; then
+        "$HOME/.shizuku/rish" -c "$*" 2>/dev/null
+    elif command -v adb >/dev/null 2>&1; then
+        adb shell "$@" 2>/dev/null
+    else
+        return 1
+    fi
+}
+
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+#  OOM Killer Priority
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+set_oom_max() {
+    local pkg="$1"
+    local pids=$(run_shell "pgrep -f $pkg")
+    if [[ -n "$pids" ]]; then
+        for pid in $pids; do
+            run_shell "echo 1000 > /proc/$pid/oom_score_adj" 2>/dev/null
+        done
+    fi
+}
+
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+#  Apply Action Based on Brain Entry
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+apply_action() {
+    local full_pkg="$1"
+    local action="$2"
+    local base_pkg="${full_pkg%%:*}"
+
+    case "$action" in
+        kill)
+            run_shell am force-stop "$full_pkg"
+            fugitoid_log "DaemonHunter" "ENFORCE" "Killed $full_pkg"
+            ;;
+        freeze)
+            run_shell pm suspend "$base_pkg"
+            set_oom_max "$full_pkg"
+            fugitoid_log "DaemonHunter" "ENFORCE" "Frozen $base_pkg"
+            ;;
+        starve)
+            run_shell pm disable-user --user 0 "$base_pkg"
+            run_shell am force-stop "$full_pkg"
+            set_oom_max "$full_pkg"
+            fugitoid_log "DaemonHunter" "ENFORCE" "Starved $base_pkg"
+            ;;
+        restrict)
+            for op in 27 26 4 6 14 1 60; do
+                run_shell cmd appops set "$full_pkg" "$op" ignore
+            done
+            run_shell am force-stop "$full_pkg"
+            set_oom_max "$full_pkg"
+            fugitoid_log "DaemonHunter" "ENFORCE" "Restricted $full_pkg"
+            ;;
+        deep_starve)
+            run_shell pm suspend "$base_pkg"
+            run_shell pm disable-user --user 0 "$base_pkg"
+            run_shell am force-stop "$full_pkg"
+            run_shell pm clear "$base_pkg"
+            for op in 63 64 40 59 27 26 4 6 14 1 60; do
+                run_shell cmd appops set "$full_pkg" "$op" ignore
+            done
+            set_oom_max "$full_pkg"
+            run_shell am force-stop "$full_pkg"
+            fugitoid_log "DaemonHunter" "ENFORCE" "Deep starved $base_pkg"
+            ;;
+        *)
+            run_shell am force-stop "$full_pkg"
+            ;;
+    esac
+}
+
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+#  Apply All Brain Actions (used for initial sweep and manual trigger)
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+declare -A brain_actions
+
+load_brain() {
+    brain_actions=()
+    while IFS='|' read -r pkg action extra; do
+        [[ -z "$pkg" || "$pkg" =~ ^# ]] && continue
+        brain_actions["$pkg"]="$action"
+    done < "$BRAIN"
+    
+    while read -r line; do
+        [[ -z "$line" || "$line" =~ ^# || "$line" == *"|"* ]] && continue
+        [[ -z "${brain_actions[$line]}" ]] && brain_actions["$line"]="kill"
+    done < "$BRAIN"
+}
+
+apply_all_actions() {
+    load_brain
+    fugitoid_log "DaemonHunter" "SWEEP" "Applying ${#brain_actions[@]} actions"
+    for pkg in "${!brain_actions[@]}"; do
+        apply_action "$pkg" "${brain_actions[$pkg]}"
+    done
+    fugitoid_log "DaemonHunter" "SWEEP" "Sweep complete"
+}
+
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+#  Signal Handler for Manual Trigger
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+trap 'echo "[$(date)] Manual sweep triggered"; apply_all_actions' USR1
+
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+#  Initial Enforcement
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+apply_all_actions
+
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+#  Active Sentinel Loop
+# Handle --add flag for external tools
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+if [[ "$1" == "--add" ]]; then
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    pkg="$2"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    action="${3:-deep_starve}"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "$pkg|$action|" >> data/daemonhunter_brain.txt
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    echo "✅ $pkg → $action added to brain"
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+    exit 0
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+fi
+
+# Educational gate: require Peruse Control + RAM Slammer
+if [[ ! -f data/.peruse_completed ]]; then
+    echo "❌ Peruse Control training not completed."
+    echo "   Run: ./tools/peruse_control.sh (option 1)"
+    exit 1
+fi
+if [[ ! -f data/.ram_slammer_used ]]; then
+    echo "❌ RAM Slammer has not been used yet."
+    echo "   Run: ./bin/watch_ram_slammers.sh"
+    exit 1
+fi
+# ------------------------------------------------------------
+while true; do
+    sleep "$CHECK_INTERVAL"
+    
+    load_brain
+    for pkg in "${!brain_actions[@]}"; do
+        if run_shell "pgrep -f $pkg" > /dev/null 2>&1; then
+            action="${brain_actions[$pkg]}"
+            fugitoid_log "DaemonHunter" "RESPAWN" "$pkg detected — reapplying $action"
+            apply_action "$pkg" "$action"
+            db_log_action "DaemonHunter" "$pkg" "$action" "respawn"
+        fi
+    done
+done

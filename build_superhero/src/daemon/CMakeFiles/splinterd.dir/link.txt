@@ -1,0 +1,1 @@
+/data/data/com.termux/files/usr/bin/cc -O3 -DNDEBUG -Xlinker --dependency-file=CMakeFiles/splinterd.dir/link.d CMakeFiles/splinterd.dir/splinterd.c.o CMakeFiles/splinterd.dir/ipc.c.o CMakeFiles/splinterd.dir/daemon_core.c.o -o splinterd  ../core/libsensei_core.a -lpthread /data/data/com.termux/files/usr/lib/libcrypto.so

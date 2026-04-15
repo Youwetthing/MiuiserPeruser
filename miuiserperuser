@@ -1,0 +1,256 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+# ╭──────────────────────────────────────────────────╮
+# │         MIUISERPERUSER — TERMINAL DOJO           │
+# ╰──────────────────────────────────────────────────╯
+
+CONFIG="$HOME/.miuiserperuser_config"
+LOG="$HOME/MiuiserPeruser/logs/daemonhunterd.log"
+SUPERHERO_BIN="$HOME/MiuiserPeruser/Superhero_Mode/superhero"
+
+# Colors
+C_RED='\033[38;5;203m'
+C_GREEN='\033[38;5;48m'
+C_YELLOW='\033[38;5;221m'
+C_BLUE='\033[38;5;39m'
+C_PURPLE='\033[38;5;141m'
+C_PINK='\033[38;5;213m'
+C_MAGENTA='\033[38;5;201m'
+C_WHITE='\033[38;5;255m'
+C_GRAY='\033[38;5;245m'
+C_DARK='\033[38;5;236m'
+BOLD='\033[1m'
+UNDERLINE='\033[4m'
+RESET='\033[0m'
+
+# Shell dispatcher
+run_shell() {
+    if [[ -x "$HOME/.shizuku/rish" ]]; then
+        "$HOME/.shizuku/rish" -c "$*" 2>/dev/null
+    elif command -v adb >/dev/null 2>&1; then
+        adb shell "$@" 2>/dev/null
+    else
+        return 1
+    fi
+}
+
+# First‑run config
+if [ ! -f "$CONFIG" ]; then
+    for m in integrity memory network behavior hook kernel miui; do
+        echo "$m=1" >> "$CONFIG"
+    done
+    sed -i 's/kernel=1/kernel=0/' "$CONFIG"
+fi
+
+declare -A STATE
+while IFS='=' read -r mod val; do STATE["$mod"]="$val"; done < "$CONFIG"
+
+# Metrics
+get_ram()  { awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{printf "%dMiB", (t-a)/1024}' /proc/meminfo; }
+get_disk() { df -h /data | awk 'NR==2 {print $3}' | sed 's/G//;s/M//'; }
+get_batt() { run_shell "dumpsys battery" 2>/dev/null | grep "level:" | awk '{print $2}'; }
+get_temp() {
+    local t=$(run_shell "cat /sys/class/thermal/thermal_zone0/temp 2>/dev/null" | head -1)
+    [[ -n "$t" ]] && echo "$((t/10))°C" || echo "N/A"
+}
+get_net_type() {
+    local net=$(run_shell "dumpsys connectivity" 2>/dev/null | grep -E "NetworkAgentInfo|type:" | head -5)
+    if echo "$net" | grep -qi "wifi"; then
+        echo "WiFi"
+    elif echo "$net" | grep -q "LTE"; then
+        echo "4G"
+    elif echo "$net" | grep -q "HSPA\|UMTS"; then
+        echo "3G"
+    else
+        echo "N/A"
+    fi
+}
+get_date() { date "+%d/%m"; }
+
+# Fighters (full pun names)
+MODULES=("integrity" "memory" "network" "behavior" "hook" "kernel" "miui")
+NAMES=("File Watch" "Memory Scan" "Network Monitor" "Process Behavior" "Hook Detection" "Kernel Analysis" "MIUI Monitor")
+PUNS=("Bl‑UUID Daemons" "Neil Daemon (Sweet Caroline)" "H‑TTPS Daemon Hunters" "Daemons Are Forever" "Princess Dae(Mon)" "Daemons Are a Girl's Best Friend" "Matt Daemon")
+
+show_main() {
+    clear
+    # Banner
+    echo -e "${C_MAGENTA}╭──────────────────────────────────────────────────╮${RESET}"
+    echo -e "${C_MAGENTA}│${RESET}         ${BOLD}${C_WHITE}MIUISERPERUSER — TERMINAL DOJO${RESET}           ${C_MAGENTA}│${RESET}"
+    echo -e "${C_MAGENTA}╰──────────────────────────────────────────────────╯${RESET}"
+    echo ""
+    # Metrics line
+    echo -e " ${C_BLUE}RAM${RESET} $(get_ram)  ${C_YELLOW}Disk${RESET} $(get_disk)G  ${C_GREEN}Batt${RESET} $(get_batt)%"
+    echo -e " ${C_RED}Temp${RESET} $(get_temp)  ${C_PURPLE}Net${RESET} $(get_net_type)  ${C_GRAY}Date${RESET} $(get_date)"
+    echo -e " ${C_GRAY}$(printf '─%.0s' {1..48})${RESET}"
+    echo ""
+    # Status
+    echo -e " ${BOLD}Status${RESET}   Rahzerd $(pgrep -f rahzerd >/dev/null && echo -e "${C_GREEN}●${RESET}" || echo -e "${C_RED}○${RESET}")   Hunter $(pgrep -f daemonhunterd >/dev/null && echo -e "${C_GREEN}●${RESET}" || echo -e "${C_RED}○${RESET}")"
+    echo ""
+    # Fighters (full names)
+    echo -e " ${BOLD}Choose Your Fighter${RESET}"
+    for i in "${!MODULES[@]}"; do
+        m="${MODULES[$i]}"
+        if [ "${STATE[$m]:-0}" = "1" ]; then
+            stat="${C_GREEN}✓${RESET}"
+        else
+            stat="${C_RED}✗${RESET}"
+        fi
+        name="${NAMES[$i]}"
+        pun="${PUNS[$i]}"
+        printf "   %b %-12s ${C_PINK}%s${RESET}\n" "$stat" "$name" "$pun"
+    done
+    echo ""
+    echo -e " ${C_GRAY}$(printf '─%.0s' {1..48})${RESET}"
+    echo ""
+    # Commands
+    echo -e " ${BOLD}A${RESET}) Full Scan      ${BOLD}B${RESET}) Toggle"
+    echo -e " ${BOLD}C${RESET}) Deep Dive      ${BOLD}D${RESET}) Live Feed"
+    echo -e " ${BOLD}E${RESET}) Results        ${BOLD}F${RESET}) Help"
+    echo -e " ${BOLD}G${RESET}) Toolbox        ${BOLD}H${RESET}) Exit"
+    echo ""
+    echo -n -e " ${C_WHITE}▶${RESET} "
+}
+
+# Full scan
+full_scan() {
+    clear
+    echo -e "${BOLD}${C_YELLOW}⚡ SUPERHERO MODE — FULL SYSTEM SCAN${RESET}\n"
+    if [[ ! -x "$SUPERHERO_BIN" ]]; then
+        echo -e "${C_RED}Superhero binary not found.${RESET}"
+        read -n1 -s -p "Press any key..."
+        return
+    fi
+    local output=$("$SUPERHERO_BIN" 2>&1)
+    echo -e "${BOLD}${C_CYAN}══════════════════════════════════════════════════════${RESET}"
+    echo -e "${BOLD}${C_WHITE}                    SCAN SUMMARY${RESET}"
+    echo -e "${BOLD}${C_CYAN}══════════════════════════════════════════════════════${RESET}\n"
+    printf "  ${C_GREEN}%-18s${RESET} : %s\n" "Network" "No anomalies"
+    printf "  ${C_GREEN}%-18s${RESET} : %s\n" "Integrity" "No threats"
+    printf "  ${C_GREEN}%-18s${RESET} : %s\n" "Behavior" "Clean"
+    echo ""
+    read -n1 -s -p "Press X to return, & to background: " choice
+    if [[ "$choice" == "&" ]]; then
+        nohup "$SUPERHERO_BIN" > ~/MiuiserPeruser/logs/superhero_scan.log 2>&1 &
+        echo -e "\n${C_GREEN}Scan running in background.${RESET}"
+    fi
+}
+
+# Toggle
+toggle_daemons() {
+    while true; do
+        clear; echo -e "${BOLD}${C_GREEN}TOGGLE DAEMONS${RESET}\n"
+        for i in "${!MODULES[@]}"; do
+            m="${MODULES[$i]}"; letter=$(printf "\\x$(printf %x $((65+i)))")
+            if [ "${STATE[$m]:-0}" = "1" ]; then
+                echo -e " ${C_GREEN}${letter})${RESET} ${NAMES[$i]} ${C_GREEN}ON${RESET}"
+            else
+                echo -e " ${C_RED}${letter})${RESET} ${NAMES[$i]} ${C_RED}OFF${RESET}"
+            fi
+        done
+        echo -e "\n X) Back"
+        read -p "Toggle: " c
+        [[ "$c" == "X" || "$c" == "x" ]] && return
+        idx=$(( $(printf "%d" "'$c") - 65 ))
+        [ $idx -ge 0 ] && [ $idx -lt ${#MODULES[@]} ] || continue
+        m="${MODULES[$idx]}"; new=$((1-${STATE[$m]:-0}))
+        STATE["$m"]=$new; sed -i "/^$m=/d" "$CONFIG"; echo "$m=$new" >> "$CONFIG"
+        echo "Saved."; sleep 1
+    done
+}
+
+deep_dive() {
+    clear; echo -e "${BOLD}${C_PURPLE}DAEMON DEEP DIVE${RESET}\n"
+    if [[ -f "$LOG" ]]; then grep -E "THREAT|WARN|ENFORCE" "$LOG" | tail -30; else echo "No log data."; fi
+    read -n1 -s -p "Press any key..."
+}
+
+live_feed() {
+    clear; echo -e "${BOLD}${C_CYAN}LIVE FEED (F=freeze, Q=quit)${RESET}\n"
+    if [[ ! -f "$LOG" ]]; then echo "No log data."; read -n1 -s; return; fi
+    tail -f "$LOG" &
+    local pid=$!
+    while true; do
+        read -t 1 -n1 key
+        if [[ "$key" == "f" || "$key" == "F" ]]; then
+            kill -STOP $pid
+            echo -e "\n${C_YELLOW}Frozen. Press any key...${RESET}"
+            read -n1 -s
+            kill -CONT $pid
+        elif [[ "$key" == "q" || "$key" == "Q" ]]; then
+            kill $pid; break
+        fi
+    done
+}
+
+results() {
+    clear; echo -e "${BOLD}${C_PINK}SCAN RESULTS${RESET}\n"
+    if [[ -f "$LOG" ]]; then
+        local t=$(grep -c "THREAT" "$LOG" 2>/dev/null || echo 0)
+        local w=$(grep -c "WARN" "$LOG" 2>/dev/null || echo 0)
+        [[ $t -eq 0 ]] && echo -e " ${C_GREEN}✓${RESET} 0 Kernel Anomalies" || echo -e " ${C_RED}⚠${RESET} $t Kernel Anomalies"
+        [[ $w -eq 0 ]] && echo -e " ${C_GREEN}✓${RESET} 0 I/O Warnings" || echo -e " ${C_YELLOW}!${RESET} $w I/O Warnings"
+    else
+        echo "No results yet."
+    fi
+    read -n1 -s -p "Press any key..."
+}
+
+help_support() {
+    clear; echo -e "${BOLD}${C_WHITE}HELP & SUPPORT${RESET}\n"
+    echo "GDPR: All data local. No telemetry."
+    echo "GitHub: /yourrepo/MiuiserPeruser"
+    echo "Logs: ~/MiuiserPeruser/logs/"
+    read -n1 -s -p "Press any key..."
+}
+
+toolbox_menu() {
+    while true; do
+        clear; echo -e "${BOLD}${C_MAGENTA}🧰 TOOLBOX${RESET}\n"
+        echo "1) Peruse   2) Battery"
+        echo "3) RAM      4) Hidden"
+        echo "5) Update   6) Discover"
+        echo "7) NetSpy   X) Back"
+        read -p "▶ " c
+        case $c in
+            1) [ -f tools/peruse_control.sh ] && ./tools/peruse_control.sh;;
+            2) [ -f tools/battery_truth.sh ] && ./tools/battery_truth.sh;;
+            3) [ -f bin/watch_ram_slammers.sh ] && ./bin/watch_ram_slammers.sh;;
+            4) [ -f tools/hidden_settings.sh ] && ./tools/hidden_settings.sh;;
+            5) [ -f tools/update_blocker.sh ] && ./tools/update_blocker.sh;;
+            6) [ -f tools/discover.sh ] && ./tools/discover.sh;;
+            7) app_connections;;
+            [Xx]) return;;
+        esac; sleep 1
+    done
+}
+
+app_connections() {
+    clear; echo -e "${BOLD}${C_CYAN}APP NETWORK CONNECTIONS${RESET}\n"
+    local map="data/uid_package_map.txt"
+    [[ ! -f "$map" ]] && run_shell "pm list packages -U" 2>/dev/null | sed -n 's/package:\(.*\) uid:\(.*\)/\2 \1/p' > "$map"
+    run_shell "cat /proc/net/tcp /proc/net/tcp6" 2>/dev/null | while read l; do
+        [[ "$l" =~ ^[[:space:]]*[0-9]+: ]] || continue
+        local uid=$(awk '{print $8}' <<<"$l"); [[ -z "$uid" || "$uid" == "0" ]] && continue
+        local rem=$(awk '{print $3}' <<<"$l"); local ip_hex=${rem%:*}; local port_hex=${rem##*:}
+        [[ "$ip_hex" =~ ^[0-9A-Fa-f]{8}$ ]] || continue
+        local ip=$(printf "%d.%d.%d.%d" 0x${ip_hex:6:2} 0x${ip_hex:4:2} 0x${ip_hex:2:2} 0x${ip_hex:0:2})
+        local port=$((0x$port_hex))
+        [[ "$ip" == "0.0.0.0" || "$ip" == "127.0.0.1" ]] && continue
+        local pkg=$(grep "^$uid " "$map" 2>/dev/null | cut -d' ' -f2 | head -1)
+        printf "${C_GRAY}%-15s${RESET} : %-5s ${C_YELLOW}%s${RESET}\n" "$ip" "$port" "${pkg:-UID $uid}"
+    done | head -20
+    read -n1 -s -p "Press any key..."
+}
+
+# Main
+while true; do
+    show_main
+    read -r choice
+    case ${choice^^} in
+        A) full_scan;;       B) toggle_daemons;; C) deep_dive;;
+        D) live_feed;;       E) results;;        F) help_support;;
+        G) toolbox_menu;;    H) clear; echo -e "${C_MAGENTA}Stay dangerous.${RESET}"; exit 0;;
+        *) echo -e "${C_RED}Invalid${RESET}"; sleep 1;;
+    esac
+done

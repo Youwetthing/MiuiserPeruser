@@ -1,0 +1,75 @@
+com.miui.analytics
+com.miui.msa.global
+com.miui.powerkeeper
+com.miui.daemon
+com.miui.cleanmaster
+com.miui.cloudservice
+com.miui.cloud
+com.miui.systemAdSolution
+com.xiaomi.finddevice
+com.miui.securitycenter
+com.miui.securityadd
+com.miui.guardprovider
+com.miui.permcenter
+com.miui.hybrid
+com.miui.yellowpage
+com.miui.player
+com.xiaomi.mipush
+com.xiaomi.push
+com.miui.analytics
+com.miui.accessibility|ignore
+com.miui.aod|restrict|ACCESS_FINE_LOCATION CAMERA CAMERA_OPEN_CLOSE_LISTENER FOREGROUND_SERVICE_CAMERA READ_CALL_LOG READ_CONTACTS RECORD_AUDIO WRITE_EXTERNAL_STORAGE
+com.miui.audiomonitor|restrict|ACCESS_FINE_LOCATION CAMERA CAMERA_OPEN_CLOSE_LISTENER FOREGROUND_SERVICE_CAMERA READ_CALL_LOG READ_CONTACTS RECORD_AUDIO WRITE_EXTERNAL_STORAGE
+com.miui.backup|restrict|ACCESS_FINE_LOCATION CAMERA READ_CALL_LOG READ_CONTACTS READ_SMS WRITE_EXTERNAL_STORAGE
+com.miui.bugreport|ignore|
+com.miui.calculator|ignore|
+com.miui.cleaner|starve|
+com.miui.cloudbackup|restrict|WRITE_EXTERNAL_STORAGE
+com.miui.compass|ignore|
+com.miui.core|ignore|
+com.miui.core.internal.services|ignore|
+com.miui.cotaservice|restrict|ACCESS_FINE_LOCATION CAMERA CAMERA_OPEN_CLOSE_LISTENER FOREGROUND_SERVICE_CAMERA READ_CALL_LOG READ_CONTACTS RECORD_AUDIO WRITE_EXTERNAL_STORAGE
+com.miui.extraphoto|ignore|
+com.miui.fm|ignore|
+com.miui.fmservice|restrict|RECORD_AUDIO WRITE_EXTERNAL_STORAGE
+com.miui.gallery|ignore|
+com.miui.global.packageinstaller|ignore|
+com.miui.home|ignore|
+com.miui.mediaeditor|ignore|
+com.miui.mediaviewer|ignore|
+com.miui.micloudsync|starve|
+com.miui.miservice|starve|
+com.miui.mishare.connectivity|ignore|
+com.miui.misightservice|restrict|ACCESS_FINE_LOCATION CAMERA CAMERA_OPEN_CLOSE_LISTENER FOREGROUND_SERVICE_CAMERA READ_CALL_LOG READ_CONTACTS RECORD_AUDIO WRITE_EXTERNAL_STORAGE
+com.miui.misound|restrict|ACCESS_FINE_LOCATION RECORD_AUDIO
+com.miui.miwallpaper|starve|
+com.miui.miwallpaper.config.overlay|starve|
+com.miui.miwallpaper.overlay|starve|
+com.miui.miwallpaper.overlay.customize|starve|
+com.miui.notes|restrict|READ_CONTACTS RECORD_AUDIO WRITE_EXTERNAL_STORAGE
+com.miui.notification|ignore|
+com.miui.permissioncontroller.overlay|ignore|
+com.miui.phone.carriers.overlay.h3g|ignore|
+com.miui.phone.carriers.overlay.vodafone|kill|
+com.miui.phrase|ignore|
+com.miui.qr|restrict|ACCESS_FINE_LOCATION CAMERA CAMERA_OPEN_CLOSE_LISTENER FOREGROUND_SERVICE_CAMERA READ_CALL_LOG READ_CONTACTS RECORD_AUDIO WRITE_EXTERNAL_STORAGE
+com.miui.rom|ignore|
+com.miui.screenrecorder|restrict|RECORD_AUDIO
+com.miui.screenshot|ignore|
+com.miui.securitycore|ignore|
+com.xiaomi.discover|starve|
+com.miui.securitycenter.remote|starve|
+com.miui.analytics|starve|
+com.miui.analytics|deep_starve|
+com.miui.weather2|deep_starve|
+com.miui.guardprovider|deep_starve|
+com.xiaomi.xmsf|deep_starve|
+com.xiaomi.xmsf|deep_starve|
+com.xiaomi.xmsfkeeper|deep_starve|
+com.xiaomi.aicr:searchDataService|deep_starve|
+com.xiaomi.aicr|deep_starve|
+com.xiaomi.xmsfkeeper|deep_starve|
+com.xiaomi.aicr|deep_starve|
+|deep_starve|
+com.test.example|starve|
+com.test.example|starve|
