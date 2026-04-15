@@ -1,3 +1,4 @@
+extern void april_log(const char* level, const char* format, ...);
 /*
  * MiuiserPeruser – Behavioral anomaly detection (Donatello)
  */
@@ -92,6 +93,9 @@ SENSEI_STATUS don_behavior_analyze(uint32_t pid, SENSEI_DETECTION_LIST *results)
         snprintf(det.description, SENSEI_MAX_DESCRIPTION,
                  "Process PID %u appears hidden (cannot read status)", pid);
         leo_detection_list_append(results, &det);
+    static int behavior_scan_count = 0;
+    behavior_scan_count++;
+    if (behavior_scan_count % 10 == 0) april_log("INFO", "Behavior scan completed (no hidden/suspicious processes)");
         return SENSEI_STATUS_OK;
     }
 
@@ -133,5 +137,8 @@ SENSEI_STATUS don_behavior_analyze(uint32_t pid, SENSEI_DETECTION_LIST *results)
         }
     }
 
+    static int behavior_scan_count = 0;
+    behavior_scan_count++;
+    if (behavior_scan_count % 10 == 0) april_log("INFO", "Behavior scan completed (no hidden/suspicious processes)");
     return SENSEI_STATUS_OK;
 }

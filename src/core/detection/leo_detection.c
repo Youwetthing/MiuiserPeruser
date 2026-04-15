@@ -39,6 +39,14 @@ static SENSEI_EVENT_QUEUE g_event_queue;
 
 /* Whitelist */
 static const char *g_whitelist[] = {
+    "kworker", "rcu", "ksoftirqd", "migration", "watchdog", "kthreadd",
+    "irq/", "spi", "mmcqd", "cmdq", "cpuhp", "idle_inject", "kauditd",
+    "khungtaskd", "oom_reaper", "kcompactd", "kswapd", "erofs_worker",
+    "dmabuf", "hang_detect", "wdtk", "teei_", "dma_pool",
+    "kworker", "rcu", "ksoftirqd", "migration", "watchdog", "kthreadd",
+    "irq/", "spi", "mmcqd", "cmdq", "cpuhp", "idle_inject", "kauditd",
+    "khungtaskd", "oom_reaper", "kcompactd", "kswapd", "erofs_worker",
+    "dmabuf", "hang_detect", "wdtk", "teei_", "dma_pool",
     "chrome.exe", "msedge.exe", "firefox.exe", "Code.exe",
     "discord.exe", "slack.exe", "Teams.exe", "node.exe",
     "electron.exe", "star-daemon.exe", "svchost.exe", "csrss.exe",

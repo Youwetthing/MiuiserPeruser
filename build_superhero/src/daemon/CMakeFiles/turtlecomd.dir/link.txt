@@ -1,0 +1,1 @@
+/data/data/com.termux/files/usr/bin/cc -O3 -DNDEBUG -Xlinker --dependency-file=CMakeFiles/turtlecomd.dir/link.d CMakeFiles/turtlecomd.dir/turtlecomd.c.o CMakeFiles/turtlecomd.dir/ipc.c.o CMakeFiles/turtlecomd.dir/daemon_core.c.o -o turtlecomd  ../core/libsensei_core.a -lpthread /data/data/com.termux/files/usr/lib/libcrypto.so

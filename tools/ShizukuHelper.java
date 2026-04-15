@@ -13,99 +13,59 @@ import java.util.concurrent.TimeUnit;
 import rikka.shizuku.Shizuku;
 
 public class ShizukuHelper {
-    private static final String END_MARKER = "___MIUISEREND___";
-    private static final int PERMISSION_REQUEST_CODE = 1001;
+    private static final int BINDER_TIMEOUT_SEC = 15;
     private static CountDownLatch binderLatch = new CountDownLatch(1);
-    private static volatile boolean permissionGranted = false;
 
     public static void main(String[] args) {
-        System.err.println("ShizukuHelper starting...");
+        if (args.length == 0) {
+            System.err.println("Usage: java -jar ShizukuHelper.jar <command>");
+            System.exit(1);
+        }
 
         // Wait for Shizuku binder
         Shizuku.addBinderReceivedListener(() -> binderLatch.countDown());
         if (Shizuku.getBinder() != null) binderLatch.countDown();
 
         try {
-            if (!binderLatch.await(10, TimeUnit.SECONDS)) {
-                System.err.println("Shizuku binder not available");
+            if (!binderLatch.await(BINDER_TIMEOUT_SEC, TimeUnit.SECONDS)) {
+                System.err.println("ERROR: Shizuku binder timeout");
                 System.exit(1);
             }
         } catch (InterruptedException e) {
-            System.err.println("Interrupted while waiting for binder");
+            System.err.println("ERROR: Interrupted");
             System.exit(1);
         }
 
-        // Permission handling
+        // Ensure permission (should be pre‑granted)
         if (Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            System.err.println("Requesting permission...");
-            Shizuku.addRequestPermissionResultListener((requestCode, grantResult) -> {
-                if (requestCode == PERMISSION_REQUEST_CODE) {
-                    permissionGranted = (grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED);
-                    if (!permissionGranted) {
-                        System.err.println("Permission denied");
-                        System.exit(1);
-                    }
-                }
-            });
-            Shizuku.requestPermission(PERMISSION_REQUEST_CODE);
-            // Wait a bit for user to grant (simplified)
-            for (int i = 0; i < 30; i++) {
-                if (permissionGranted) break;
-                try { Thread.sleep(100); } catch (InterruptedException e) {}
-            }
-            if (!permissionGranted) {
-                System.err.println("Permission not granted");
+            Shizuku.requestPermission(1001);
+            try { Thread.sleep(500); } catch (InterruptedException ignored) {}
+            if (Shizuku.checkSelfPermission() != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                System.err.println("ERROR: Permission denied");
                 System.exit(1);
             }
         }
 
-        System.err.println("Shizuku UID: " + Shizuku.getUid());
-
-        // Main command loop – read from stdin, execute, write to stdout
-        try (BufferedReader in = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
-             PrintWriter out = new PrintWriter(new OutputStreamWriter(System.out, StandardCharsets.UTF_8), true)) {
-
-            String line;
-            while ((line = in.readLine()) != null) {
-                if (line.trim().equalsIgnoreCase("exit")) break;
-                String result = executeCommand(line);
-                out.println(result);
-                out.println(END_MARKER);
-                out.flush();
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.exit(1);
-        }
-    }
-
-    private static String executeCommand(String cmd) {
+        String command = String.join(" ", args);
         try {
             Process process = Shizuku.createProcess(
-                new String[]{"sh", "-c", cmd},
-                null,
-                null,
-                FileDescriptor.in,
-                FileDescriptor.out,
-                FileDescriptor.err
+                new String[]{"sh", "-c", command},
+                null, null,
+                FileDescriptor.in, FileDescriptor.out, FileDescriptor.err
             );
 
-            StringBuilder output = new StringBuilder();
-            try (InputStream is = process.getInputStream();
-                 BufferedReader reader = new BufferedReader(new InputStreamReader(is))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
+            // Copy output to stdout
+            InputStream is = process.getInputStream();
+            byte[] buf = new byte[8192];
+            int len;
+            while ((len = is.read(buf)) != -1) {
+                System.out.write(buf, 0, len);
             }
-
             int exitCode = process.waitFor();
-            if (exitCode != 0) {
-                return "ERROR: exit code " + exitCode + "\n" + output.toString().trim();
-            }
-            return output.toString().trim();
+            System.exit(exitCode);
         } catch (Exception e) {
-            return "ERROR: " + e.getMessage();
+            System.err.println("ERROR: " + e.getMessage());
+            System.exit(1);
         }
     }
 }

@@ -1,0 +1,26 @@
+# src/daemon/CMakeLists.txt — wired for miuiserperuser build
+
+# Sources for the main miuiserperuser daemon
+set(MIUISERPERUSER_SRCS
+    main.c
+    daemon_core.c
+    ipc.c
+
+    # Provides miuiserperuserservicestart()
+    service.c
+
+    # Provides rishpipestart/stop/command()
+    rish_pipe.c
+)
+
+# Build the executable
+add_executable(miuiserperuser ${MIUISERPERUSER_SRCS})
+
+# Link against core libraries
+targetlinklibraries(miuiserperuser
+    PRIVATE
+        sensei_core
+        daemon_common
+        pthread
+        dl
+)

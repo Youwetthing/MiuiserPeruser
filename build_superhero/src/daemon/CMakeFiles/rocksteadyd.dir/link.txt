@@ -1,0 +1,1 @@
+/data/data/com.termux/files/usr/bin/cc -O3 -DNDEBUG -Xlinker --dependency-file=CMakeFiles/rocksteadyd.dir/link.d CMakeFiles/rocksteadyd.dir/rocksteadyd.c.o CMakeFiles/rocksteadyd.dir/ipc.c.o CMakeFiles/rocksteadyd.dir/daemon_core.c.o -o rocksteadyd  ../core/libsensei_core.a -lpthread /data/data/com.termux/files/usr/lib/libcrypto.so
