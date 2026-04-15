@@ -1,10 +1,10 @@
-#include "compat/sensei_compat.h"
 /*
  * MiuiserPeruser – MIUI-specific anomaly detection (Michelangelo / Matt Daemon)
  * Enhanced with deep Xiaomi insights using Shizuku DEX.
  */
 
 #include <leo_detection.h>
+#include <april_platform.h>
 #include <sensei_types.h>
 #include "rish_pipe.h"
 #include <stdio.h>
@@ -47,7 +47,7 @@ SENSEI_STATUS mikey_miui(SENSEI_DETECTION_LIST *results) {
             strncpy(det.detection_type, "DUAL_APPS_ACTIVE", SENSEI_MAX_DETECTION_TYPE-1);
             snprintf(det.description, SENSEI_MAX_DESCRIPTION-1,
                      "Dual Apps or Second Space active (%d users)", user_count);
-            april_detection_list_append(results, &det);
+            leo_detection_list_append(results, &det);
         }
     }
 
@@ -65,7 +65,7 @@ SENSEI_STATUS mikey_miui(SENSEI_DETECTION_LIST *results) {
             strncpy(det.detection_type, "MIUI_OPTIMIZATIONS_OFF", SENSEI_MAX_DETECTION_TYPE-1);
             snprintf(det.description, SENSEI_MAX_DESCRIPTION-1,
                      "MIUI optimizations are disabled – battery life may suffer.");
-            april_detection_list_append(results, &det);
+            leo_detection_list_append(results, &det);
         }
     }
 
@@ -83,7 +83,7 @@ SENSEI_STATUS mikey_miui(SENSEI_DETECTION_LIST *results) {
             strncpy(det.detection_type, "GAME_TURBO_ACTIVE", SENSEI_MAX_DETECTION_TYPE-1);
             snprintf(det.description, SENSEI_MAX_DESCRIPTION-1,
                      "Game Turbo is active – performance prioritized over battery.");
-            april_detection_list_append(results, &det);
+            leo_detection_list_append(results, &det);
         }
     }
 
@@ -112,7 +112,7 @@ SENSEI_STATUS mikey_miui(SENSEI_DETECTION_LIST *results) {
         strncpy(det.detection_type, "BACKGROUND_RESTRICTED_APPS", SENSEI_MAX_DETECTION_TYPE-1);
         snprintf(det.description, SENSEI_MAX_DESCRIPTION-1,
                  "%d critical MIUI apps have background restrictions", restricted_count);
-        april_detection_list_append(results, &det);
+        leo_detection_list_append(results, &det);
     }
 
     april_log("INFO", "MIUI checks completed: dual_apps=%d, miui_opt_off=%d, game_turbo=%d, restricted=%d",
