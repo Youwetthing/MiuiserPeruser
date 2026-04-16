@@ -1,127 +1,109 @@
+#include "daemon_core.h"
+
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdarg.h>
+#include <signal.h>
 #include <string.h>
 #include <unistd.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <pthread.h>
-#include "daemon_core.h"
-#include "ipc_globals.h"
-#include "daemon_common.h"
+#include <sys/stat.h>
+#include <fcntl.h>
 
-/* ── Globals (definitions owned here, declared extern in ipc_globals.h) ─ */
-/* NOTE: ipc_globals.c also provides these for the full IPC build.         *
- * Daemon executables that compile only daemon_core.c (not ipc_globals.c)  *
- * use these definitions.                                                   */
-/* DO NOT duplicate: ipc_globals.c is the single source of truth.          *
- * daemon_core.c only pulls them in via the extern from ipc_globals.h.     */
+static const char *g_daemon_name = "daemon";
+static int g_pid_fd = -1;
 
-/* ── Per-daemon state ─────────────────────────────────────────────────── */
-static char g_daemon_name[64] = "daemon";
+/* ------------------------------
+ * Internal helpers
+ * ------------------------------ */
 
-static void handle_stop(int sig)
-{
-    (void)sig;
-    g_running = false;
-    _exit(0);   /* async-signal-safe; unblocks for(;;) loops in simple daemons */
+static void handle_signal(int sig) {
+    daemon_log_info("received signal %d, shutting down", sig);
+    daemon_core_shutdown();
+    _exit(0);
 }
 
-/* ── daemon_core_init ─────────────────────────────────────────────────── */
+static void install_signal_handlers(void) {
+    struct sigaction sa = {0};
+    sa.sa_handler = handle_signal;
+    sigemptyset(&sa.sa_mask);
 
-int daemon_core_init(const char *name)
-{
-    if (name && *name)
-        snprintf(g_daemon_name, sizeof(g_daemon_name), "%s", name);
-
-    signal(SIGINT,  handle_stop);
-    signal(SIGTERM, handle_stop);
-    signal(SIGPIPE, SIG_IGN);
-
-    daemon_log_info("starting");
-    return 1;
+    sigaction(SIGINT,  &sa, NULL);
+    sigaction(SIGTERM, &sa, NULL);
 }
 
-void daemon_core_shutdown(void)
-{
+/* Create /tmp/<daemon>.pid */
+static bool create_pid_file(void) {
+    char path[256];
+    snprintf(path, sizeof(path), "/data/data/com.termux/files/home/tmp/%s.pid", g_daemon_name);
+
+    g_pid_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (g_pid_fd < 0) {
+        daemon_log_error("failed to create pid file: %s", path);
+        return false;
+    }
+
+    dprintf(g_pid_fd, "%d\n", getpid());
+    return true;
+}
+
+/* Ensure /tmp exists (MIUI sometimes nukes it) */
+static void ensure_tmp_exists(void) {
+    mkdir("/tmp", 0755);
+}
+
+/* ------------------------------
+ * Public API
+ * ------------------------------ */
+
+bool daemon_core_init(const char *daemon_name) {
+    g_daemon_name = daemon_name;
+
+    ensure_tmp_exists();
+    install_signal_handlers();
+
+    if (!create_pid_file()) {
+        return false;
+    }
+
+    daemon_log_info("initialised");
+    return true;
+}
+
+void daemon_core_shutdown(void) {
+    if (g_pid_fd >= 0) {
+        close(g_pid_fd);
+        g_pid_fd = -1;
+    }
+
     daemon_log_info("shutdown complete");
 }
 
-/* ── Logging ──────────────────────────────────────────────────────────── */
+/* ------------------------------
+ * Logging wrappers
+ * ------------------------------ */
 
-void daemon_log_info(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    fprintf(stdout, "[%s][INFO] ", g_daemon_name);
-    vfprintf(stdout, fmt, ap);
-    fputc('\n', stdout);
-    fflush(stdout);
-    va_end(ap);
-}
-
-void daemon_log_warn(const char *fmt, ...)
-{
-    va_list ap;
-    va_start(ap, fmt);
-    fprintf(stderr, "[%s][WARN] ", g_daemon_name);
+static void vlog(const char *level, const char *fmt, va_list ap) {
+    fprintf(stderr, "[%s] %s: ", level, g_daemon_name);
     vfprintf(stderr, fmt, ap);
-    fputc('\n', stderr);
-    fflush(stderr);
-    va_end(ap);
+    fprintf(stderr, "\n");
 }
 
-void daemon_log_error(const char *fmt, ...)
-{
+void daemon_log_info(const char *fmt, ...) {
     va_list ap;
     va_start(ap, fmt);
-    fprintf(stderr, "[%s][ERROR] ", g_daemon_name);
-    vfprintf(stderr, fmt, ap);
-    fputc('\n', stderr);
-    fflush(stderr);
+    vlog("INFO", fmt, ap);
     va_end(ap);
 }
 
-/* ── Main-process IPC loop (used by miuiserperuser host binary) ───────── */
-
-static bool g_console_mode = false;
-
-static void miuiserperuser_stop_signal(int sig)
-{
-    (void)sig;
-    g_running = false;
+void daemon_log_error(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vlog("ERROR", fmt, ap);
+    va_end(ap);
 }
 
-int miuiserperuser_main_loop(bool console_mode)
-{
-    g_console_mode = console_mode;
-    g_running = true;
-
-    signal(SIGINT,  miuiserperuser_stop_signal);
-    signal(SIGTERM, miuiserperuser_stop_signal);
-    signal(SIGPIPE, SIG_IGN);
-
-    fprintf(stdout, "[CORE] MiuiserPeruser daemon starting\n");
-
-    if (miuiserperuser_ipc_init() != 0)
-        fprintf(stderr, "[CORE] IPC init failed — continuing without IPC\n");
-
-    fprintf(stdout, "[CORE] scan loop running\n");
-
-    while (g_running) {
-        for (int i = 0; i < 5 && g_running; i++)
-            sleep(1);
-    }
-
-    fprintf(stdout, "[CORE] shutting down\n");
-    miuiserperuser_ipc_shutdown();
-    return 0;
+void daemon_log_debug(const char *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vlog("DEBUG", fmt, ap);
+    va_end(ap);
 }
-
-/* ── Weak IPC stubs ───────────────────────────────────────────────────── *
- * Individual daemon binaries do not compile ipc.c.  These weak           *
- * definitions satisfy the linker; the real implementations in ipc.c      *
- * override them automatically when the full host binary is built.        *
- * ─────────────────────────────────────────────────────────────────────── */
-__attribute__((weak)) int  miuiserperuser_ipc_init(void)     { return 0; }
-__attribute__((weak)) void miuiserperuser_ipc_shutdown(void) { }
