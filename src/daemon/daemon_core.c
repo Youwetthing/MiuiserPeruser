@@ -33,7 +33,7 @@ static void install_signal_handlers(void) {
 /* Create /tmp/<daemon>.pid */
 static bool create_pid_file(void) {
     char path[256];
-    snprintf(path, sizeof(path), "/tmp/%s.pid", g_daemon_name);
+    snprintf(path, sizeof(path), "/data/data/com.termux/files/home/tmp/%s.pid", g_daemon_name);
 
     g_pid_fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (g_pid_fd < 0) {

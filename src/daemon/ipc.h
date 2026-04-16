@@ -10,3 +10,8 @@ void miuiserperuser_ipc_broadcast(const SENSEI_DETECTION *detection);
 bool miuiserperuser_ipc_is_connected(void);
 
 #endif
+#define DAEMONHUNTER_SOCKET 4
+#define SEWER_SOCKET 3
+void ipc_init(void);
+char* ipc_recv_msg(int socket_id);
+void ipc_send_msg(int socket_id, const char* msg);
