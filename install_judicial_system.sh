@@ -1,44 +1,91 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 BASE="$HOME/MiuiserPeruser"
-LAW="$BASE/law_and_order:adb"
-STATE="$BASE/state"
+INSTALLERS="$BASE/installers"
+
+mkdir -p "$INSTALLERS"
 
 echo "⚖️ Judicial System Bootstrap Starting..."
 
-# ── Pipes ────────────────────────────────────────────
-mkdir -p "$BASE/pipes/state" "$BASE/pipes/pids"
+# =========================
+# CREATE INSTALLERS
+# =========================
+
+cat <<'EOF1' > "$INSTALLERS/install_core.sh"
+#!/data/data/com.termux/files/usr/bin/bash
+
+BASE="$HOME/MiuiserPeruser"
+PIPES="$BASE/pipes"
+
+mkdir -p "$PIPES"
+
 for p in superhero.pipe judgement.pipe execution.pipe escalation.pipe; do
-    [ -p "$BASE/pipes/$p" ] || mkfifo "$BASE/pipes/$p"
+    [ -p "$PIPES/$p" ] || mkfifo "$PIPES/$p"
 done
-echo "✔ Pipes ready"
 
-# ── State directories & seed files ───────────────────
-mkdir -p "$STATE/criminal_record" \
-         "$STATE/jailhouse" \
-         "$STATE/visitors_pass" \
-         "$BASE/cre/cases" \
-         "$BASE/logs"
+echo "✔ Core installed (pipes ready)"
+EOF1
+chmod +x "$INSTALLERS/install_core.sh"
 
-[ -f "$STATE/court.registry" ]   || echo "# NAME|STATE|PID" > "$STATE/court.registry"
-[ -f "$STATE/court.events" ]     || touch "$STATE/court.events"
-[ -f "$STATE/quarantine.state" ] || echo "# daemon|reason|timestamp" > "$STATE/quarantine.state"
-[ -f "$STATE/cases.state" ]      || touch "$STATE/cases.state"
 
-# CRITICAL: turtlepower won't start without this
-[ -f "$STATE/turtlepower.lock" ] || echo "LOCK_STATE=ACTIVE" > "$STATE/turtlepower.lock"
+cat <<'EOF2' > "$INSTALLERS/install_daemons.sh"
+#!/data/data/com.termux/files/usr/bin/bash
 
-echo "✔ State initialised"
+BASE="$HOME/MiuiserPeruser"
 
-# ── Permissions ───────────────────────────────────────
-chmod +x "$LAW"/*.sh 2>/dev/null
-chmod +x "$LAW/cre"/*.sh 2>/dev/null
-chmod +x "$BASE/scripts"/*.sh 2>/dev/null
-echo "✔ Permissions set"
+chmod +x "$BASE/cre/april_o_neil.sh" 2>/dev/null
+chmod +x "$BASE/turtlepower_daemon.sh" 2>/dev/null
+chmod +x "$BASE/toolkit_daemon.sh" 2>/dev/null
+chmod +x "$BASE/escalation_daemon.sh" 2>/dev/null
+
+echo "✔ Daemons installed"
+EOF2
+chmod +x "$INSTALLERS/install_daemons.sh"
+
+
+cat <<'EOF3' > "$INSTALLERS/install_ui.sh"
+#!/data/data/com.termux/files/usr/bin/bash
+
+BASE="$HOME/MiuiserPeruser"
+
+chmod +x "$BASE/judicial_controller.sh" 2>/dev/null
+
+echo "✔ UI layer installed"
+EOF3
+chmod +x "$INSTALLERS/install_ui.sh"
+
+
+cat <<'EOF4' > "$INSTALLERS/install_recovery.sh"
+#!/data/data/com.termux/files/usr/bin/bash
+
+BASE="$HOME/MiuiserPeruser"
+
+mkdir -p "$BASE/logs"
+
+echo "✔ Recovery layer ready"
+EOF4
+chmod +x "$INSTALLERS/install_recovery.sh"
+
+# =========================
+# RUN INSTALLERS IN ORDER
+# =========================
+
+echo "⚖️ Installing Core..."
+bash "$INSTALLERS/install_core.sh"
+
+echo "⚖️ Installing Daemons..."
+bash "$INSTALLERS/install_daemons.sh"
+
+echo "⚖️ Installing UI..."
+bash "$INSTALLERS/install_ui.sh"
+
+echo "⚖️ Installing Recovery..."
+bash "$INSTALLERS/install_recovery.sh"
 
 echo "⚖️ Judicial System Fully Installed"
 
-if [ "$1" = "start" ]; then
+if [ "$1" == "start" ]; then
     echo "⚖️ Court is being convened..."
-    bash "$LAW/judicial_controller.sh" start
+    bash "$BASE/judicial_controller.sh" start
 fi
+

@@ -1,10 +1,10 @@
+#include "compat/sensei_compat.h"
 extern void april_log(const char* level, const char* format, ...);
 /*
  * MiuiserPeruser – Behavioral anomaly detection (Donatello)
  */
 
 #include <leo_detection.h>
-#include <april_platform.h>
 #include <sensei_types.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -92,7 +92,7 @@ SENSEI_STATUS don_behavior_analyze(uint32_t pid, SENSEI_DETECTION_LIST *results)
         strncpy(det.detection_type, "HIDDEN_PROCESS", SENSEI_MAX_DETECTION_TYPE - 1);
         snprintf(det.description, SENSEI_MAX_DESCRIPTION,
                  "Process PID %u appears hidden (cannot read status)", pid);
-        leo_detection_list_append(results, &det);
+        april_detection_list_append(results, &det);
     static int behavior_scan_count = 0;
     behavior_scan_count++;
     if (behavior_scan_count % 10 == 0) april_log("INFO", "Behavior scan completed (no hidden/suspicious processes)");
@@ -114,7 +114,7 @@ SENSEI_STATUS don_behavior_analyze(uint32_t pid, SENSEI_DETECTION_LIST *results)
         strncpy(det.detection_type, "SUSPICIOUS_PATH", SENSEI_MAX_DETECTION_TYPE - 1);
         snprintf(det.description, SENSEI_MAX_DESCRIPTION,
                  "'%s' running from unexpected path: %s", info.name, info.path);
-        leo_detection_list_append(results, &det);
+        april_detection_list_append(results, &det);
     }
 
     /* Unusual parent */
@@ -132,7 +132,7 @@ SENSEI_STATUS don_behavior_analyze(uint32_t pid, SENSEI_DETECTION_LIST *results)
                 snprintf(det.description, SENSEI_MAX_DESCRIPTION,
                          "'%s' (PID %u) has unusual parent '%s' (PID %u)",
                          info.name, pid, parent.name, info.ppid);
-                leo_detection_list_append(results, &det);
+                april_detection_list_append(results, &det);
             }
         }
     }
