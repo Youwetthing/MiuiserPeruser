@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "daemons": [],
+  "governance": [
+    "turtlepower",
+    "judicial_controller"
+  ],
+  "notes": "auto-generated registry (rahzerd unified layer active)"
+}

@@ -1,0 +1,1 @@
+/data/data/com.termux/files/home/MiuiserPeruser/data/uid_package_map.txt

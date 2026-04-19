@@ -1,0 +1,16 @@
+# MiuiserPeruser Daemon Identity Map
+# Generated: Rahzerd consolidation pass
+
+connectivityd => rahzerd
+rahzerd => PRIMARY
+
+# Governance layer (non-daemon logic)
+judicial_controller => GOVERNANCE
+turtlepower => GOVERNANCE
+
+# Core daemons (authoritative)
+networkd => CORE
+sysportd => CORE
+turtlecomd => CORE
+foot_heartbeatd => CORE
+foot_ipcwatchd => CORE

@@ -27,8 +27,9 @@ set(CORE_SRCS
 # Add any backend files found in the core root
 file(GLOB BACKEND_SRCS "backend_*.c")
 
-add_library(sensei_core STATIC ${CORE_SRCS} ${BACKEND_SRCS})
-
+add_library(sensei_core
+    src/core/platform/capabilities.c
+)
 target_include_directories(sensei_core PUBLIC 
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/detection

@@ -1,0 +1,35 @@
+{
+  "core": [
+    "turtlecomd",
+    "sysportd",
+    "networkd",
+    "supervisor"
+  ],
+  "syndicate": [
+    "fugitoidd",
+    "krangd",
+    "bebopd",
+    "rocksteadyd",
+    "shredderd",
+    "leatherheadd",
+    "ratkingd",
+    "splinterd",
+    "metalheadd",
+    "rahzerd"
+  ],
+  "footclan": [
+    "foot_heartbeatd",
+    "foot_resurrectord",
+    "foot_blackboxd",
+    "foot_ipcwatchd",
+    "foot_tempbackupd",
+    "foot_zombiebackupd",
+    "foot_portwatchd",
+    "foot_clan_supreme"
+  ],
+  "control": [
+    "judicial_controller",
+    "turtlepower",
+    "toolkit"
+  ]
+}

@@ -1,1 +1,0 @@
-/data/data/com.termux/files/usr/bin/c++ -O2 -g -DNDEBUG -Xlinker --dependency-file=CMakeFiles/thermald.dir/link.d CMakeFiles/thermald.dir/thermald.cpp.o CMakeFiles/thermald.dir/binder_thermal_reader.cpp.o CMakeFiles/thermald.dir/fugitoid_logger.cpp.o -o thermald  -lpthread
