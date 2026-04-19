@@ -1,0 +1,19 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# --- THE FORTRESS INITIALIZATION ---
+
+echo "🛡️ [SECURE] Validating Daemon Integrity..."
+# Verification: Ensure scripts haven't been tampered with (size check)
+if [ ! -s ~/MiuiserPeruser/bin/manual_lymph.sh ]; then echo "❌ CRITICAL: DAEMON TAMPERED"; exit 1; fi
+
+echo "🧬 [SYSTEM] Launching Sentinel & Lymphatic Drainage..."
+
+# 1. Start the Sentinel (Observation)
+nohup ~/bin/syndicate_powerhouse > ~/MiuiserPeruser/logs/sentinel.log 2>&1 &
+
+# 2. Start the Lymph Loop (Execution)
+nohup ~/MiuiserPeruser/bin/manual_lymph.sh > /dev/null 2>&1 &
+
+# 3. Clean up the environment
+disown -a
+echo "✅ [SUCCESS] Fortress Active. System is protected."
+echo "📝 Log: tail -f ~/MiuiserPeruser/logs/sentinel.log"

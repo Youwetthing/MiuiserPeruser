@@ -1,0 +1,36 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+STATE="$HOME/MiuiserPeruser/Registry/daemon_state.json"
+
+cmd="$1"
+daemon="$2"
+
+if [ ! -f "$STATE" ]; then
+  echo "[syndicatectl] state file missing"
+  exit 1
+fi
+
+case "$cmd" in
+
+  enable)
+    jq ".\"$daemon\" = 1" "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+    echo "[syndicatectl] enabled $daemon"
+    ;;
+
+  disable)
+    jq ".\"$daemon\" = 0" "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+    echo "[syndicatectl] disabled $daemon"
+    ;;
+
+  status)
+    echo "[syndicatectl] daemon states:"
+    jq '.' "$STATE"
+    ;;
+
+  *)
+    echo "Usage:"
+    echo "  syndicatectl enable <daemon>"
+    echo "  syndicatectl disable <daemon>"
+    echo "  syndicatectl status"
+    ;;
+esac

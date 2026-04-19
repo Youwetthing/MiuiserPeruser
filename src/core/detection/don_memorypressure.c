@@ -1,10 +1,10 @@
+#include "compat/sensei_compat.h"
 /*
  * MiuiserPeruser – Donatello's Memory Pressure Monitor
  * Watches RAM and swap usage, warns when resources are low.
  */
 
 #include <leo_detection.h>
-#include <april_platform.h>
 #include <sensei_types.h>
 #include <stdio.h>
 #include <stdlib.h>

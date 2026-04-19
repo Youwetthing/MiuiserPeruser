@@ -2243,3 +2243,16 @@ while true; do
         fi
     done
 done
+# --- LYMPHATIC INTEGRATION ---
+start_lymph_drainage() {
+    (
+        while true; do
+            while IFS='|' read -r pkg action ts; do
+                [ -z "$pkg" ] && continue
+                adb shell cmd appops set "$pkg" RUN_IN_BACKGROUND ignore < /dev/null 2>/dev/null
+                adb shell am force-stop "$pkg" < /dev/null >/dev/null 2>&1
+            done < "$HOME/MiuiserPeruser/data/daemonhunter_brain.txt"
+            sleep 20
+        done
+    ) &
+}

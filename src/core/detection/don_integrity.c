@@ -1,10 +1,10 @@
+#include "compat/sensei_compat.h"
 /*
  * MiuiserPeruser – Full System File Integrity Monitor (Donatello)
  * Monitors critical Android system files using Shizuku/RISH.
  */
 
 #include <leo_detection.h>
-#include <april_platform.h>
 #include <sensei_types.h>
 #include "rish_pipe.h"
 #include <stdio.h>

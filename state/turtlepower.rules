@@ -1,0 +1,11 @@
+# format: RULE|condition|action
+
+RULE|ratkingd:HIGH>=5|restart:ratkingd
+RULE|leatherheadd:HIGH>=3|restart:leatherheadd
+RULE|granitord:HIGH>=5|restart:granitord
+
+RULE|thermal>=45|throttle:all_non_critical
+RULE|thermal>=50|shutdown:non_essential
+
+RULE|cpu_spike>=90|throttle:ratkingd
+RULE|crash>=1|restart:any

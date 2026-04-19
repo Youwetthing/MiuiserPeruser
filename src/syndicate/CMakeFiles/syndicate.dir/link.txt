@@ -1,0 +1,1 @@
+/data/data/com.termux/files/usr/bin/cc -O2 -g -DNDEBUG -Xlinker --dependency-file=CMakeFiles/syndicate.dir/link.d CMakeFiles/syndicate.dir/rahzerd/rahzerd.c.o CMakeFiles/syndicate.dir/rahzerd/modules/radio.c.o CMakeFiles/syndicate.dir/rahzerd/modules/environment.c.o -o syndicate

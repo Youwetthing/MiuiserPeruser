@@ -1,0 +1,11 @@
+{
+  "status": "trained",
+  "version": "1.0",
+  "nodes": {
+    "ratking": {"priority": 1, "drainage_enabled": true},
+    "bebop": {"priority": 1, "drainage_enabled": true},
+    "tigerclaw": {"priority": 2, "drainage_enabled": true},
+    "rahzer": {"priority": 2, "drainage_enabled": true}
+  },
+  "bridge_confirmed": true
+}

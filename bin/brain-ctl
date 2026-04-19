@@ -1,0 +1,21 @@
+#!/data/data/com.termux/files/usr/bin/bash
+BRAIN_FILE="$HOME/MiuiserPeruser/data/daemonhunter_brain.txt"
+
+case $1 in
+    add)
+        echo "$2|deep_starve|$(date +%s)" >> "$BRAIN_FILE"
+        sort -u "$BRAIN_FILE" -o "$BRAIN_FILE"
+        echo "✅ Added $2 to the hit-list."
+        ;;
+    remove)
+        sed -i "/$2/d" "$BRAIN_FILE"
+        echo "❌ Removed $2 from the hit-list."
+        ;;
+    list)
+        echo "--- CURRENT TARGETS ---"
+        cut -d'|' -f1 "$BRAIN_FILE"
+        ;;
+    *)
+        echo "Usage: brain-ctl [add|remove|list] [package_name]"
+        ;;
+esac

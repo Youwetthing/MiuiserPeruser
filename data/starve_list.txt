@@ -1,0 +1,2 @@
+​10050 com.miui.core.internal.services
+​10213 com.xiaomi.xmsf (This is the messaging service that often triggers the "phone home" for MSA).

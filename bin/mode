@@ -1,0 +1,20 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+case "$1" in
+  lite)
+    daemonctl stop all
+    daemonctl start core
+    ;;
+  balanced)
+    daemonctl stop all
+    daemonctl start core
+    daemonctl start footclan
+    ;;
+  deep)
+    daemonctl stop all
+    daemonctl start all
+    ;;
+  *)
+    echo "Usage: mode {lite|balanced|deep}"
+    ;;
+esac

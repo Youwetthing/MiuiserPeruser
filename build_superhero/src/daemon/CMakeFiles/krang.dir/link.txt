@@ -1,2 +1,0 @@
-/data/data/com.termux/files/usr/bin/llvm-ar qc libkrang.a CMakeFiles/krang.dir/ipc.c.o CMakeFiles/krang.dir/krang.c.o
-/data/data/com.termux/files/usr/bin/llvm-ranlib libkrang.a

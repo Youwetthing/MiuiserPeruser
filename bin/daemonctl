@@ -1,0 +1,78 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+REGISTRY="$HOME/MiuiserPeruser/Registry/daemon_allowlist.json"
+BIN_DIR="$HOME/MiuiserPeruser/bin"
+LOG_DIR="$HOME/MiuiserPeruser/Log_Cabin"
+PID_DIR="$HOME/MiuiserPeruser/pipes"
+
+mkdir -p "$LOG_DIR" "$PID_DIR"
+
+get_daemons() {
+    python3 - <<PY
+import json
+with open("$REGISTRY") as f:
+    data = json.load(f)
+
+group = "$1"
+if group == "all":
+    for g in data.values():
+        for d in g:
+            print(d)
+else:
+    for d in data.get(group, []):
+        print(d)
+PY
+}
+
+start_daemon() {
+    d="$1"
+    if [ -f "$BIN_DIR/$d" ]; then
+        nohup "$BIN_DIR/$d" > "$LOG_DIR/$d.log" 2>&1 &
+        echo $! > "$PID_DIR/$d.pid"
+        echo "▶ Started $d"
+    else
+        echo "✗ Missing binary: $d"
+    fi
+}
+
+stop_daemon() {
+    d="$1"
+    if [ -f "$PID_DIR/$d.pid" ]; then
+        kill -9 "$(cat "$PID_DIR/$d.pid")" 2>/dev/null
+        rm -f "$PID_DIR/$d.pid"
+        echo "■ Stopped $d"
+    else
+        pkill -f "$d" 2>/dev/null
+        echo "■ Force-stopped $d"
+    fi
+}
+
+status_daemon() {
+    d="$1"
+    if pgrep -f "$d" > /dev/null; then
+        echo "✔ $d running"
+    else
+        echo "✘ $d stopped"
+    fi
+}
+
+case "$1" in
+    start)
+        for d in $(get_daemons "$2"); do start_daemon "$d"; done
+        ;;
+    stop)
+        for d in $(get_daemons "$2"); do stop_daemon "$d"; done
+        ;;
+    restart)
+        for d in $(get_daemons "$2"); do
+            stop_daemon "$d"
+            start_daemon "$d"
+        done
+        ;;
+    status)
+        for d in $(get_daemons "$2"); do status_daemon "$d"; done
+        ;;
+    *)
+        echo "Usage: daemonctl {start|stop|restart|status} [group|all]"
+        ;;
+esac
