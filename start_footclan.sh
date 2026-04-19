@@ -1,4 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
+adb shell pm grant com.termux android.permission.READ_LOGS
+adb shell pm grant com.termux android.permission.GET_APP_OPS_STATS
 # Foot Clan Full Launch v12 - Using all existing binaries
 
 PROJECT_DIR="/data/data/com.termux/files/home/MiuiserPeruser"
