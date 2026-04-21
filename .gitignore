@@ -27,3 +27,12 @@ __pycache__/
 
 # Termux
 .termux/
+
+# CMake / build noise
+build/
+CMakeFiles/
+cmake-build-*/
+*.o
+*.a
+*.so
+*.bin
