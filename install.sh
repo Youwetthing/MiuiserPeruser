@@ -1,35 +1,59 @@
-#!/bin/bash
-PREFIX="/data/data/com.termux/files/usr"
-BIN="$PREFIX/bin"
-REPO_DIR="$HOME/MiuiserPeruser"
+#!/data/data/com.termux/files/usr/bin/bash
 
-echo "--- MiuiserPeruser: The Syndicate Rises ---"
+BASE="$HOME/MiuiserPeruser"
+PIPES="$BASE/pipes"
+LOGS="$BASE/Log_Cabin"
+BOOT_DIR="$HOME/.termux/boot"
+BOOT_SCRIPT="$BOOT_DIR/start_miuiser.sh"
 
-# 1. Nuanced Rish Setup
-if [ ! -f "$BIN/rish" ]; then
-    echo "[!] Rish not found in path. Looking for Shizuku assets..."
-    # Attempting to pull rish from standard Shizuku export location
-    if [ -f "/sdcard/rish" ]; then
-        cp /sdcard/rish "$BIN/rish"
-        chmod +x "$BIN/rish"
-        echo "[✔] Rish installed from /sdcard/."
-    else
-        echo "[X] Please export 'rish' from the Shizuku app to your Internal Storage first."
-        exit 1
-    fi
-fi
+echo "[INSTALL] MiuiserPeruser setup starting..."
 
-# 2. The Flip Switch Handshake
-echo "[*] Initializing Shizuku Bridge..."
-if rish -c "id" | grep -q "uid=2000"; then
-    echo "[✔] Syndicate has High-Privilege Access (Shell)."
+mkdir -p "$PIPES" "$LOGS" "$BASE/Database" "$BASE/bin"
+chmod 700 "$PIPES"
+
+[ ! -d "$PIPES" ] && echo "[INSTALL] FATAL: pipes/ failed." && exit 1
+[ ! -d "$LOGS"  ] && echo "[INSTALL] FATAL: Log_Cabin/ failed." && exit 1
+
+echo "[INSTALL] Directory structure OK."
+echo "[INSTALL] Building binaries..."
+
+gcc "$BASE/src/syndicate/krangd.c" "$BASE/src/core/april_table.c" \
+    -I "$BASE/src/syndicate" -I "$BASE/src/core" -lsqlite3 -o "$BASE/bin/krangd" \
+    || { echo "[INSTALL] FATAL: krangd build failed."; exit 1; }
+
+gcc "$BASE/src/syndicate/turtlecomd.c" "$BASE/src/core/april_table.c" \
+    -I "$BASE/src/syndicate" -I "$BASE/src/core" -lsqlite3 -o "$BASE/bin/turtlecomd" \
+    || { echo "[INSTALL] FATAL: turtlecomd build failed."; exit 1; }
+
+gcc "$BASE/src/toolkit/dex_ping.c" \
+    -I "$BASE/src/syndicate" -o "$BASE/bin/dex_ping" \
+    || { echo "[INSTALL] FATAL: dex_ping build failed."; exit 1; }
+
+echo "[INSTALL] Binaries OK."
+
+ln -sf "$BASE/bin/miuiser.sh" "$PREFIX/bin/miuiser"
+chmod +x "$BASE/bin/miuiser.sh"
+echo "[INSTALL] miuiser command available."
+
+if [ -d "$BOOT_DIR" ]; then
+    cp "$BASE/termux_boot/start_miuiser.sh" "$BOOT_SCRIPT"
+    chmod +x "$BOOT_SCRIPT"
+    echo "[INSTALL] Boot entry installed."
 else
-    echo "[X] Shizuku denied. Please 'Allow' Termux in the Shizuku app."
-    exit 1
+    echo "[INSTALL] termux-boot not found — session mode only."
 fi
 
-# 3. Create the Sewer Pipes
-mkdir -p "$REPO_DIR/pipes"
-chmod 777 "$REPO_DIR/pipes"
+echo "[INSTALL] Bringing daemons online..."
+miuiser start
+echo "[INSTALL] Done."
 
-echo "--- Setup Complete. The City is ours. ---"
+# Initialise april.bin if missing
+python3 -c "
+import os
+p = '$BASE/Database/april.bin'
+if not os.path.exists(p):
+    open(p, 'wb').write(b'\x00' * 4096)
+    print('[INSTALL] april.bin initialised.')
+else:
+    print('[INSTALL] april.bin exists.')
+"

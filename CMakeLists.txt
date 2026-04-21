@@ -39,6 +39,5 @@ message(STATUS "Guard completed successfully.")
 #
 
 add_subdirectory(src/core)
-add_subdirectory(src/daemon)
 add_subdirectory(src)
 
