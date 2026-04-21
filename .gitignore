@@ -36,3 +36,15 @@ cmake-build-*/
 *.a
 *.so
 *.bin
+*.o
+*.pyc
+__pycache__/
+build/
+bin/
+logs/
+*.dex
+*.bak
+miuiserperuser-daemon
+cpud
+thermald
+sysportd*
