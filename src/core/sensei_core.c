@@ -1,39 +1,54 @@
 #include "sensei_core.h"
-#include <sys/mman.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <stdio.h>
-#include <sys/stat.h>
+#include <stdbool.h>
 
-static void* april_broadcast_map = NULL;
+/* Cortex interfaces */
+bool cortex_protocol_parse(const char *raw, sensei_msg_t *out);
+bool cortex_routing_route(const sensei_msg_t *msg, sensei_route_result_t *out);
+void cortex_protocol_free_msg(sensei_msg_t *msg);
+void cortex_routing_free_route(sensei_route_result_t *route);
 
-int sensei_core_init(void) {
-    /* Standard file-backed mmap for Termux compatibility */
-    const char* april_path = "/data/data/com.termux/files/home/tmp/miuiser_april.bin";
-    
-    /* Ensure tmp directory exists */
-    mkdir("/data/data/com.termux/files/home/tmp", 0700);
+bool sensei_cap_register(const char *worker, const char *command);
 
-    int fd = open(april_path, O_RDWR | O_CREAT, 0666);
-    if (fd >= 0) {
-        /* Set table size to 4KB */
-        ftruncate(fd, 4096);
-        april_broadcast_map = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        // Cast the raw memory to our structured table
-AprilTable* table = (AprilTable*)april_broadcast_map;
+/* capability init */
+static bool g_caps_inited = false;
 
-if (table != MAP_FAILED) {
-    table->magic_v1 = 0xDEADBEEF;  // The "Handshake" for Python
-    table->daemon_active = 1;      // Tell the Dashboard we are alive
-    table->threat_level = 0;       // Initialize at 0
-    return 0; 
+static void sensei_core_ensure_caps(void) {
+    if (g_caps_inited) return;
+    g_caps_inited = true;
+
+    sensei_cap_register("splinter",   "PING");
+    sensei_cap_register("footrunner", "TEMP");
+    sensei_cap_register("footrunner", "CPU");
+    sensei_cap_register("superhero",  "SCAN");
+    sensei_cap_register("splinter",   "WORKER");
 }
-        close(fd);
-        
-        if (april_broadcast_map != MAP_FAILED) {
-            return 0; /* Heartbeat initialized */
-        }
+
+/* API */
+bool sensei_parse(const char *raw, sensei_msg_t *out_msg) {
+    return cortex_protocol_parse(raw, out_msg);
+}
+
+bool sensei_route(const sensei_msg_t *msg, sensei_route_result_t *out_route) {
+    sensei_core_ensure_caps();
+    return cortex_routing_route(msg, out_route);
+}
+
+const char *sensei_status_string(sensei_status_t status) {
+    switch (status) {
+        case SENSEI_OK: return "OK";
+        case SENSEI_ERR_PARSE: return "Parse error";
+        case SENSEI_ERR_UNKNOWN_CMD: return "Unknown command";
+        case SENSEI_ERR_NO_TARGET: return "No target worker";
+        case SENSEI_ERR_INVALID: return "Invalid message";
+        case SENSEI_ERR_INTERNAL: return "Internal error";
+        default: return "Unknown status";
     }
-    perror("Sensei Core: April Table mapping failed");
-    return -1;
+}
+
+void sensei_msg_free(sensei_msg_t *msg) {
+    cortex_protocol_free_msg(msg);
+}
+
+void sensei_route_free(sensei_route_result_t *route) {
+    cortex_routing_free_route(route);
 }

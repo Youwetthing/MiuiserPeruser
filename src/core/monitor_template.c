@@ -1,35 +1,41 @@
-#include "monitor_template.h"
-#include "april_table.h"
-#include "syndicate_core.h"
-#include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
-#include <signal.h>
+#include <stdint.h>
 
-static volatile int _running = 1;
-static void _cleanup(int sig) { _running = 0; }
+#include "april_runtime.h"
+#include "april_constants.h"
 
-void monitor_run(const MonitorConfig *cfg) {
-    signal(SIGINT,  _cleanup);
-    signal(SIGTERM, _cleanup);
-    syndicate_init();
-    printf("[%s] ONLINE\n", cfg->name);
+/* -------------------------
+ * Monitor config structure
+ * ------------------------- */
+typedef struct {
+    int base_sleep;
+} april_monitor_cfg;
 
-    while (_running) {
-        if (april_read(APRIL_SYSTEM_LOCK, SYSLOCK_NORMAL) == SYSLOCK_LOCKED) {
-            sleep(april_poll_sleep(cfg->base_sleep));
+/* -------------------------
+ * Main monitor loop
+ * ------------------------- */
+void april_monitor_run(april_monitor_cfg *cfg)
+{
+    while (1)
+    {
+        /* system lock check */
+        uint32_t syslock =
+            april_read(APRIL_KEY_SYSTEM_LOCK, POLL_NORMAL);
+
+        if (syslock == 1)
+        {
+            /* locked state → back off */
+            sleep(1);
             continue;
         }
-        uint32_t log_level = april_read(APRIL_LOG_LEVEL, LOG_NORMAL);
-        char *data = cfg->observe();
-        if (log_level >= LOG_NORMAL) {
-            log_cabin(cfg->name, data ? data : "empty");
-            db_log(cfg->name, cfg->log_tag, data ? data : "empty");
-        }
-        if (log_level == LOG_VERBOSE && data)
-            printf("[%s] %s\n", cfg->name, data);
-        free(data);
-        sleep(april_poll_sleep(cfg->base_sleep));
+
+        /* log level read */
+        uint32_t log_level =
+            april_read(APRIL_KEY_LOG_LEVEL, POLL_NORMAL);
+
+        (void)log_level; /* placeholder for future logging logic */
+
+        /* throttle / base sleep */
+        sleep((unsigned int)cfg->base_sleep);
     }
-    printf("[%s] shutdown\n", cfg->name);
 }
