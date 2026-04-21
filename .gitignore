@@ -1,7 +1,29 @@
+# Build outputs
 build/
+build_superhero/
+src/core/build/
+bin/
+
+# C/C++ artifacts
 *.o
 *.a
-*.so
-*.log
-*.pid
+*.bin
+*.cmake
+CMakeFiles/
+CMakeCache.txt
 
+# Runtime
+pipes/
+Log_Cabin/
+Database/*.db
+Database/april.bin
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# Termux
+.termux/
