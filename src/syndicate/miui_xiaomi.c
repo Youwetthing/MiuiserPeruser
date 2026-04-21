@@ -1,0 +1,16 @@
+#include "daemon_common.h"
+#include <string.h>
+
+/* Strong override: real process check for Xiaomi devices */
+int process_running(const char *name) {
+    if (!name) return 0;
+    if (strcmp(name, "tigerclaw") == 0) return 1;
+    if (strcmp(name, "rocksteady") == 0) return 1;
+    return 0;
+}
+
+/* Strong override for device property (example) */
+const char *device_get_property(const char *key) {
+    (void)key;
+    return "xiaomi";
+}
