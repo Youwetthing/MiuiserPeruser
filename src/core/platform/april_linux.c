@@ -1,3 +1,4 @@
+#include "april_runtime.h"
 /*
  * MiuiserPeruser – Linux platform implementation (April's domain)
  */

@@ -1,3 +1,4 @@
+#include "april_runtime.h"
 #ifndef APRIL_PLATFORM_H
 #define APRIL_PLATFORM_H
 
