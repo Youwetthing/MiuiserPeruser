@@ -1,31 +1,35 @@
-
-
+/*
+ * daemon_modes.c — MiuiserPeruser operating modes
+ *
+ * Passive:   single scan, print results, exit
+ * Scheduled: IPC up, hourly scans
+ * Active:    IPC up, per-minute scans
+ */
 
 #include <stdio.h>
 #include <unistd.h>
 
+#include "ipc_globals.h"
 #include "capabilities_extra.h"
 #include "port_pathway.h"
-#include "ipc_globals.h"
+#include "daemon_common.h"
 
 /* IPC server */
-int miuiserperuser_ipc_init(void);
+int  miuiserperuser_ipc_init(void);
 void miuiserperuser_ipc_shutdown(void);
 
 /* Global capability state */
 extern struct capabilities_state capabilities;
 
-/* Pretty printer */
+/* Capability output */
 void print_capabilities_pretty(void);
-
-/* Summary + hints */
 void capability_print_summary(void);
 void capability_print_hints(void);
 
-/* ------------------------------
-   HELP
-   ------------------------------ */
-void print_help(void) {
+/* ── Help ─────────────────────────────────────────────────────────────── */
+
+void print_help(void)
+{
     printf("MiuiserPeruser daemon\n");
     printf("Usage:\n");
     printf("  --doctor            Run full diagnostic mode\n");
@@ -35,18 +39,18 @@ void print_help(void) {
     printf("  --selftest          Run internal self-test\n");
 }
 
-/* ------------------------------
-   SELFTEST
-   ------------------------------ */
-void run_selftest(void) {
+/* ── Selftest ─────────────────────────────────────────────────────────── */
+
+void run_selftest(void)
+{
     printf("[Selftest] Running basic checks...\n");
     printf("[Selftest] OK\n");
 }
 
-/* ------------------------------
-   PASSIVE MODE
-   ------------------------------ */
-void run_single_scan(void) {
+/* ── Passive mode ─────────────────────────────────────────────────────── */
+
+void run_single_scan(void)
+{
     printf("[Scan] Running single scan...\n");
     detect_capabilities();
     print_capabilities_pretty();
@@ -54,11 +58,11 @@ void run_single_scan(void) {
     capability_print_hints();
 }
 
-/* ------------------------------
-   SCHEDULED MODE
-   ------------------------------ */
-void run_scheduled_mode(void) {
-    printf("[Scheduled] Starting Turtle Power IPC...\n");
+/* ── Scheduled mode ───────────────────────────────────────────────────── */
+
+void run_scheduled_mode(void)
+{
+    printf("[Scheduled] Starting IPC...\n");
     if (miuiserperuser_ipc_init() != 0) {
         printf("[Scheduled] IPC failed to start.\n");
         return;
@@ -75,11 +79,11 @@ void run_scheduled_mode(void) {
     miuiserperuser_ipc_shutdown();
 }
 
-/* ------------------------------
-   ACTIVE MODE
-   ------------------------------ */
-void run_active_mode(void) {
-    printf("[Active] Starting Turtle Power IPC...\n");
+/* ── Active mode ──────────────────────────────────────────────────────── */
+
+void run_active_mode(void)
+{
+    printf("[Active] Starting IPC...\n");
     if (miuiserperuser_ipc_init() != 0) {
         printf("[Active] IPC failed to start.\n");
         return;
