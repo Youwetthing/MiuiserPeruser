@@ -1,36 +1,48 @@
+/*
+ * ipc.c — MiuiserPeruser IPC layer
+ *
+ * Two Unix sockets:
+ *   DASHBOARD_SOCKET  — persistent client (UI / monitor)
+ *   SEWER_SOCKET      — one-shot worker command/response
+ *
+ * Splinter notifications go out via ipc_splinter_emit().
+ * No sensei/leo dependencies in this file.
+ */
 
 #include "ipc_globals.h"
-#include "backend_sysinfo.h"
-
-
+#include "ipc_contract.h"
+#include "../core/ipc_utils.h"
 #include "../core/log_safe.h"
+#include "backend_sysinfo.h"
 #include "backend_thermals.h"
 #include "backend_adb.h"
+#include "backend_doctor.h"
+#include "backend_portbridge.h"
+
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/select.h>
 #include <arpa/inet.h>
-#include "backend_doctor.h"
-#include "backend_portbridge.h"
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <stdbool.h>
 #include <pthread.h>
 
 #define BUFFER_SIZE 1024
 
-/* External detection entry points */
+/* Forward declaration — implemented in krangd / port_pathway */
+extern void krang_send_command(const char *payload);
 
-/* IPC state */
+/* ── IPC state ────────────────────────────────────────────────────────── */
 static int g_dashboard_listen_fd = -1;
 static int g_sewer_listen_fd     = -1;
 static int g_client_fd           = -1;
-
 static volatile bool g_client_connected = false;
 
-/* --- helpers --- */
+/* ── Low-level I/O helpers ────────────────────────────────────────────── */
 
 static ssize_t read_full(int fd, void *buf, size_t len)
 {
@@ -62,19 +74,50 @@ static ssize_t write_full(int fd, const void *buf, size_t len)
 
 static void send_response(int fd, const char *msg)
 {
-    uint32_t len = (uint32_t)strlen(msg);
+    uint32_t len     = (uint32_t)strlen(msg);
     uint32_t net_len = htonl(len);
-
     write_full(fd, &net_len, sizeof(net_len));
-write_full(fd, msg, len);
-write_full(fd, "\n", 1);
+    write_full(fd, msg, len);
+    write_full(fd, "\n", 1);
 }
+
+/* ── Splinter emit (fire-and-forget) ──────────────────────────────────── */
+
+/*
+ * ipc_splinter_emit — send an APRIL event to splinterd
+ *
+ * Convenience wrapper for internal IPC events. Source is fixed as
+ * "miuiserperuser"; use splinter_emit() directly for per-daemon sourcing.
+ * Wire format: APRIL|source|type|payload\n  (no length prefix)
+ */
+void ipc_splinter_emit(const char *event)
+{
+    if (!event) return;
+
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return;
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SPLINTER_SOCKET, sizeof(addr.sun_path) - 1);
+
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+        char buf[2048];
+        int len = snprintf(buf, sizeof(buf),
+                           "APRIL|miuiserperuser|ipc|%s\n", event);
+        if (len > 0 && len < (int)sizeof(buf))
+            write(fd, buf, (size_t)len);
+    }
+
+    close(fd);
+}
+
+/* ── Command dispatch ─────────────────────────────────────────────────── */
 
 static void handle_worker(int fd)
 {
     uint32_t net_len;
-
-    /* Read length prefix */
     if (read_full(fd, &net_len, sizeof(net_len)) <= 0)
         return;
 
@@ -86,93 +129,86 @@ static void handle_worker(int fd)
     if (!cmd)
         return;
 
-    /* Read command body */
     if (read_full(fd, cmd, len) <= 0) {
         free(cmd);
         return;
     }
-
     cmd[len] = '\0';
 
-    /* --- COMMAND DISPATCH --- */
-
-    /* 1. Full scan */
-    if (strncmp(cmd, "FULL_SCAN", 9) == 0) {
-        
-        
-        send_response(fd, "OK");
-
-    /* 2. Reload config */
-    } else if (strncmp(cmd, "RELOAD_CONFIG", 13) == 0) {
-        
-        send_response(fd, "RELOADED");
-
-    /* 3. Echo (for Splinter/Krang testing) */
-    } else if (strncmp(cmd, "echo ", 5) == 0 || strncmp(cmd, "ECHO ", 5) == 0) {
+    /* 1. Echo */
+    if (strncmp(cmd, "echo ", 5) == 0 || strncmp(cmd, "ECHO ", 5) == 0) {
         send_response(fd, cmd + 5);
 
-    /* 4. Basic system info */
-} else if (strcmp(cmd, "SYSINFO") == 0) {
-    char *info = backend_sysinfo();
-    send_response(fd, info ? info : "sysinfo:error");
-    free(info);
+    /* 2. Ping */
+    } else if (strcmp(cmd, "PING") == 0) {
+        send_response(fd, "PONG");
 
-/* X. Doctor mode */
-} else if (strcmp(cmd, "DOCTOR") == 0) {
-    char *r = backend_doctor();
-    send_response(fd, r ? r : "doctor:error");
-    free(r);
+    /* 3. Sysinfo */
+    } else if (strcmp(cmd, "SYSINFO") == 0) {
+        char *info = backend_sysinfo();
+        send_response(fd, info ? info : "sysinfo:error");
+        free(info);
+
+    /* 4. Doctor */
+    } else if (strcmp(cmd, "DOCTOR") == 0) {
+        char *r = backend_doctor();
+        send_response(fd, r ? r : "doctor:error");
+        free(r);
 
     /* 5. Thermals */
-} else if (strcmp(cmd, "THERMALS") == 0) {
-    char *t = backend_thermals();
-    send_response(fd, t ? t : "thermals:error");
-    free(t);
+    } else if (strcmp(cmd, "THERMALS") == 0) {
+        char *t = backend_thermals();
+        send_response(fd, t ? t : "thermals:error");
+        free(t);
 
-/* 5b. Thermals → Leatherhead */
-} else if (strncmp(cmd, "THERMAL_REPORT ", 15) == 0) {
-    /* Forward thermald’s parsed data to Leatherhead */
-    const char *payload = cmd + 15;
-    krang_send_command(payload);
-    send_response(fd, "OK");
+    /* 5b. Thermal report → krang forward */
+    } else if (strncmp(cmd, "THERMAL_REPORT ", 15) == 0) {
+        krang_send_command(cmd + 15);
+        send_response(fd, "OK");
 
     /* 6. MIUI probe */
     } else if (strcmp(cmd, "MIUI_PROBE") == 0) {
         send_response(fd, "miui_probe:ok");
 
     /* 7. Portbridge probe */
-} else if (strcmp(cmd, "PORTBRIDGE_PROBE") == 0) {
-    char *r = backend_portbridge_probe();
-    send_response(fd, r ? r : "portbridge:error");
-    free(r);
+    } else if (strcmp(cmd, "PORTBRIDGE_PROBE") == 0) {
+        char *r = backend_portbridge_probe();
+        send_response(fd, r ? r : "portbridge:error");
+        free(r);
 
-    /* 8. RISH command */
+    /* 8. RISH command (stub — wire when rish_pipe is ready) */
     } else if (strncmp(cmd, "RISH ", 5) == 0) {
         send_response(fd, "rish:ok");
 
     /* 9. ADB command */
-} else if (strncmp(cmd, "ADB ", 4) == 0) {
-    const char *subcmd = cmd + 4;
-    char *r = backend_adb_exec(subcmd);
-    send_response(fd, r ? r : "adb:error");
-    free(r);
+    } else if (strncmp(cmd, "ADB ", 4) == 0) {
+        char *r = backend_adb_exec(cmd + 4);
+        send_response(fd, r ? r : "adb:error");
+        free(r);
 
-    /* 10. Read from /proc */
+    /* 10. /proc read (stub) */
     } else if (strncmp(cmd, "PROC_READ ", 10) == 0) {
         send_response(fd, "proc_read:ok");
 
-    /* 11. Read from /sys */
+    /* 11. /sys read (stub) */
     } else if (strncmp(cmd, "SYSFS_READ ", 11) == 0) {
         send_response(fd, "sysfs_read:ok");
 
+    /* 12. Splinter emit passthrough */
+    } else if (strncmp(cmd, "EMIT ", 5) == 0) {
+        ipc_splinter_emit(cmd + 5);
+        send_response(fd, "OK");
+
     /* Default */
-} else {
-    fprintf(stderr, "[SEWER] Unknown command: '%s'\n", cmd);
-    send_response(fd, "UNKNOWN");
-}
+    } else {
+        fprintf(stderr, "[SEWER] Unknown command: '%s'\n", cmd);
+        send_response(fd, "UNKNOWN");
+    }
 
     free(cmd);
 }
+
+/* ── Socket setup ─────────────────────────────────────────────────────── */
 
 static int create_socket(const char *path)
 {
@@ -182,11 +218,11 @@ static int create_socket(const char *path)
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, path, sizeof(addr.sun_path)-1);
+    strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
 
     unlink(path);
 
-    if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+    if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         close(fd);
         return -1;
     }
@@ -199,16 +235,15 @@ static int create_socket(const char *path)
     return fd;
 }
 
-/* --- thread --- */
+/* ── IPC thread ───────────────────────────────────────────────────────── */
 
-static void* ipc_thread(void *arg)
+static void *ipc_thread(void *arg)
 {
     (void)arg;
 
     while (g_running) {
         fd_set fds;
         FD_ZERO(&fds);
-
         int maxfd = -1;
 
         if (g_dashboard_listen_fd >= 0) {
@@ -234,7 +269,8 @@ static void* ipc_thread(void *arg)
             continue;
         }
 
-        if (FD_ISSET(g_dashboard_listen_fd, &fds)) {
+        if (g_dashboard_listen_fd >= 0 &&
+            FD_ISSET(g_dashboard_listen_fd, &fds)) {
             int cfd = accept(g_dashboard_listen_fd, NULL, NULL);
             if (cfd >= 0) {
                 pthread_mutex_lock(&g_mutex);
@@ -246,7 +282,8 @@ static void* ipc_thread(void *arg)
             }
         }
 
-        if (FD_ISSET(g_sewer_listen_fd, &fds)) {
+        if (g_sewer_listen_fd >= 0 &&
+            FD_ISSET(g_sewer_listen_fd, &fds)) {
             int wfd = accept(g_sewer_listen_fd, NULL, NULL);
             if (wfd >= 0) {
                 handle_worker(wfd);
@@ -258,7 +295,7 @@ static void* ipc_thread(void *arg)
     return NULL;
 }
 
-/* --- API --- */
+/* ── Public API ───────────────────────────────────────────────────────── */
 
 int miuiserperuser_ipc_init(void)
 {
@@ -279,34 +316,14 @@ int miuiserperuser_ipc_init(void)
 void miuiserperuser_ipc_shutdown(void)
 {
     g_running = false;
-
     pthread_join(g_thread, NULL);
 
     if (g_dashboard_listen_fd >= 0) close(g_dashboard_listen_fd);
-    if (g_sewer_listen_fd >= 0) close(g_sewer_listen_fd);
+    if (g_sewer_listen_fd     >= 0) close(g_sewer_listen_fd);
+    if (g_client_fd           >= 0) close(g_client_fd);
 
     unlink(DASHBOARD_SOCKET);
     unlink(SEWER_SOCKET);
-}
-
-void miuiserperuser_ipc_broadcast(const char *event)
-{
-    if (!event) return;
-
-    pthread_mutex_lock(&g_mutex);
-
-    if (g_client_connected && g_client_fd >= 0) {
-        char buffer[BUFFER_SIZE];
-
-        snprintf(buffer, sizeof(buffer),
-
-        snprintf(buffer, sizeof(buffer), "APRIL|krangd|event|%s\n", event);
-
-        write_full(g_client_fd, buffer, strlen(buffer));
-        write_full(g_client_fd, "\n", 1);
-    }
-
-    pthread_mutex_unlock(&g_mutex);
 }
 
 bool miuiserperuser_ipc_is_connected(void)
