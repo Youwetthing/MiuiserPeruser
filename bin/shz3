@@ -1,0 +1,77 @@
+#!/system/bin/sh
+# shz3 -- third privileged shell route for MiuiserPeruser
+#
+# Mirrors `rish`: invoked from a terminal it runs a single command via the
+# custom ShizukuDirectLoader DEX, bypassing rish entirely. The daemon-mode
+# helper (long-lived UDS server) is launched by miuiserperuser at startup;
+# this script is the *interactive* / ad-hoc path.
+#
+# Usage:
+#   shz3                       # interactive REPL on stdin/stdout
+#   shz3 -c "id"               # run a single command and exit
+#   shz3 -uds /path/sock       # run as background daemon serving a UDS
+#
+# Env:
+#   RISH_APPLICATION_ID        # caller package (default com.termux)
+
+BASEDIR="$(cd "$(dirname "$0")"/.. && pwd)"
+DEX="$BASEDIR/rish_shizuku_direct.dex"
+
+if [ ! -f "$DEX" ]; then
+    echo "shz3: cannot find $DEX -- run Build_Dex.sh first." >&2
+    exit 1
+fi
+
+# Android 14+ refuses to load writable DEX via app_process.
+if [ "$(getprop ro.build.version.sdk 2>/dev/null || echo 0)" -ge 34 ]; then
+    if [ -w "$DEX" ]; then
+        chmod 400 "$DEX" 2>/dev/null
+        if [ -w "$DEX" ]; then
+            echo "shz3: $DEX is still writable; copy it into the app's private dir." >&2
+            exit 1
+        fi
+    fi
+fi
+
+[ -z "$RISH_APPLICATION_ID" ] && export RISH_APPLICATION_ID=com.termux
+
+MODE="stdio"
+UDS=""
+ONE_SHOT=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -uds|--uds)  MODE="uds";  UDS="$2"; shift 2 ;;
+        -c)          ONE_SHOT="$2"; shift 2 ;;
+        -h|--help)
+            sed -n '2,15p' "$0"; exit 0 ;;
+        *)
+            echo "shz3: unknown arg: $1" >&2; exit 2 ;;
+    esac
+done
+
+if [ "$MODE" = "uds" ]; then
+    exec /system/bin/app_process \
+        -Djava.class.path="$DEX" \
+        "$HOME" \
+        --nice-name=shz3-helper \
+        ShizukuDirectLoader --uds "$UDS"
+fi
+
+if [ -n "$ONE_SHOT" ]; then
+    # Stdio mode, send one command, capture the framed reply, strip the marker.
+    printf '%s\nexit\n' "$ONE_SHOT" | \
+    /system/bin/app_process \
+        -Djava.class.path="$DEX" \
+        "$HOME" \
+        --nice-name=shz3 \
+        ShizukuDirectLoader --stdio \
+        | awk 'BEGIN{p=1} /^___MIUISEREND___$/{p=0;next} p{print}'
+    exit ${PIPESTATUS:-0}
+fi
+
+# Interactive REPL (stdio, no marker stripping -- user sees raw protocol).
+exec /system/bin/app_process \
+    -Djava.class.path="$DEX" \
+    "$HOME" \
+    --nice-name=shz3 \
+    ShizukuDirectLoader --stdio

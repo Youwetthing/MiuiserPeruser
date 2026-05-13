@@ -23,6 +23,7 @@ gcc src/daemon/miuiserperuser.c \
     src/daemon/help_extra.c \
     src/backend/backend_selector.c \
     src/backend/backend_rish.c \
+    src/backend/backend_shizuku_direct.c \
     src/backend/backend_adb.c \
     $LAIRS $LDFLAGS -o bin/miuiserperuser
 
