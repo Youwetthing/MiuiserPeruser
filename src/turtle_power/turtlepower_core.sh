@@ -4,7 +4,7 @@
 # ONLY decision making
 
 LOG="/data/data/com.termux/files/home/MiuiserPeruser/src/turtle_power/logs/turtlepower.log"
-INPUT="/data/data/com.termux/files/home/MiuiserPeruser/tmp/superhero.sock"
+INPUT="/data/data/com.termux/files/home/MiuiserPeruser/pipes/superhero.pipe"
 
 log() {
     echo "[TURTLEPOWER] $1" >> "$LOG"
@@ -34,10 +34,21 @@ decide() {
     esac
 }
 
-while true; do
-    if read line < "$INPUT"; then
-        IFS="|" read -r sev src det <<< "$line"
-        decide "$sev" "$src" "$det"
+exec 3<>"$INPUT"
+while IFS="|" read -r src sig score ctx <&3; do
+    [ -z "$src" ] && continue
+
+    # Map score to severity
+    if [ "$score" -ge 80 ]; then
+        sev="CRITICAL"
+    elif [ "$score" -ge 60 ]; then
+        sev="HIGH"
+    elif [ "$score" -ge 40 ]; then
+        sev="MEDIUM"
+    else
+        sev="LOW"
     fi
+
+    decide "$sev" "$src" "$sig:$ctx"
 done
 
