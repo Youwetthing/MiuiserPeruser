@@ -18,6 +18,7 @@
  */
 
 #include "ipc_globals.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -70,23 +71,22 @@ static void hub_report(const char *msg)
 static void getprop(const char *key, char *out, size_t outlen)
 {
     char cmd[128];
-    snprintf(cmd, sizeof(cmd), "getprop %s 2>/dev/null", key);
-    FILE *f = popen(cmd, "r");
-    if (!f) { strncpy(out, "err", outlen); return; }
-    out[0] = '\0';
-    fgets(out, (int)outlen, f);
-    pclose(f);
+    snprintf(cmd, sizeof(cmd), "getprop %s", key);
+    char *r = bexec(cmd);
+    if (!r) { strncpy(out, "err", outlen); return; }
+    strncpy(out, r, outlen - 1);
+    out[outlen - 1] = '\0';
     out[strcspn(out, "\n\r")] = '\0';
     if (!out[0]) strncpy(out, "(unset)", outlen);
+    free(r);
 }
 
 static long read_long_file(const char *path)
 {
-    FILE *f = fopen(path, "r");
-    if (!f) return -1;
-    long v = -1;
-    fscanf(f, "%ld", &v);
-    fclose(f);
+    char *s = bexec_read_file(path);
+    if (!s) return -1;
+    long v = atol(s);
+    free(s);
     return v;
 }
 
@@ -110,11 +110,14 @@ static void poll_security(void)
     /* ── SELinux ─────────────────────────────────────────────────────── */
     char selinux[32];
     getprop("ro.boot.selinux", selinux, sizeof(selinux));
-    /* Also check live enforcement */
+    /* Live SELinux enforcement via privileged backend */
     char enforce[32] = "unknown";
-    FILE *f = popen("getenforce 2>/dev/null", "r");
-    if (f) { fgets(enforce, sizeof(enforce), f); pclose(f); }
-    enforce[strcspn(enforce, "\n")] = '\0';
+    char *ge = bexec("getenforce");
+    if (ge) {
+        strncpy(enforce, ge, sizeof(enforce) - 1);
+        enforce[strcspn(enforce, "\n")] = '\0';
+        free(ge);
+    }
     int enforcing = (strcasecmp(enforce, "Enforcing") == 0);
     if (!enforcing) { score -= 25; }
     printf("[GRANITOR]  SELinux         : %-12s  (boot: %s)   %s\n",
@@ -225,6 +228,7 @@ static void poll_security(void)
 
 int main(void)
 {
+    bexec_init();
     printf("[GRANITOR] Security & Boot Integrity Checker: ONLINE\n");
     printf("[GRANITOR] Poll interval: %ds\n", POLL_SEC);
 

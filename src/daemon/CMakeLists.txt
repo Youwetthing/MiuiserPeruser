@@ -8,6 +8,7 @@ set(DAEMON_COMMON_SRCS
     daemon_core.c
     ipc_globals.c
     daemon_common.c
+    backend_exec.c
 )
 
 # Include dirs for the daemon layer (can see src/core headers too)

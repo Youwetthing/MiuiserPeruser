@@ -16,6 +16,7 @@
 
 #include "daemon_core.h"
 #include "ipc_globals.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -307,6 +308,7 @@ static void poll_procs(void)
 int main(void)
 {
     if (!daemon_core_init(DAEMON_NAME)) return 1;
+    bexec_init();
 
     for (;;) {
         poll_procs();

@@ -16,6 +16,7 @@
 
 #include "daemon_core.h"
 #include "ipc_globals.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -103,16 +104,15 @@ static zone_t g_zones[MAX_ZONES];
 static int    g_nzones = 0;
 static int    g_first  = 1;
 
-/* ── Read one sysfs float (millidegrees → deg C) ─────────────────────── */
+/* ── Read one sysfs float via backend (millidegrees → deg C) ─────────── */
 
 static float read_temp_file(const char *path)
 {
-    FILE *f = fopen(path, "r");
-    if (!f) return -999.0f;
-    long raw = 0;
-    fscanf(f, "%ld", &raw);
-    fclose(f);
-    /* Android thermal values: if > 1000 assume millidegrees */
+    /* bexec_read_file tries fopen first, falls back to privileged cat */
+    char *raw_str = bexec_read_file(path);
+    if (!raw_str) return -999.0f;
+    long raw = atol(raw_str);
+    free(raw_str);
     return (raw > 1000) ? (float)raw / 1000.0f : (float)raw;
 }
 
@@ -256,6 +256,7 @@ int main(void)
 {
     if (!daemon_core_init(DAEMON_NAME)) return 1;
 
+    bexec_init();
     printf("[LEATHER] Discovering thermal zones in /sys/class/thermal/...\n");
     discover_zones();
     printf("[LEATHER] Found %d thermal zones\n", g_nzones);
