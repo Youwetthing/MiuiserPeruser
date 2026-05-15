@@ -43,7 +43,7 @@ CFLAGS="-O2 -std=c11 -fPIE -pie -Wall -Wextra -Wno-unused-parameter -Wno-unused-
 INC="-I$DAEMON -I$CORE"
 
 # Sources shared by every daemon binary
-SHARED="$DAEMON/daemon_core.c $DAEMON/ipc_globals.c $DAEMON/daemon_common.c"
+SHARED="$DAEMON/daemon_core.c $DAEMON/ipc_globals.c $DAEMON/daemon_common.c $DAEMON/backend_exec.c"
 
 # ── Helpers ────────────────────────────────────────────────────
 PASS=0; FAIL=0; FAIL_LIST=()

@@ -14,6 +14,7 @@
 
 #include "daemon_core.h"
 #include "ipc_globals.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,13 +106,13 @@ typedef struct {
 static cpu_info_t g_cpu[MAX_CPUS];
 static int        g_ncpus = 0;
 
+/* Route all sysfs reads through bexec_read_file (fopen → privileged cat) */
 static long read_long_file(const char *path)
 {
-    FILE *f = fopen(path, "r");
-    if (!f) return -1;
-    long v = -1;
-    fscanf(f, "%ld", &v);
-    fclose(f);
+    char *s = bexec_read_file(path);
+    if (!s) return -1;
+    long v = atol(s);
+    free(s);
     return v;
 }
 
@@ -120,11 +121,12 @@ static void read_governor(int cpu_id, char *out, size_t outlen)
     char path[128];
     snprintf(path, sizeof(path),
              "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor", cpu_id);
-    FILE *f = fopen(path, "r");
-    if (!f) { strncpy(out, "N/A", outlen); return; }
-    fgets(out, (int)outlen, f);
-    fclose(f);
+    char *s = bexec_read_file(path);
+    if (!s) { strncpy(out, "N/A", outlen); return; }
+    strncpy(out, s, outlen - 1);
+    out[outlen - 1] = '\0';
     out[strcspn(out, "\n")] = '\0';
+    free(s);
 }
 
 /* ── Discover CPUs ────────────────────────────────────────────────────── */
@@ -275,6 +277,7 @@ static void poll_cpu(void)
 int main(void)
 {
     if (!daemon_core_init(DAEMON_NAME)) return 1;
+    bexec_init();
 
     discover_cpus();
     printf("[ROCKY] Discovered %d CPU core(s)\n", g_ncpus);

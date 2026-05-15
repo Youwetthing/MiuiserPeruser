@@ -15,6 +15,7 @@
  */
 
 #include "ipc_globals.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,19 +65,19 @@ static void hub_report(const char *msg)
     close(fd);
 }
 
-/* ── Getprop helper ───────────────────────────────────────────────────── */
+/* ── Getprop helper — routed through privileged backend ───────────────── */
 
 static void getprop(const char *key, char *out, size_t outlen)
 {
     char cmd[128];
-    snprintf(cmd, sizeof(cmd), "getprop %s 2>/dev/null", key);
-    FILE *f = popen(cmd, "r");
-    if (!f) { strncpy(out, "(err)", outlen); return; }
-    out[0] = '\0';
-    fgets(out, (int)outlen, f);
-    pclose(f);
+    snprintf(cmd, sizeof(cmd), "getprop %s", key);
+    char *r = bexec(cmd);
+    if (!r) { strncpy(out, "(err)", outlen); return; }
+    strncpy(out, r, outlen - 1);
+    out[outlen - 1] = '\0';
     out[strcspn(out, "\n\r")] = '\0';
     if (!out[0]) strncpy(out, "(unset)", outlen);
+    free(r);
 }
 
 /* ── Property table ───────────────────────────────────────────────────── */
@@ -190,6 +191,7 @@ static void poll_policy(void)
 
 int main(void)
 {
+    bexec_init();
     printf("[BURNED] MIUI/HyperOS Policy Guardian: ONLINE\n");
     printf("[BURNED] Monitoring %d system properties — poll every %ds\n",
            g_nprops, POLL_SEC);

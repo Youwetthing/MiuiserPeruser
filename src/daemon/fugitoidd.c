@@ -18,6 +18,7 @@
 
 #include "daemon_core.h"
 #include "ipc_globals.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,17 +54,7 @@ static void splinterd_emit(const char *type, const char *payload)
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
-static char *run_cmd(const char *cmd)
-{
-    FILE *f = popen(cmd, "r");
-    if (!f) return NULL;
-    char *buf = malloc(16384);
-    if (!buf) { pclose(f); return NULL; }
-    size_t n = fread(buf, 1, 16383, f);
-    buf[n] = '\0';
-    pclose(f);
-    return buf;
-}
+static char *run_cmd(const char *cmd) { return bexec_n(cmd, 32768); }
 
 static int count_substr(const char *hay, const char *needle)
 {
@@ -273,6 +264,7 @@ static void poll_system_headline(void)
 int main(void)
 {
     if (!daemon_core_init(DAEMON_NAME)) return 1;
+    bexec_init();
 
     int cycle = 0;
     char ts[32];

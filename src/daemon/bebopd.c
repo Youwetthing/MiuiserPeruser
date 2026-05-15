@@ -14,6 +14,7 @@
 
 #include "daemon_core.h"
 #include "ipc_globals.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,19 +47,8 @@ static void splinterd_emit(const char *type, const char *payload)
     close(fd);
 }
 
-/* ── Helpers ──────────────────────────────────────────────────────────── */
-
-static char *run_cmd(const char *cmd)
-{
-    FILE *f = popen(cmd, "r");
-    if (!f) return NULL;
-    char *buf = malloc(8192);
-    if (!buf) { pclose(f); return NULL; }
-    size_t n = fread(buf, 1, 8191, f);
-    buf[n] = '\0';
-    pclose(f);
-    return buf;
-}
+/* run_cmd: thin alias over the privileged backend */
+static char *run_cmd(const char *cmd) { return bexec(cmd); }
 
 static int count_lines_containing(const char *haystack, const char *needle)
 {
@@ -221,6 +211,7 @@ static void poll_alarms(void)
 int main(void)
 {
     if (!daemon_core_init(DAEMON_NAME)) return 1;
+    bexec_init();
 
     char ts[32];
     time_t t;

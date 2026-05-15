@@ -15,6 +15,7 @@
 
 #include "daemon_core.h"
 #include "ipc_globals.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,17 +68,7 @@ static int      g_nsensors = 0;
 
 /* ── Helpers ──────────────────────────────────────────────────────────── */
 
-static char *run_cmd(const char *cmd)
-{
-    FILE *f = popen(cmd, "r");
-    if (!f) return NULL;
-    char *buf = malloc(65536);
-    if (!buf) { pclose(f); return NULL; }
-    size_t n = fread(buf, 1, 65535, f);
-    buf[n] = '\0';
-    pclose(f);
-    return buf;
-}
+static char *run_cmd(const char *cmd) { return bexec_n(cmd, 131072); }
 
 /* Find value after "key=" on the same line, up to whitespace/newline */
 static int kv_extract(const char *line, const char *key,
@@ -289,6 +280,7 @@ static void poll_sensors(void)
 int main(void)
 {
     if (!daemon_core_init(DAEMON_NAME)) return 1;
+    bexec_init();
 
     for (;;) {
         poll_sensors();
