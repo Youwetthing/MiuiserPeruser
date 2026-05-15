@@ -358,14 +358,16 @@ static void poll_system_headline(void)
 
     /* MemAvailable */
     long avail_mb = 0;
-    f = fopen("/proc/meminfo", "r");
-    if (f) {
-        char line[128]; long v;
-        while (fgets(line, sizeof(line), f)) {
-            if (sscanf(line, "MemAvailable: %ld", &v) == 1)
-                { avail_mb = v / 1024; break; }
+    char *meminfo = bexec_read_file("/proc/meminfo");
+    if (meminfo) {
+        char *p = meminfo;
+        while (*p) {
+            long v = 0;
+            if (sscanf(p, "MemAvailable: %ld", &v) == 1) { avail_mb = v / 1024; break; }
+            while (*p && *p != '\n') p++;
+            if (*p == '\n') p++;
         }
-        fclose(f);
+        free(meminfo);
     }
 
     printf("[FUGITOID] Battery  : %d%%  (%s)\n", bat_cap, bat_status);
