@@ -1,8 +1,9 @@
 import sys, os, time, mmap, struct, socket
 from pathlib import Path
 
-APRIL_BIN = "/data/data/com.termux/files/home/tmp/miuiser_april.bin"
-SEWER_SOCK = "/data/local/tmp/miuiserperuser_sewer.sock"
+BASE       = "/data/data/com.termux/files/home/MiuiserPeruser"
+APRIL_BIN  = BASE + "/tmp/miuiser_april.bin"
+SEWER_SOCK = BASE + "/pipes/sewer.sock"       # matches SEWER_SOCKET in ipc_globals.h
 TCP_FALLBACK = ("127.0.0.1", 6789)
 
 class PowerhouseDaemon:

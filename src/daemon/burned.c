@@ -6,7 +6,8 @@
 #include <sys/un.h>
 #include <fcntl.h>
 
-#define SOCK_PATH "/data/data/com.termux/files/home/tmp/turtlecom.sock"
+#include "ipc_globals.h"
+
 #define BUF_SIZE 2048
 
 static int connect_to_turtlecom(void) {
@@ -16,7 +17,7 @@ static int connect_to_turtlecom(void) {
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, SOCK_PATH);
+    strncpy(addr.sun_path, TURTLE_SOCKET, sizeof(addr.sun_path) - 1);
 
     if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("connect");

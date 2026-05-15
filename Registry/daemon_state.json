@@ -1,12 +1,16 @@
 {
-  "rahzerd": 1,
-  "fugitoidd": 1,
-  "krangd": 0,
-  "bebopd": 1,
-  "rocksteadyd": 1,
-  "shredderd": 1,
+  "turtlecomd":   1,
+  "krangd":       1,
+  "splinterd":    1,
+  "burned":       1,
+  "granitord":    1,
+  "shredderd":    1,
+  "bebopd":       1,
+  "fugitoidd":    1,
   "leatherheadd": 1,
-  "ratkingd": 1,
-  "splinterd": 1,
-  "metalheadd": 1
+  "metalheadd":   1,
+  "rocksteadyd":  1,
+  "ratkingd":     1,
+  "rahzerd":      1,
+  "tigerclawd":   0
 }
