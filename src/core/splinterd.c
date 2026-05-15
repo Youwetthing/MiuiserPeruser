@@ -80,10 +80,10 @@ static splinter_sub_t g_subscribers[] = {
 
 /* ── Globals ──────────────────────────────────────────────────────────── */
 
-static int  g_debug   = 0;
-static int  g_running = 1;
-static int  g_srv_fd  = -1;
-static FILE *g_log_fp = NULL;
+static int  g_debug       = 0;
+static int  g_srv_running = 1;   /* renamed: avoids clash with extern g_running in ipc_globals.h */
+static int  g_srv_fd      = -1;
+static FILE *g_log_fp     = NULL;
 
 /* ── Logging ──────────────────────────────────────────────────────────── */
 
@@ -114,7 +114,7 @@ static void splinter_log(const char *level, const char *fmt, ...)
 static void handle_sig(int sig)
 {
     (void)sig;
-    g_running = 0;
+    g_srv_running = 0;
     if (g_srv_fd >= 0) shutdown(g_srv_fd, SHUT_RDWR);
 }
 
@@ -299,7 +299,7 @@ int main(int argc, char *argv[])
 
     splinter_log("INFO", "ready — pid=%d", (int)getpid());
 
-    while (g_running) {
+    while (g_srv_running) {
         int client = accept(g_srv_fd, NULL, NULL);
         if (client < 0) {
             if (errno == EINTR || errno == EBADF) break;

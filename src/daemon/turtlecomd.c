@@ -1,4 +1,5 @@
 #include "daemon_core.h"
+#include "ipc_globals.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,7 +8,6 @@
 #include <sys/un.h>
 #include <fcntl.h>
 
-#define SOCK_PATH "/data/data/com.termux/files/home/tmp/turtlecom.sock"
 #define BUF_SIZE 512
 
 static int create_server_socket(void) {
@@ -17,9 +17,9 @@ static int create_server_socket(void) {
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, SOCK_PATH);
+    strncpy(addr.sun_path, TURTLE_SOCKET, sizeof(addr.sun_path) - 1);
 
-    unlink(SOCK_PATH);
+    unlink(TURTLE_SOCKET);
 
     if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         perror("bind");

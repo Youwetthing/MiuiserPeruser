@@ -5,15 +5,17 @@
 extern "C" {
 #endif
 
+/* Shared state flags — set by detection daemons, readable system-wide. */
 extern int miui_flag_restricted;
 extern int thermal_state;
 
+/* Returns 1 if a process with the given name is running, 0 otherwise. */
 int process_running(const char *name);
-int krang_connect(void);
-int krang_send_command(const char *cmd);
+
+/* Weak-symbol property reader — returns "" when native getprop not available. */
 const char *device_get_property(const char *key);
 
 #ifdef __cplusplus
 }
 #endif
-#endif
+#endif /* DAEMON_COMMON_H */
