@@ -1,8 +1,9 @@
 import sys, os, time, mmap, struct, socket
 from pathlib import Path
 
-APRIL_BIN = "/data/data/com.termux/files/home/tmp/miuiser_april.bin"
-SEWER_SOCK = "/data/local/tmp/miuiserperuser_sewer.sock"
+BASE       = str(Path(__file__).resolve().parent.parent)
+APRIL_BIN  = BASE + "/tmp/miuiser_april.bin"
+SEWER_SOCK = BASE + "/pipes/sewer.sock"       # matches SEWER_SOCKET in ipc_globals.h
 TCP_FALLBACK = ("127.0.0.1", 6789)
 
 class PowerhouseDaemon:
@@ -23,13 +24,30 @@ class PowerhouseDaemon:
         self.mm.seek(0)
         return struct.unpack('f', self.mm.read(4))[0]
 
-    def send_command(self, cmd):
-        # Try UNIX socket first
-        try:
-            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    def check_connection(self):
+        """Returns True if sewer socket or TCP fallback is reachable."""
+        for family, addr in [
+            (socket.AF_UNIX, SEWER_SOCK),
+            (socket.AF_INET, TCP_FALLBACK),
+        ]:
+            s = socket.socket(family, socket.SOCK_STREAM)
             s.settimeout(1.0)
+            try:
+                s.connect(addr)
+                s.close()
+                return True
+            except Exception:
+                s.close()
+        return False
+
+    def send_command(self, cmd):
+        # Try UNIX socket first, fall back to TCP
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(1.0)
+        try:
             s.connect(SEWER_SOCK)
-        except:
+        except Exception:
+            s.close()
             # Fall back to TCP
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
