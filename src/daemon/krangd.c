@@ -25,12 +25,12 @@
 #include "ipc_globals.h"
 #include "../core/truth_engine.h"
 
-static volatile int g_running = 1;
+static volatile int g_krang_running = 1;
 
 static void handle_sig(int sig)
 {
     (void)sig;
-    g_running = 0;
+    g_krang_running = 0;
 }
 
 /* ── PID ──────────────────────────────────────────────────────────────── */
@@ -199,11 +199,11 @@ int main(void)
 
     printf("krangd: ONLINE — %s\n", KRANG_SOCKET);
 
-    while (g_running) {
+    while (g_krang_running) {
         int client_fd = accept(server_fd, NULL, NULL);
         if (client_fd < 0) {
             if (errno == EINTR) continue;
-            if (g_running) perror("krangd: accept");
+            if (g_krang_running) perror("krangd: accept");
             break;
         }
         handle_client(client_fd);

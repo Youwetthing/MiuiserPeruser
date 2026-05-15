@@ -35,7 +35,7 @@
 #define EMIT_BUF          4096
 
 static int           g_debug    = 0;
-static int           g_running  = 1;
+static int           g_rahzer_running  = 1;
 static int           g_poll_sec = DEFAULT_POLL_SEC;
 static const char   *g_splinter = SPLINTER_SOCKET;
 static const char   *g_dns_host = DEFAULT_DNS_HOST;
@@ -58,7 +58,7 @@ static void rzlog(const char *lvl, const char *fmt, ...) {
     va_end(ap);
 }
 
-static void handle_sig(int s) { (void)s; g_running = 0; }
+static void handle_sig(int s) { (void)s; g_rahzer_running = 0; }
 
 char *rz_run(const char *cmd) {
     FILE *f = popen(cmd, "r");
@@ -838,7 +838,7 @@ int main(void) {
     memset(&state, 0, sizeof(state));
     state.first_poll = 1;
 
-    while (g_running) {
+    while (g_rahzer_running) {
         rz_state_update(&state);
         if (!state.first_poll)
             rz_emit_netstate(&state.curr);
@@ -854,7 +854,7 @@ int main(void) {
               state.curr.xiaomi.divergence_detected,
               state.curr.poll_duration_ms);
         state.curr.poll_cycle++;
-        for (int i = 0; i < g_poll_sec && g_running; i++)
+        for (int i = 0; i < g_poll_sec && g_rahzer_running; i++)
             sleep(1);
     }
 
