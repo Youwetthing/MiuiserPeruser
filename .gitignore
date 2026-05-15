@@ -5,3 +5,29 @@ build/
 *.log
 *.pid
 
+
+# State files
+state/court.events
+state/court.registry
+state/cases.state
+state/quarantine.state
+state/jailhouse/
+state/visitors_pass/
+state/criminal_record/
+state/turtlepower.lock
+state/*.lock
+
+# Pipes and sockets
+pipes/
+
+# Compiled binaries
+bin/
+cre/cases/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Temp
+*.tmp
+*.bak
