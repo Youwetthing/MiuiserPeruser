@@ -9,7 +9,7 @@ appeal() {
     target="$1"
     reason="$2"
 
-    echo "$(date +%s)|APPEAL|$target|$reason" >> "$EVT"
+    (flock -x 200; echo "$(date +%s)|APPEAL|$target|$reason" >> "$EVT") 200>"$EVT.lock"
     echo "⚖️ Appeal logged: $target"
 }
 

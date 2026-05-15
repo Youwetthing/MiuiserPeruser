@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 DISPATCH="$HOME/MiuiserPeruser/src/core/court_dispatcher.sh"
+LAW="$HOME/MiuiserPeruser/law_and_order:adb"
 
 emit_case() {
     entity="$1"
