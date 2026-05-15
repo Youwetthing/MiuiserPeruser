@@ -3,6 +3,11 @@ cmake_minimum_required(VERSION 3.10)
 # ── Shared compile options ─────────────────────────────────────────────
 set(DAEMON_CFLAGS -Wall -Wextra -Wno-unused-parameter -std=c99)
 
+# Pass project root from build environment — overrides hardcoded fallback in ipc_globals.h
+if(DEFINED ENV{HOME})
+    add_compile_definitions(BASE="$ENV{HOME}/MiuiserPeruser")
+endif()
+
 # Source files shared by every daemon executable
 set(DAEMON_COMMON_SRCS
     daemon_core.c
