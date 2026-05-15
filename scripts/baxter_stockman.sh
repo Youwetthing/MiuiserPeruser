@@ -1,83 +1,86 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# MiuiserPeruser: Toolkit Intervention Daemon
-# Actively executes system interventions received via IPC pipe
+# Baxter Stockman — Execution Arm
+# Receives verdicts via execution.pipe, enforces via rish/adb
 
-BASE="\$HOME/MiuiserPeruser"
-IN_PIPE="\$BASE/pipes/execution.pipe"
-LOG="\$BASE/logs/toolkit.log"
+BASE="$HOME/MiuiserPeruser"
+LAW="$BASE/law_and_order:adb"
+IN_PIPE="$BASE/pipes/execution.pipe"
+LOG="$BASE/logs/baxter.log"
+EVT="$BASE/state/court.events"
 
-mkdir -p "\$BASE/logs"
+source "$LAW/court_registry_lib.sh" 2>/dev/null
+source "$LAW/court_event_lib.sh" 2>/dev/null
 
-# Use common lib if available
-source "\$BASE/lib/miuiserperuser_common.sh" 2>/dev/null
+mkdir -p "$BASE/logs"
 
 log() {
-    local ts=\$(date "+%Y-%m-%d %H:%M:%S")
-    echo "[\$ts] [TOOLKIT] \$1" >> "\$LOG"
+    local ts=$(date "+%Y-%m-%d %H:%M:%S")
+    echo "[$ts] [BAXTER] $1" >> "$LOG"
 }
 
-# Standard run_shell if library failed to load
-if ! command -v run_shell >/dev/null; then
-    run_shell() {
-        if [[ -x "\$HOME/.shizuku/rish" ]]; then
-            "\$HOME/.shizuku/rish" -c "\$*" 2>/dev/null
-        elif command -v adb >/dev/null 2>&1; then
-            adb shell "\$@" 2>/dev/null
-        else
-            return 1
-        fi
-    }
-fi
+run_shell() {
+    if [[ -x "$BASE/rish" ]]; then
+        "$BASE/rish" -c "$*" 2>/dev/null
+    elif command -v adb >/dev/null 2>&1; then
+        adb shell "$@" 2>/dev/null
+    else
+        log "ERROR: no rish or adb available"
+        return 1
+    fi
+}
 
 declare -A SEEN
 MAX_SEEN=500
 
 log "ONLINE — Active Intervention Mode"
 
-[ -p "\$IN_PIPE" ] || mkfifo "\$IN_PIPE"
+[ -p "$IN_PIPE" ] || mkfifo "$IN_PIPE"
 
-while true; do
-    if read line < "\$IN_PIPE"; then
-        [[ -z "\$line" ]] && continue
-        
-        IFS="|" read -r action target ctx <<< "\$line"
-        KEY="\$action|\$target|\$ctx"
+exec 3<>"$IN_PIPE"  # keep pipe open — prevents EOF busy loop
 
-        # IDEMPOTENCY GUARD & GC
-        if [[ "\${SEEN[\$KEY]}" == "1" ]]; then
-            continue
-        fi
-        
-        if [[ \${#SEEN[@]} -gt \$MAX_SEEN ]]; then
-            unset SEEN
-            declare -A SEEN
-        fi
-        SEEN[\$KEY]=1
+while IFS="|" read -r action target ctx <&3; do
+    [[ -z "$action" ]] && continue
 
-        case "\$action" in
-            INTERVENE)
-                log "SOFT_KILL \$target (ctx: \$ctx)"
-                run_shell "am kill \$target"
-                ;;
+    KEY="$action|$target"
 
-            ISOLATE)
-                log "ISOLATE \$target (ctx: \$ctx)"
-                run_shell "pm disable-user --user 0 \$target"
-                ;;
-
-            KILL)
-                log "FORCE_STOP \$target (ctx: \$ctx)"
-                run_shell "am force-stop \$target"
-                ;;
-
-            ESCALATE)
-                log "ESCALATION_FORWARD \$target"
-                [ -p "\$BASE/pipes/escalation.pipe" ] && echo "\$action|\$target|\$ctx" >> "\$BASE/pipes/escalation.pipe"
-                ;;
-
-            *)
-                log "UNHANDLED \$action \$target"
-                ;;
-        esac
+    # Idempotency guard
+    if [[ "${SEEN[$KEY]}" == "1" ]]; then
+        log "SKIP (already handled): $KEY"
+        continue
     fi
+
+    # GC seen map
+    if [[ ${#SEEN[@]} -gt $MAX_SEEN ]]; then
+        unset SEEN
+        declare -A SEEN
+    fi
+    SEEN[$KEY]=1
+
+    log "ACTION: $action | TARGET: $target | CTX: $ctx"
+
+    case "$action" in
+        KILL)
+            log "FORCE_STOP $target"
+            run_shell "am force-stop $target"
+            (flock -x 200; echo "$(date +%s)|BAXTER|KILL|$target:$ctx" >> "$EVT") 200>"$EVT.lock"
+            ;;
+        ISOLATE)
+            log "ISOLATE $target"
+            run_shell "pm disable-user --user 0 $target"
+            (flock -x 200; echo "$(date +%s)|BAXTER|ISOLATE|$target:$ctx" >> "$EVT") 200>"$EVT.lock"
+            ;;
+        INTERVENE)
+            log "SOFT_KILL $target"
+            run_shell "am kill $target"
+            (flock -x 200; echo "$(date +%s)|BAXTER|INTERVENE|$target:$ctx" >> "$EVT") 200>"$EVT.lock"
+            ;;
+        ESCALATE)
+            log "ESCALATION_FORWARD $target"
+            [ -p "$BASE/pipes/escalation.pipe" ] &&                 echo "$action|$target|$ctx" > "$BASE/pipes/escalation.pipe"
+            ;;
+        *)
+            log "UNHANDLED: $action $target"
+            ;;
+    esac
+
 done
