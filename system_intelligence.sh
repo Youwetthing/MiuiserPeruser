@@ -3,10 +3,13 @@
 BASE="$HOME/MiuiserPeruser"
 REG="$BASE/state/court.registry"
 
+while true; do
+
 total=0
 alive=0
 
 while IFS='|' read -r name state pid; do
+    [ -z "$name" ] && continue
     [ "$name" = "# NAME" ] && continue
     total=$((total+1))
 
@@ -35,3 +38,5 @@ fi
 echo ""
 echo "🔁 refresh: 10s"
 sleep 10
+
+done
