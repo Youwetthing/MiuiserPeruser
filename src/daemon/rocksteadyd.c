@@ -57,25 +57,44 @@ typedef struct { unsigned long long u, n, s, i, w, q, sq; } jiffies_t;
 static jiffies_t g_prev_j[MAX_CPUS + 1];   /* [0] = total, [1..] = per-core */
 static int       g_first_stat = 1;
 
+static int parse_stat_buf(const char *buf, jiffies_t *out_cores, int *ncores_out)
+{
+    int nc = 0;
+    *ncores_out = 0;
+    const char *p = buf;
+    while (*p && nc <= MAX_CPUS) {
+        char label[16] = {0};
+        jiffies_t j = {0};
+        if (sscanf(p, "%15s %llu %llu %llu %llu %llu %llu %llu",
+                   label, &j.u, &j.n, &j.s, &j.i, &j.w, &j.q, &j.sq) >= 5
+            && strncmp(label, "cpu", 3) == 0)
+        {
+            out_cores[nc++] = j;
+            if (label[3] >= '0') (*ncores_out)++;
+        }
+        /* advance to next line */
+        while (*p && *p != '\n') p++;
+        if (*p == '\n') p++;
+    }
+    return nc;
+}
+
 static int read_stat(jiffies_t *out_cores, int *ncores_out)
 {
+    /* Try direct fopen first (world-readable on most Android) */
     FILE *f = fopen("/proc/stat", "r");
-    if (!f) return 0;
-    int nc = 0;
-    char line[256];
-    *ncores_out = 0;
-    while (fgets(line, sizeof(line), f) && nc <= MAX_CPUS) {
-        jiffies_t j = {0};
-        char label[16];
-        if (sscanf(line, "%15s %llu %llu %llu %llu %llu %llu %llu",
-                   label, &j.u, &j.n, &j.s, &j.i, &j.w, &j.q, &j.sq) < 5)
-            continue;
-        if (strncmp(label, "cpu", 3) != 0) continue;
-        out_cores[nc++] = j;
-        if (label[3] >= '0')    /* skip the aggregate "cpu" line at nc==0 */
-            (*ncores_out)++;
+    if (f) {
+        char buf[4096] = {0};
+        fread(buf, 1, sizeof(buf)-1, f);
+        fclose(f);
+        int nc = parse_stat_buf(buf, out_cores, ncores_out);
+        if (nc > 0) return nc;
     }
-    fclose(f);
+    /* Fallback: route through privileged backend */
+    char *s = bexec("cat /proc/stat 2>/dev/null");
+    if (!s) return 0;
+    int nc = parse_stat_buf(s, out_cores, ncores_out);
+    free(s);
     return nc;
 }
 
@@ -118,10 +137,24 @@ static long read_long_file(const char *path)
 
 static void read_governor(int cpu_id, char *out, size_t outlen)
 {
+    /* Try per-core path first */
     char path[128];
     snprintf(path, sizeof(path),
              "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor", cpu_id);
     char *s = bexec_read_file(path);
+
+    /* Fallback: cpufreq policy directory (common on big.LITTLE SoCs) */
+    if (!s) {
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpufreq/policy%d/scaling_governor", cpu_id);
+        s = bexec_read_file(path);
+    }
+    /* Fallback: system-wide governor */
+    if (!s) {
+        s = bexec_read_file(
+            "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor");
+    }
+
     if (!s) { strncpy(out, "N/A", outlen); return; }
     strncpy(out, s, outlen - 1);
     out[outlen - 1] = '\0';
@@ -161,11 +194,25 @@ static void poll_cpu(void)
         cpu_info_t *c = &g_cpu[i];
         char path[128];
 
-        /* Online status */
-        snprintf(path, sizeof(path),
-                 "/sys/devices/system/cpu/cpu%d/online", i);
-        long online_v = read_long_file(path);
-        c->online = (i == 0) ? 1 : (online_v >= 1 ? 1 : 0);
+        /* Online status — cpu0 has no 'online' file (always on).
+         * For other cores: check 'online' file; if absent/unreadable,
+         * infer from whether scaling_cur_freq is nonzero. */
+        if (i == 0) {
+            c->online = 1;
+        } else {
+            snprintf(path, sizeof(path),
+                     "/sys/devices/system/cpu/cpu%d/online", i);
+            long ov = read_long_file(path);
+            if (ov >= 0) {
+                c->online = (ov >= 1) ? 1 : 0;
+            } else {
+                /* online file missing — infer from cur_freq */
+                snprintf(path, sizeof(path),
+                    "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", i);
+                long cf = read_long_file(path);
+                c->online = (cf > 0) ? 1 : 0;
+            }
+        }
 
         if (!c->online) continue;
 

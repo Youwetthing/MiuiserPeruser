@@ -109,18 +109,41 @@ static void poll_wakelocks(void)
     if (dump) {
         partial  = count_lines_containing(dump, "PARTIAL_WAKE_LOCK");
         full     = count_lines_containing(dump, "FULL_WAKE_LOCK");
-        /* First named holder after "Wake Locks:" section */
-        const char *wl_sec = strstr(dump, "Wake Locks:");
-        if (wl_sec) {
-            const char *tag = strstr(wl_sec, "tag=");
-            if (tag) {
-                tag += 4;
-                size_t i = 0;
-                while (tag[i] && tag[i] != ' ' && tag[i] != '\n' && i < 127)
-                    top_holder[i] = tag[i++];
-                top_holder[i] = '\0';
+
+        /* Wake lock holder — try several field names used across MIUI versions:
+         *   tag="com.package" / PackageName=com.package / pkg=com.package
+         *   ACQ_TIME / ACQUIRE_CAUSE lines contain the holder package         */
+        const char *holder_keys[] = { "tag=\"", "PackageName=", "pkg=",
+                                       "WorkSource{", NULL };
+        for (int ki = 0; holder_keys[ki] && top_holder[0] == '\0'; ki++) {
+            const char *h = strstr(dump, holder_keys[ki]);
+            if (!h) continue;
+            h += strlen(holder_keys[ki]);
+            /* strip leading quote if tag="..." */
+            if (*h == '"') h++;
+            size_t i = 0;
+            while (*h && *h != '"' && *h != ' ' && *h != '\n'
+                       && *h != '}' && i < 127)
+                top_holder[i++] = *h++;
+            top_holder[i] = '\0';
+        }
+
+        /* Also try parsing individual PARTIAL_WAKE_LOCK lines for a name */
+        if (!top_holder[0]) {
+            const char *pw = strstr(dump, "PARTIAL_WAKE_LOCK");
+            if (pw) {
+                /* Line typically: "PARTIAL_WAKE_LOCK 'tag' pid=X ws=..." */
+                const char *sq = strchr(pw, '\'');
+                if (sq) {
+                    sq++;
+                    size_t i = 0;
+                    while (*sq && *sq != '\'' && i < 127)
+                        top_holder[i++] = *sq++;
+                    top_holder[i] = '\0';
+                }
             }
         }
+
         free(dump);
     }
 
@@ -158,27 +181,36 @@ static void poll_alarms(void)
                + count_lines_containing(dump, "RTC_WAKEUP");
     int total  = count_lines_containing(dump, "type=");
 
-    /* Identify top setter: most common "packageName=" */
+    /* Identify top alarm setter — try multiple field names MIUI uses */
     char top_pkg[128] = "unknown";
     {
+        /* Field names across Android/MIUI versions:
+         *   packageName=com.pkg  /  pkg=com.pkg  /  package com.pkg
+         *   uid=u0a123 (needs UID map)  */
+        static const char *pkg_keys[] = {
+            "packageName=", "pkg=", "package=", NULL
+        };
         int best = 0;
-        /* Walk through each "packageName=X" and tally */
-        const char *p = dump;
-        char pkg[128];
-        while ((p = strstr(p, "packageName=")) != NULL) {
-            p += 12;
-            /* Extract package name */
-            size_t i = 0;
-            while (p[i] && p[i] != ' ' && p[i] != '\n' && i < 127)
-                pkg[i] = p[i++];
-            pkg[i] = '\0';
-            /* cheap duplicate tally: just count how many times this pkg appears */
-            char search[160];
-            snprintf(search, sizeof(search), "packageName=%s", pkg);
-            int cnt = count_lines_containing(dump, search);
-            if (cnt > best && i > 0) {
-                best = cnt;
-                strncpy(top_pkg, pkg, sizeof(top_pkg) - 1);
+        for (int ki = 0; pkg_keys[ki]; ki++) {
+            const char *p = dump;
+            char pkg[128];
+            while ((p = strstr(p, pkg_keys[ki])) != NULL) {
+                p += strlen(pkg_keys[ki]);
+                /* skip quotes */
+                if (*p == '"' || *p == '\'') p++;
+                size_t i = 0;
+                while (p[i] && p[i] != ' ' && p[i] != '\n' &&
+                       p[i] != '"' && p[i] != '\'' && i < 127)
+                    pkg[i] = p[i++];
+                pkg[i] = '\0';
+                if (!i || !strchr(pkg, '.')) continue; /* skip non-package tokens */
+                char search[160];
+                snprintf(search, sizeof(search), "%s%s", pkg_keys[ki], pkg);
+                int cnt = count_lines_containing(dump, search);
+                if (cnt > best) {
+                    best = cnt;
+                    strncpy(top_pkg, pkg, sizeof(top_pkg) - 1);
+                }
             }
         }
     }

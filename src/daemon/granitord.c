@@ -172,18 +172,31 @@ static void poll_security(void)
     long hardlinks       = read_long_file("/proc/sys/fs/protected_hardlinks");
     long symlinks        = read_long_file("/proc/sys/fs/protected_symlinks");
 
-    if (kptr_restrict  < 1) score -= 2;
-    if (dmesg_restrict < 1) score -= 2;
-    if (aslr           < 2) score -= 3;
-    if (!hardlinks)         score -= 1;
-    if (!symlinks)          score -= 1;
+    /* Only penalise if readable AND explicitly misconfigured (value=0).
+     * -1 means the file is restricted on MIUI — treat as neutral. */
+    if (kptr_restrict  >= 0 && kptr_restrict  < 1) score -= 2;
+    if (dmesg_restrict >= 0 && dmesg_restrict < 1) score -= 2;
+    if (aslr           >= 0 && aslr           < 2) score -= 3;
+    if (hardlinks      >= 0 && !hardlinks)          score -= 1;
+    if (symlinks       >= 0 && !symlinks)           score -= 1;
+
+    /* Helper: display value or "N/A (MIUI-restricted)" */
+    #define PV(v) ((v) >= 0 ? (v) : -1L)
+    #define PS(v) ((v) >= 0 ? "" : " (restricted)")
 
     printf("[GRANITOR]  Kernel params\n");
-    printf("[GRANITOR]    kptr_restrict=%-2ld  dmesg_restrict=%-2ld  "
-           "perf_paranoid=%-2ld  ASLR=%-2ld\n",
-           kptr_restrict, dmesg_restrict, perf_paranoid, aslr);
-    printf("[GRANITOR]    hardlinks=%ld  symlinks=%ld\n",
-           hardlinks, symlinks);
+    printf("[GRANITOR]    kptr_restrict=%-2ld%s  dmesg_restrict=%-2ld%s  "
+           "perf_paranoid=%-2ld%s  ASLR=%-2ld%s\n",
+           PV(kptr_restrict), PS(kptr_restrict),
+           PV(dmesg_restrict), PS(dmesg_restrict),
+           PV(perf_paranoid),  PS(perf_paranoid),
+           PV(aslr),           PS(aslr));
+    printf("[GRANITOR]    hardlinks=%-2ld%s  symlinks=%-2ld%s\n",
+           PV(hardlinks), PS(hardlinks),
+           PV(symlinks),  PS(symlinks));
+
+    #undef PV
+    #undef PS
 
     /* ── Score summary ───────────────────────────────────────────────── */
     if (score < 0) score = 0;

@@ -116,37 +116,119 @@ static float read_temp_file(const char *path)
     return (raw > 1000) ? (float)raw / 1000.0f : (float)raw;
 }
 
-/* ── Discovery + poll ─────────────────────────────────────────────────── */
+/* ── Discovery: primary via dumpsys thermalservice ────────────────────── *
+ *
+ * On MIUI/HyperOS the thermal HAL owns the sensors. Parsing the service
+ * dump is more reliable than /sys/class/thermal/ which may be
+ * permission-restricted or sparsely populated.
+ *
+ * Expected output (one or more of these lines):
+ *   Temperature{mValue=36.5, mType=0, mName=CPU0, mStatus=0, ...}
+ *   Temperature{mValue=38.2, mType=3, mName=SKIN, ...}
+ * ─────────────────────────────────────────────────────────────────────── */
+
+static void discover_zones_thermalservice(void)
+{
+    char *dump = bexec("dumpsys thermalservice 2>/dev/null");
+    if (!dump) return;
+
+    const char *p = dump;
+    while ((p = strstr(p, "mValue=")) != NULL && g_nzones < MAX_ZONES) {
+        float val = 0.0f;
+        char  name[64]  = "unknown";
+        int   type_id   = -1;
+
+        /* mValue */
+        sscanf(p, "mValue=%f", &val);
+
+        /* mName — search forward within the same Temperature{} block */
+        const char *nb = strstr(p, "mName=");
+        const char *cb = strstr(p, "}");   /* end of block */
+        if (nb && (!cb || nb < cb)) {
+            nb += 6;
+            /* strip quotes if present */
+            if (*nb == '"' || *nb == '\'') nb++;
+            size_t i = 0;
+            while (*nb && *nb != ',' && *nb != '}' && *nb != '"' &&
+                   *nb != '\'' && i < sizeof(name) - 1)
+                name[i++] = *nb++;
+            name[i] = '\0';
+        }
+
+        /* mType */
+        const char *tb = strstr(p, "mType=");
+        if (tb && (!cb || tb < cb))
+            sscanf(tb, "mType=%d", &type_id);
+
+        zone_t *z   = &g_zones[g_nzones++];
+        z->id       = g_nzones - 1;
+        z->prev_c   = -999.0f;
+        z->temp_c   = val;          /* seed with first reading */
+        z->cls      = classify(name);
+        strncpy(z->type, name, sizeof(z->type) - 1);
+        (void)type_id;
+
+        p++;
+    }
+    free(dump);
+}
+
+/* ── Discovery fallback: /sys/class/thermal/ ─────────────────────────── */
+
+static void discover_zones_sysfs(void)
+{
+    /* Try to list the directory via bexec in case direct opendir is blocked */
+    char *listing = bexec("ls /sys/class/thermal/ 2>/dev/null");
+    if (!listing) return;
+
+    const char *p = listing;
+    while (*p && g_nzones < MAX_ZONES) {
+        while (*p == '\n' || *p == ' ') p++;
+        if (!*p) break;
+        const char *eol = strpbrk(p, "\n ");
+        size_t llen = eol ? (size_t)(eol - p) : strlen(p);
+        char entry[64] = {0};
+        if (llen >= sizeof(entry)) llen = sizeof(entry) - 1;
+        memcpy(entry, p, llen);
+        entry[llen] = '\0';
+        p = eol ? eol + 1 : p + llen;
+
+        if (strncmp(entry, "thermal_zone", 12) != 0) continue;
+        int id = atoi(entry + 12);
+
+        /* Read type */
+        char type_path[128];
+        snprintf(type_path, sizeof(type_path),
+                 "/sys/class/thermal/%s/type", entry);
+        char *ts = bexec_read_file(type_path);
+        if (!ts) continue;
+        char type[64] = {0};
+        strncpy(type, ts, sizeof(type) - 1);
+        type[strcspn(type, "\n")] = '\0';
+        free(ts);
+
+        zone_t *z   = &g_zones[g_nzones++];
+        z->id       = id;
+        z->prev_c   = -999.0f;
+        z->temp_c   = -999.0f;
+        z->cls      = classify(type);
+        strncpy(z->type, type, sizeof(z->type) - 1);
+    }
+    free(listing);
+}
 
 static void discover_zones(void)
 {
     g_nzones = 0;
-    DIR *d = opendir("/sys/class/thermal");
-    if (!d) return;
-    struct dirent *ent;
-    while ((ent = readdir(d)) != NULL && g_nzones < MAX_ZONES) {
-        if (strncmp(ent->d_name, "thermal_zone", 12) != 0) continue;
-        int id = atoi(ent->d_name + 12);
-        char path[128];
 
-        /* Read type */
-        snprintf(path, sizeof(path),
-                 "/sys/class/thermal/%s/type", ent->d_name);
-        FILE *tf = fopen(path, "r");
-        if (!tf) continue;
-        char type[64] = {0};
-        fgets(type, sizeof(type), tf);
-        fclose(tf);
-        type[strcspn(type, "\n")] = '\0';
+    /* Primary: thermal HAL via dumpsys */
+    discover_zones_thermalservice();
 
-        zone_t *z       = &g_zones[g_nzones++];
-        z->id           = id;
-        z->prev_c       = -999.0f;
-        z->temp_c       = -999.0f;
-        z->cls          = classify(type);
-        strncpy(z->type, type, sizeof(z->type) - 1);
-    }
-    closedir(d);
+    /* If HAL gave us anything, we have initial temps too — skip sysfs */
+    if (g_nzones > 0) return;
+
+    /* Fallback: sysfs walk */
+    discover_zones_sysfs();
 }
 
 static void poll_thermals(void)
@@ -168,14 +250,53 @@ static void poll_thermals(void)
            "Zone", "Class  ", "Type", "Temp(°C)");
     printf("[LEATHER]  ───────────────────────────────────────────────\n");
 
+    /* Re-read thermalservice for fresh temperatures */
+    {
+        char *tsdump = bexec("dumpsys thermalservice 2>/dev/null");
+        if (tsdump) {
+            /* Match each zone by name and update its temp_c */
+            for (int i = 0; i < g_nzones; i++) {
+                char search[80];
+                snprintf(search, sizeof(search), "mName=%s,", g_zones[i].type);
+                const char *hit = strstr(tsdump, search);
+                /* Also try without comma (end of block) */
+                if (!hit) {
+                    snprintf(search, sizeof(search), "mName=%s}", g_zones[i].type);
+                    hit = strstr(tsdump, search);
+                }
+                if (hit) {
+                    /* Scan back to mValue= in the same block */
+                    /* mValue= always precedes mName= in the output */
+                    const char *block_start = hit;
+                    while (block_start > tsdump && *block_start != '{') block_start--;
+                    const char *mv = strstr(block_start, "mValue=");
+                    if (mv) {
+                        float v = 0.0f;
+                        if (sscanf(mv, "mValue=%f", &v) == 1) {
+                            g_zones[i].prev_c = (g_first) ? -999.0f : g_zones[i].temp_c;
+                            g_zones[i].temp_c = v;
+                        }
+                    }
+                }
+            }
+            free(tsdump);
+        }
+    }
+
     for (int i = 0; i < g_nzones; i++) {
         zone_t *z = &g_zones[i];
-        char path[128];
-        snprintf(path, sizeof(path),
-                 "/sys/class/thermal/thermal_zone%d/temp", z->id);
-        z->prev_c = (g_first) ? -999.0f : z->temp_c;
-        z->temp_c = read_temp_file(path);
-        if (z->temp_c <= -900.0f) continue;   /* unreadable zone */
+        /* If temp still unset from thermalservice, try sysfs */
+        if (z->temp_c <= -900.0f || g_first) {
+            char path[128];
+            snprintf(path, sizeof(path),
+                     "/sys/class/thermal/thermal_zone%d/temp", z->id);
+            float sv = read_temp_file(path);
+            if (sv > -900.0f) {
+                z->prev_c = (g_first) ? -999.0f : z->temp_c;
+                z->temp_c = sv;
+            }
+        }
+        if (z->temp_c <= -900.0f) continue;   /* still unreadable — skip */
 
         float delta = (z->prev_c > -900.0f) ? (z->temp_c - z->prev_c) : 0.0f;
 
