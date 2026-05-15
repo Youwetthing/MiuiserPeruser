@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 import os, sys, time
-from daemons.powerhouse import PowerhouseDaemon
 
+# Ensure the project root is on sys.path so 'daemons' package is importable
+# regardless of the working directory at launch time.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
+
+from daemons.powerhouse import PowerhouseDaemon
 
 def main():
     print("="*50)
