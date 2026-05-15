@@ -80,50 +80,137 @@ static int first_line_after(const char *hay, const char *kw,
 
 /* ── Foreground activity detection ───────────────────────────────────── */
 
+/* Extract "com.package/com.Activity" from a Window{...} token.
+ * Handles: "u0 com.pkg/Act}", "u0 com.pkg}", space-delimited variants. */
+static int extract_window_pkg(const char *token, char *pkg, char *act,
+                               size_t plen, size_t alen)
+{
+    /* Skip past any "u0 ", "u0_a123 ", or "0 " prefix */
+    const char *p = token;
+    while (*p == ' ') p++;
+    /* skip the "uN " or "uN_aM " user tag */
+    if (*p == 'u') {
+        while (*p && *p != ' ') p++;
+        while (*p == ' ') p++;
+    }
+    /* p now points at "com.pkg/com.Activity}" or "com.pkg}" */
+    char buf[128] = {0};
+    size_t i = 0;
+    while (*p && *p != '}' && *p != ' ' && i < sizeof(buf) - 1)
+        buf[i++] = *p++;
+    buf[i] = '\0';
+    if (!i || !strchr(buf, '.')) return 0;  /* must look like a package */
+
+    char *slash = strchr(buf, '/');
+    if (slash) {
+        size_t ppart = (size_t)(slash - buf);
+        if (ppart >= plen) ppart = plen - 1;
+        memcpy(pkg, buf, ppart); pkg[ppart] = '\0';
+        strncpy(act, slash + 1, alen - 1);
+    } else {
+        strncpy(pkg, buf, plen - 1);
+        strncpy(act, "(unknown)", alen - 1);
+    }
+    return 1;
+}
+
 static void poll_foreground(void)
 {
     char fg_app[128] = "unknown";
     char fg_activity[128] = "unknown";
 
-    /* Method 1: dumpsys window — most reliable across MIUI versions */
+    /* Method 1: dumpsys window — parse mCurrentFocus window token.
+     * The Window{} token format is vendor-dependent; we search for
+     * the last space-delimited token before '}' that contains '.' */
     char *win = run_cmd(
-        "dumpsys window windows 2>/dev/null | grep -E 'mCurrentFocus|mFocusedApp' | head -3");
+        "dumpsys window 2>/dev/null | grep -E 'mCurrentFocus|mFocusedApp' | head -3");
     if (win) {
-        /* mCurrentFocus=Window{... u0 com.pkg/com.pkg.Activity} */
-        const char *p = strstr(win, "mCurrentFocus=");
-        if (p) {
-            p += 14;
-            /* Skip "Window{... " to get to the package/activity */
-            const char *brace = strstr(p, " u0 ");
-            if (brace) {
-                brace += 4;
-                size_t i = 0;
+        const char *p = win;
+        /* Try mCurrentFocus= */
+        const char *fc = strstr(p, "mCurrentFocus=");
+        if (fc) {
+            /* Find the Window{} block content */
+            const char *ob = strchr(fc, '{');
+            const char *cb = ob ? strchr(ob, '}') : NULL;
+            if (ob && cb) {
+                /* Extract last space-delimited token before '}' */
+                char block[256] = {0};
+                size_t blen = (size_t)(cb - ob - 1);
+                if (blen >= sizeof(block)) blen = sizeof(block) - 1;
+                memcpy(block, ob + 1, blen);
+                block[blen] = '\0';
+                extract_window_pkg(block, fg_app, fg_activity,
+                                   sizeof(fg_app), sizeof(fg_activity));
+            }
+        }
+        free(win);
+    }
+
+    /* Method 2: dumpsys activity top — gives foreground stack directly */
+    if (strcmp(fg_app, "unknown") == 0) {
+        char *top = run_cmd(
+            "dumpsys activity top 2>/dev/null | grep -E 'ACTIVITY|Resumed' | head -3");
+        if (top) {
+            /* "  ACTIVITY com.package/com.Activity pid=1234" */
+            const char *at = strstr(top, "ACTIVITY ");
+            if (at) {
+                at += 9;
                 char tmp[128] = {0};
-                while (*brace && *brace != '}' && *brace != ' ' && i < 127)
-                    tmp[i++] = *brace++;
+                size_t i = 0;
+                while (*at && *at != ' ' && *at != '\n' && i < 127)
+                    tmp[i++] = *at++;
                 tmp[i] = '\0';
                 if (i > 0) {
-                    /* tmp = "com.pkg/com.Activity" */
                     char *slash = strchr(tmp, '/');
                     if (slash) {
                         *slash = '\0';
-                        strncpy(fg_app,      tmp,    sizeof(fg_app) - 1);
+                        strncpy(fg_app,      tmp,     sizeof(fg_app) - 1);
                         strncpy(fg_activity, slash+1, sizeof(fg_activity) - 1);
                     } else {
                         strncpy(fg_app, tmp, sizeof(fg_app) - 1);
                     }
                 }
             }
+            free(top);
         }
-        free(win);
     }
 
-    /* Method 2: dumpsys activity fallback */
+    /* Method 3: mResumedActivity */
     if (strcmp(fg_app, "unknown") == 0) {
         char *act = run_cmd(
-            "dumpsys activity activities 2>/dev/null | grep -E 'mResumedActivity|Resumed' | head -2");
+            "dumpsys activity activities 2>/dev/null | "
+            "grep -E 'mResumedActivity|mCurrentFocus' | head -2");
         if (act) {
-            first_line_after(act, "mResumedActivity", fg_app, sizeof(fg_app));
+            /* "mResumedActivity: ActivityRecord{... com.pkg/.Activity ...}" */
+            const char *mr = strstr(act, "ActivityRecord{");
+            if (!mr) mr = strstr(act, "mResumedActivity=");
+            if (mr) {
+                char buf[128] = {0};
+                first_line_after(mr, "ActivityRecord{", buf, sizeof(buf));
+                if (buf[0]) {
+                    /* skip leading tokens to find package/activity */
+                    char *sp = strstr(buf, " ");
+                    if (sp) {
+                        sp++;
+                        sp = strstr(sp, " ");
+                        if (sp) {
+                            sp++;
+                            char *slash = strchr(sp, '/');
+                            if (slash) {
+                                size_t plen = (size_t)(slash - sp);
+                                if (plen < sizeof(fg_app)) {
+                                    memcpy(fg_app, sp, plen);
+                                    fg_app[plen] = '\0';
+                                    strncpy(fg_activity, slash+1,
+                                            sizeof(fg_activity)-1);
+                                    char *end = strpbrk(fg_activity, " }");
+                                    if (end) *end = '\0';
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             free(act);
         }
     }
@@ -228,19 +315,45 @@ static void poll_services(void)
 
 static void poll_system_headline(void)
 {
-    /* Battery level from /sys (quick, no dumpsys needed) */
-    FILE *f;
     int bat_cap = -1;
     char bat_status[32] = "unknown";
 
-    f = fopen("/sys/class/power_supply/battery/capacity", "r");
-    if (f) { fscanf(f, "%d", &bat_cap); fclose(f); }
+    /* Battery capacity — try common paths across Qualcomm/Xiaomi configurations */
+    static const char *cap_paths[] = {
+        "/sys/class/power_supply/battery/capacity",
+        "/sys/class/power_supply/bms/capacity",
+        "/sys/class/power_supply/main/capacity",
+        "/sys/class/power_supply/BAT0/capacity",
+        NULL
+    };
+    for (int i = 0; cap_paths[i] && bat_cap < 0; i++) {
+        char *s = bexec_read_file(cap_paths[i]);
+        if (s) { bat_cap = atoi(s); free(s); }
+    }
+    /* Final fallback: parse dumpsys battery */
+    if (bat_cap < 0) {
+        char *bd = bexec("dumpsys battery 2>/dev/null | grep -E '^  level:' | head -1");
+        if (bd) {
+            sscanf(bd, " level: %d", &bat_cap);
+            free(bd);
+        }
+    }
 
-    f = fopen("/sys/class/power_supply/battery/status", "r");
-    if (f) {
-        fgets(bat_status, sizeof(bat_status), f);
-        bat_status[strcspn(bat_status, "\n")] = '\0';
-        fclose(f);
+    /* Battery status — same multi-path approach */
+    static const char *stat_paths[] = {
+        "/sys/class/power_supply/battery/status",
+        "/sys/class/power_supply/bms/status",
+        "/sys/class/power_supply/main/status",
+        "/sys/class/power_supply/BAT0/status",
+        NULL
+    };
+    for (int i = 0; stat_paths[i] && !strcmp(bat_status,"unknown"); i++) {
+        char *s = bexec_read_file(stat_paths[i]);
+        if (s) {
+            strncpy(bat_status, s, sizeof(bat_status) - 1);
+            bat_status[strcspn(bat_status, "\n")] = '\0';
+            free(s);
+        }
     }
 
     /* MemAvailable */
