@@ -8,7 +8,9 @@ extern pthread_t g_thread;
 extern pthread_mutex_t g_mutex;
 
 /* ── Project root ─────────────────────────────────────────────────────── */
+#ifndef BASE
 #define BASE         "/data/data/com.termux/files/home/MiuiserPeruser"
+#endif
 #define MP_PIPES_DIR BASE "/pipes"
 #define MP_PIDS_DIR  BASE "/pipes/pids"
 
