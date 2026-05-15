@@ -1,9 +1,43 @@
 {
   "version": "1.0",
-  "daemons": [],
+  "daemons": [
+    "CORE",
+    "fugitoidd",
+    "krangd",
+    "bebopd",
+    "rocksteadyd",
+    "shredderd",
+    "leatherheadd",
+    "ratkingd",
+    "splinterd",
+    "metalheadd",
+    "PRIMARY",
+    "foot_resurrectord",
+    "foot_blackboxd",
+    "foot_tempbackupd",
+    "foot_zombiebackupd",
+    "foot_portwatchd",
+    "foot_clan_supreme",
+    "GOVERNANCE",
+    "baxter_stockman",
+    "court_core_engine",
+    "court_orchestrator",
+    "april_o_neil",
+    "escalation",
+    "visitors_pass",
+    "judge_executor",
+    "superherod"
+  ],
   "governance": [
     "turtlepower",
     "judicial_controller"
   ],
-  "notes": "auto-generated registry (rahzerd unified layer active)"
+  "notes": "auto-generated registry (rahzerd unified layer active)",
+  "turtle_team": [
+    "leo",
+    "casey",
+    "mikey",
+    "don",
+    "raph"
+  ]
 }
