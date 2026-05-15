@@ -7,7 +7,7 @@ allow_action() {
     action="$1"
 
     case "$action" in
-        RESTART|ISOLATE|THROTTLE)
+        RESTART|ISOLATE|THROTTLE|QUARANTINE)
             return 0
             ;;
         KILL|WIPE|FORMAT)

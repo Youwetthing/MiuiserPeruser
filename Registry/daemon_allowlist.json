@@ -30,6 +30,26 @@
   "control": [
     "judicial_controller",
     "turtlepower",
-    "toolkit"
+    "baxter_stockman"
+  ],
+  "judicial": [
+    "court_core_engine",
+    "court_orchestrator",
+    "april_o_neil",
+    "escalation",
+    "visitors_pass",
+    "turtlepower",
+    "judge_executor"
+  ],
+  "enforcement": [
+    "baxter_stockman"
+  ],
+  "superhero": [
+    "superherod",
+    "leo",
+    "casey",
+    "mikey",
+    "don",
+    "raph"
   ]
 }
