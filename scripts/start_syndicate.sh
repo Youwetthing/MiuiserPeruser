@@ -6,8 +6,7 @@ BASE="${BASE:-$HOME/MiuiserPeruser}"
 BIN="$BASE/bin"
 
 # Ensure the pipes and pids directories exist before any daemon starts
-mkdir -p "$BASE/pipes/pids"
-mkdir -p "$BASE/pipes/state"
+mkdir -p "$BASE/pipes/pids" "$BASE/pipes/state"
 mkdir -p "$BASE/logs"
 
 echo "[SYNDICATE] Initialising daemon fleet..."
@@ -62,3 +61,4 @@ nohup bash "$BASE/law_and_order:adb/court_dispatcher.sh" \
     >> "$BASE/logs/court_dispatcher.log" 2>&1 &
 echo "[SYNDICATE]   + court_dispatcher (PID $!)"
 echo "[SYNDICATE] Judicial: $BASE/law_and_order:adb/"
+
