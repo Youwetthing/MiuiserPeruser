@@ -1,0 +1,17 @@
+#!/bin/bash
+# MiuiserPeruser: Syndicate Haus - Anonymous Bug Reporter
+# Collects logs and anonymizes them for safe sharing
+
+GDPR_DIR="\$(dirname "\$0")/GDPR"
+SCRIPT="\$GDPR_DIR/bug_reporter.py"
+LOG_MANAGER="\$GDPR_DIR/log_manager.py"
+
+# Auto-cap logs to keep reports manageable
+python3 "\$LOG_MANAGER"
+
+echo "[Syndicate] Gathering system state..."
+echo "[Syndicate] Scrubbing personal identifiers (App names/PIDs)..."
+
+python3 "\$SCRIPT"
+
+echo "[Syndicate] Done."

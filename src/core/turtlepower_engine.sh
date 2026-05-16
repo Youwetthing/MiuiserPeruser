@@ -1,45 +1,195 @@
 #!/data/data/com.termux/files/usr/bin/bash
+# ============================================================
+# turtlepower_engine.sh — Rule evaluator (one-shot, called by daemon)
+# ============================================================
+# FIX: throttle/shutdown actions now route to execution.pipe → Baxter
+#      Previously logged only — enforcement was a no-op
 
-EVENT_FILE="$HOME/MiuiserPeruser/state/court.events"
-RULE_FILE="$HOME/MiuiserPeruser/state/turtlepower.rules"
-QUAR_FILE="$HOME/MiuiserPeruser/state/quarantine.state"
+BASE="$HOME/MiuiserPeruser"
+EVENT_FILE="$BASE/state/court.events"
+RULE_FILE="$BASE/state/turtlepower.rules"
+QUAR_FILE="$BASE/state/quarantine.state"
+REG="$BASE/state/court.registry"
+LOCK="$BASE/state/turtlepower.lock"
+PIDDIR="$BASE/state/pids"
+EXEC_PIPE="$BASE/pipes/execution.pipe"
 
+mkdir -p "$(dirname "$QUAR_FILE")"
+touch "$QUAR_FILE"
+
+# -------------------------
+# READ LOCK FLAGS
+# -------------------------
+read_lock_val() {
+    grep "^$1=" "$LOCK" 2>/dev/null | cut -d'=' -f2
+}
+
+allow_daemons=$(read_lock_val ALLOW_DAEMONS)
+lock_state=$(read_lock_val LOCK_STATE)
+
+if [ "$lock_state" != "ACTIVE" ]; then
+    echo "[TP_ENGINE] LOCK_STATE=$lock_state — skipping evaluation"
+    exit 0
+fi
+
+# -------------------------
+# EXECUTION PIPE HELPER
+# -------------------------
+send_exec() {
+    local action="$1" target="$2" ctx="$3"
+    if [ -p "$EXEC_PIPE" ]; then
+        ( echo "$action|$target|$ctx" > "$EXEC_PIPE" ) &
+        disown $!
+    else
+        echo "[TP_ENGINE] WARNING: execution.pipe missing — $action $target not sent" >&2
+    fi
+}
+
+# -------------------------
+# QUARANTINE HELPERS
+# -------------------------
 is_quarantined() {
-    grep -q "^$1|" "$QUAR_FILE"
+    grep -q "^$1|" "$QUAR_FILE" 2>/dev/null
 }
 
 quarantine() {
-    echo "$1|rule|$(date +%s)" >> "$QUAR_FILE"
-    pkill -f "$1"
+    local name="$1" reason="${2:-rule}"
+    (
+        flock -x 200
+        grep -v "^$name|" "$QUAR_FILE" > "$QUAR_FILE.tmp" 2>/dev/null
+        mv "$QUAR_FILE.tmp" "$QUAR_FILE"
+        echo "$name|$reason|$(date +%s)" >> "$QUAR_FILE"
+    ) 200>"$QUAR_FILE.lock"
+
+    local pidfile="$PIDDIR/${name}.pid"
+    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+        kill "$(cat "$pidfile")" 2>/dev/null
+    fi
 }
 
 release() {
-    grep -v "^$1|" "$QUAR_FILE" > "$QUAR_FILE.tmp" && mv "$QUAR_FILE.tmp" "$QUAR_FILE"
+    local name="$1"
+    (
+        flock -x 200
+        grep -v "^$name|" "$QUAR_FILE" > "$QUAR_FILE.tmp" 2>/dev/null
+        mv "$QUAR_FILE.tmp" "$QUAR_FILE"
+    ) 200>"$QUAR_FILE.lock"
 }
 
+restart_daemon() {
+    local name="$1"
+    [ "$allow_daemons" != "1" ] && echo "[TP_ENGINE] ALLOW_DAEMONS=0 — restart blocked" && return
+    is_quarantined "$name" && return 0
+
+    local LAW="$BASE/law_and_order:adb"
+    declare -A DAEMON_SCRIPTS=(
+        [court_core_engine]="$LAW/court_core_engine.sh"
+        [court_orchestrator]="$LAW/court_orchestrator.sh"
+        [april_o_neil]="$LAW/cre/april_o_neil.sh"
+        [escalation]="$LAW/escalation_daemon.sh"
+        [visitors_pass]="$LAW/visitors_pass_daemon.sh"
+        [turtlepower]="$LAW/turtlepower_daemon.sh"
+    )
+
+    local pidfile="$PIDDIR/${name}.pid"
+    [ -f "$pidfile" ] && kill "$(cat "$pidfile")" 2>/dev/null && rm -f "$pidfile"
+
+    local script="${DAEMON_SCRIPTS[$name]}"
+    [ -z "$script" ] && echo "[TP_ENGINE] WARNING: no script for '$name'" >&2 && return 1
+
+    nohup bash "$script" >> "$BASE/logs/judicial_controller.log" 2>&1 &
+    echo "$!" > "$pidfile"
+}
+
+restart_any_stopped() {
+    [ "$allow_daemons" != "1" ] && return
+    while IFS='|' read -r name state pid; do
+        [ "$name" = "# NAME" ] || [ -z "$name" ] && continue
+        [ "$state" = "STOPPED" ] && restart_daemon "$name"
+    done < "$REG"
+}
+
+# -------------------------
+# ACTION DISPATCHER
+# -------------------------
 apply() {
-    case "$2" in
+    local cond="$1" action="$2"
+
+    case "$action" in
         quarantine:*)
-            quarantine "${2#quarantine:}"
+            quarantine "${action#quarantine:}" "$cond"
             ;;
         release:*)
-            release "${2#release:}"
+            release "${action#release:}"
+            ;;
+        restart:any)
+            restart_any_stopped
             ;;
         restart:*)
-            d="${2#restart:}"
-            is_quarantined "$d" && exit 0
-            pkill -f "$d"
+            restart_daemon "${action#restart:}"
+            ;;
+        throttle:*)
+            # FIX: was log-only — now routes to Baxter via execution.pipe
+            local target="${action#throttle:}"
+            echo "[TP_ENGINE] THROTTLE → $target"
+            send_exec "THROTTLE" "$target" "rule=$cond"
+            (flock -x 200; echo "$(date +%s)|TURTLEPOWER|THROTTLE|$target:$cond" >> "$EVENT_FILE") \
+                200>"$EVENT_FILE.lock"
+            ;;
+        shutdown:*)
+            # FIX: was log-only — now routes to Baxter via execution.pipe
+            local target="${action#shutdown:}"
+            echo "[TP_ENGINE] SHUTDOWN → $target"
+            send_exec "SHUTDOWN" "$target" "rule=$cond"
+            (flock -x 200; echo "$(date +%s)|TURTLEPOWER|SHUTDOWN|$target:$cond" >> "$EVENT_FILE") \
+                200>"$EVENT_FILE.lock"
+            ;;
+        *)
+            echo "[TP_ENGINE] WARNING: unknown action '$action'" >&2
             ;;
     esac
 }
 
-while IFS='|' read -r _ cond action; do
-    key=$(echo "$cond" | cut -d'>' -f1 | cut -d'=' -f1)
-    num=$(echo "$cond" | grep -o '[0-9]\+')
+# -------------------------
+# COUNT EVENTS
+# -------------------------
+count_matching_events() {
+    local key="$1" count=0
 
-    count=$(grep "$key" "$EVENT_FILE" | wc -l)
+    if [[ "$key" == *":"* ]]; then
+        local src="${key%%:*}" evt="${key##*:}"
+        count=$(grep -c "^[^|]*|${src}|${evt}|" "$EVENT_FILE" 2>/dev/null || echo 0)
+    else
+        count=$(grep -c "^[^|]*|[^|]*|${key}|" "$EVENT_FILE" 2>/dev/null || echo 0)
+        if [ "$count" -eq 0 ]; then
+            count=$(grep -c "^[^|]*|[^|]*|[^|]*|.*${key}.*" "$EVENT_FILE" 2>/dev/null || echo 0)
+        fi
+    fi
+
+    echo "$count"
+}
+
+# -------------------------
+# RULE EVALUATION LOOP
+# -------------------------
+echo "[TP_ENGINE] Evaluating rules at $(date)"
+
+while IFS='|' read -r prefix cond action; do
+    [ "$prefix" != "RULE" ] && continue
+    [ -z "$cond" ] || [ -z "$action" ] && continue
+
+    key="${cond%%>=*}"
+    num="${cond##*>=}"
+
+    [[ "$num" =~ ^[0-9]+$ ]] || { echo "[TP_ENGINE] WARNING: bad condition '$cond'" >&2; continue; }
+
+    count=$(count_matching_events "$key")
 
     if [ "$count" -ge "$num" ]; then
+        echo "[TP_ENGINE] RULE TRIGGERED: $cond ($count >= $num) → $action"
         apply "$cond" "$action"
     fi
+
 done < "$RULE_FILE"
+
+echo "[TP_ENGINE] Evaluation complete"
