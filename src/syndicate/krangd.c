@@ -8,8 +8,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#define PID_FILE "/data/data/com.termux/files/home/tmp/krangd.pid"
-#define SOCK_PATH "/data/data/com.termux/files/home/tmp/krang.sock"
+#define PID_FILE "/data/data/com.termux/files/home/MiuiserPeruser/pipes/pids/krangd.pid"
+#define SOCK_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/krang.sock"
 #define LOG_PREFIX "[KRANG]"
 
 static void write_pid(void) {

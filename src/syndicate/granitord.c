@@ -6,7 +6,7 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#define PID_FILE "/data/data/com.termux/files/home/tmp/granitord.pid"
+#define PID_FILE "/data/data/com.termux/files/home/MiuiserPeruser/pipes/pids/granitord.pid"
 #define LOG_PREFIX "[GRANITOR]"
 
 static void write_pid(void) {

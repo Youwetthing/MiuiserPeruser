@@ -6,7 +6,7 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#define PID_FILE "/data/data/com.termux/files/home/tmp/shredderd.pid"
+#define PID_FILE "/data/data/com.termux/files/home/MiuiserPeruser/pipes/pids/shredderd.pid"
 #define LOG_PREFIX "[SHREDDER]"
 
 static void write_pid(void) {

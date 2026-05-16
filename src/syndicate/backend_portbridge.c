@@ -7,7 +7,7 @@
 
 #include "backend_portbridge.h"
 
-#define PORTBRIDGE_SOCK "/data/data/com.termux/files/home/tmp/portbridge.sock"
+#define PORTBRIDGE_SOCK "/data/data/com.termux/files/home/MiuiserPeruser/pipes/portbridge.sock"
 
 char *backend_portbridge_probe(void)
 {
