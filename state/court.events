@@ -426,3 +426,18 @@ STRESS|complete|system stabilising
 1776536276|CRE|CASE|turtlepower:HIGH:lock verification test
 1776536473|april_o_neil|HEARTBEAT|OK
 1776536483|turtlepower|STATE|RUNNING
+1778896892|judicial_controller|STARTED|baxter
+1778896892|judicial_controller|STARTED|court_core_engine
+1778896893|judicial_controller|STARTED|judge_executor
+1778896893|judicial_controller|STARTED|court_orchestrator
+1778896893|judicial_controller|STARTED|escalation
+1778896893|judicial_controller|STARTED|april_o_neil
+1778896894|judicial_controller|STARTED|visitors_pass
+1778896894|judicial_controller|STARTED|turtlepower
+1778896894|judicial_controller|STARTED|superhero
+1778896942|JUDGE|QUARANTINED|superherod:score=75
+1778896942|BAXTER|ISOLATE|superherod:score=75
+1778897006|JUDGE|QUARANTINED|leatherheadd:score=70
+1778897007|BAXTER|ISOLATE|leatherheadd:score=70
+1778897815|JUDGE|QUARANTINED|superherod:score=75
+1778898498|JUDGE|QUARANTINED|superherod:score=75

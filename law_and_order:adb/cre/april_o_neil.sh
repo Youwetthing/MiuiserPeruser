@@ -66,6 +66,13 @@ while IFS="|" read -r src sig score ctx <&3; do
 
     log "Case received: $id ($src)"
 
+    # enforce cap — evict oldest if at limit
+    case_count=$(ls "$CASE_DIR"/case_*.json 2>/dev/null | wc -l)
+    if [ "$case_count" -ge "$MAX_CASES" ]; then
+        ls -t "$CASE_DIR"/case_*.json | tail -n +$((MAX_CASES)) | xargs rm -f
+        log "Cap enforced: evicted $((case_count - MAX_CASES + 1)) old case(s)"
+    fi
+
     write_case "$id" "$src" "$sig" "$score" "$ctx"
 
     forward_to_judgement "$src" "$sig" "$score" "$ctx"

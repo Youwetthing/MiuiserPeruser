@@ -7,6 +7,8 @@ BIN="$BASE/bin"
 
 # Ensure the pipes and pids directories exist before any daemon starts
 mkdir -p "$BASE/pipes/pids"
+mkdir -p "$BASE/pipes/state"
+mkdir -p "$BASE/logs"
 
 echo "[SYNDICATE] Initialising daemon fleet..."
 echo "---------------------------------------------------"
@@ -51,3 +53,12 @@ echo "[SYNDICATE] Fleet deployed — $(( ${#DAEMONS[@]} + 4 )) processes launche
 echo "[SYNDICATE] IPC hub : $BASE/pipes/turtlecom.sock"
 echo "[SYNDICATE] Krang   : $BASE/pipes/krang.sock"
 echo "[SYNDICATE] Splinter: $BASE/pipes/splinterd.sock"
+
+# ── Tier 4: Judicial system ────────────────────────────────────────────
+echo "[SYNDICATE]  Tier 4 — Judicial system"
+bash "$BASE/law_and_order:adb/judicial_controller.sh" start
+
+nohup bash "$BASE/law_and_order:adb/court_dispatcher.sh" \
+    >> "$BASE/logs/court_dispatcher.log" 2>&1 &
+echo "[SYNDICATE]   + court_dispatcher (PID $!)"
+echo "[SYNDICATE] Judicial: $BASE/law_and_order:adb/"
