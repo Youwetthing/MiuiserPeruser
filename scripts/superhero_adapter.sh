@@ -12,8 +12,8 @@ LOG="$BASE/logs/superhero_adapter.log"
 log() { echo "[ADAPTER] $(date +%s) $1" >> "$LOG"; }
 
 emit() {
-    local sig="$1" score="$2" ctx="$3"
-    local line="superherod|$sig|$score|$ctx"
+    local sig="$1" score="$2" ctx="$3" src="${4:-superherod}"
+    local line="$src|$sig|$score|$ctx"
     log "EMIT: $line"
     ( echo "$line" > "$PIPE" ) &
     disown $!
@@ -23,6 +23,9 @@ log "ONLINE"
 
 declare -A EMITTED
 SCAN_ID=0
+
+# Outer restart loop — relaunches superhero binary if it exits
+while true; do
 
 # FIX: process substitution keeps loop in current shell — EMITTED persists
 while IFS= read -r line; do
@@ -52,8 +55,9 @@ while IFS= read -r line; do
     fi
 
     if [[ "$line" =~ "RWX_MEMORY_PAGE" ]]; then
-        proc=$(echo "$line" | grep -o "\[.*\]" | head -1)
-        emit "RWX_MEMORY_PAGE" 90 "process=$proc"
+        proc=$(echo "$line" | grep -o "\[[^]]*\]" | head -1 | tr -d '[]')
+        src="${proc:-superherod}"
+        emit "RWX_MEMORY_PAGE" 90 "process=$proc" "$src"
     fi
 
     if [[ "$line" =~ "NETWORK_ANOMALY" ]] || [[ "$line" =~ "ANOMALY_DETECTED" ]]; then
@@ -66,8 +70,9 @@ while IFS= read -r line; do
        ( [[ "$line" =~ "hidden" ]] && ! [[ "$line" =~ "no hidden" ]] ); then
         [ "${EMITTED[HIDDEN]}" = "1" ] && continue
         EMITTED[HIDDEN]=1
-        proc=$(echo "$line" | grep -o "\[.*\]" | head -1)
-        emit "HIDDEN_PROCESS" 85 "process=$proc"
+        proc=$(echo "$line" | grep -o "\[[^]]*\]" | head -1 | tr -d '[]')
+        src="${proc:-superherod}"
+        emit "HIDDEN_PROCESS" 85 "process=$proc" "$src"
     fi
 
     if [[ "$line" =~ "INTEGRITY" ]] && [[ "$line" =~ "FAIL" ]]; then
@@ -79,3 +84,8 @@ while IFS= read -r line; do
     fi
 
 done < <("$BASE/Superhero_Mode/superhero" --loop 30 2>&1)
+
+log "superhero exited — restarting in 5s"
+sleep 5
+
+done  # outer restart loop
