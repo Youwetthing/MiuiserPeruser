@@ -5,7 +5,7 @@ LAW="$BASE/law_and_order:adb"
 REG="$BASE/state/court.registry"
 LOG="$BASE/logs/judicial_controller.log"
 PID_DIR="$BASE/pipes/pids"
-LOCK="$LAW/state/turtlepower.lock"
+LOCK="$BASE/state/turtlepower.lock"
 
 mkdir -p "$BASE/logs" "$PID_DIR"
 
