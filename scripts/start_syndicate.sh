@@ -59,6 +59,9 @@ bash "$BASE/law_and_order:adb/judicial_controller.sh" start
 
 nohup bash "$BASE/law_and_order:adb/court_dispatcher.sh" \
     >> "$BASE/logs/court_dispatcher.log" 2>&1 &
-echo "[SYNDICATE]   + court_dispatcher (PID $!)"
+
+CDPID=$!
+echo "$CDPID" > "$BASE/pipes/pids/court_dispatcher.pid"
+echo "[SYNDICATE]   + court_dispatcher (PID $CDPID)"
 echo "[SYNDICATE] Judicial: $BASE/law_and_order:adb/"
 

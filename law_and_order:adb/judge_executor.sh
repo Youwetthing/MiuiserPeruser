@@ -89,5 +89,6 @@ while IFS='|' read -r src sig score ctx <&3; do
     fi
 
     sed -i "s/PENDING_JUDGEMENT/$verdict/" "$case_file"
+    rotate_court_events
 
 done

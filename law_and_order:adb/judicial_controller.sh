@@ -17,8 +17,9 @@ declare -A DAEMON_SCRIPTS=(
     [visitors_pass]="$LAW/visitors_pass_daemon.sh"
     [turtlepower]="$LAW/turtlepower_daemon.sh"
     [baxter]="$BASE/scripts/baxter_stockman.sh"
-    [superhero]="$BASE/scripts/superhero_adapter.sh"
+    [superhero]="$LAW/superhero_adapter.sh"
     [judge_executor]="$LAW/judge_executor.sh"
+    [court_dispatcher]="$LAW/court_dispatcher.sh"
 )
 
 court_status() {
