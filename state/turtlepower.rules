@@ -1,11 +1,42 @@
+# turtlepower.rules
 # format: RULE|condition|action
+#
+# TWO condition types:
+#
+#   VALUE-BASED  — reads live metric from turtlecomd.log
+#     thermal_peak>=N      peak_c field from leatherheadd|thermal_critical
+#     thermal_zones>=N     critical_zones field from leatherheadd|thermal_critical
+#     cpu_pct>=N           cpu_pct field from ratkingd|cpu_hog
+#     warn_zones>=N        warn_zones field from leatherheadd|thermal_critical
+#
+#   COUNT-BASED  — counts matching events in court.events
+#     source:EVENT>=N      e.g. ratkingd:HIGH>=5
+#     keyword>=N           e.g. crash>=1
+#
+# NOTE: Device thermal zones all report 49.8°C (HyperOS sensor floor/cap).
+#       Thresholds set above 50°C to avoid constant triggering.
+#       Raise if device runs legitimately hotter under load.
 
+# ── Daemon health (count-based) ─────────────────────────────────────
 RULE|ratkingd:HIGH>=5|restart:ratkingd
 RULE|leatherheadd:HIGH>=3|restart:leatherheadd
 RULE|granitord:HIGH>=5|restart:granitord
-
-RULE|thermal>=45|throttle:all_non_critical
-RULE|thermal>=50|shutdown:non_essential
-
-RULE|cpu_spike>=90|throttle:ratkingd
 RULE|crash>=1|restart:any
+
+# ── Thermal enforcement (value-based, peak_c from leatherheadd) ──────
+# 52°C: background apps are hurting — kill cached processes
+RULE|thermal_peak>=52|throttle:all_non_critical
+
+# 5+ critical zones: widespread heat — kill non-essential apps
+RULE|thermal_zones>=5|throttle:all_non_critical
+
+# 58°C: serious thermal event — force-stop non-essential packages
+RULE|thermal_peak>=58|shutdown:non_essential
+
+# ── CPU enforcement (value-based, cpu_pct from ratkingd) ─────────────
+# 80%+: single process hogging — throttle ratkingd so it stops reporting
+#        (Baxter will kill its poll cycle; sentencing engine restarts it)
+RULE|cpu_pct>=80|throttle:ratkingd
+
+# 95%+: critical CPU hog — full restart of ratkingd to reset state
+RULE|cpu_pct>=95|restart:ratkingd
