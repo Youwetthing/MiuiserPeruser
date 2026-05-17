@@ -19,3 +19,35 @@ register() {
 get_registry() {
     cat "$REG"
 }
+
+EVT="$BASE/state/court.events"
+EVT_ROTATE_THRESHOLD=2000
+
+rotate_court_events() {
+    local lines
+    lines=$(wc -l < "$EVT" 2>/dev/null || echo 0)
+    [ "$lines" -lt "$EVT_ROTATE_THRESHOLD" ] && return 0
+
+    local archive="$EVT.$(date +%Y%m%d_%H%M%S)"
+    (flock -x 201
+     mv "$EVT" "$archive"
+     touch "$EVT"
+    ) 201>"$EVT.rotate.lock"
+    echo "[court_registry_lib] court.events rotated → $archive (was $lines lines)"
+}
+
+EVT="$BASE/state/court.events"
+EVT_ROTATE_THRESHOLD=2000
+
+rotate_court_events() {
+    local lines
+    lines=$(wc -l < "$EVT" 2>/dev/null || echo 0)
+    [ "$lines" -lt "$EVT_ROTATE_THRESHOLD" ] && return 0
+
+    local archive="$EVT.$(date +%Y%m%d_%H%M%S)"
+    (flock -x 201
+     mv "$EVT" "$archive"
+     touch "$EVT"
+    ) 201>"$EVT.rotate.lock"
+    echo "[court_registry_lib] court.events rotated → $archive (was $lines lines)"
+}
