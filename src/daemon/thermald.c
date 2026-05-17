@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include <dirent.h>
 
-#define SOCK_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/turtlecom.sock"
+#define SOCK_PATH "/data/data/com.termux/files/home/tmp/turtlecom.sock"
 #define BUF_SIZE 512
 
 static int connect_to_turtlecom(void) {

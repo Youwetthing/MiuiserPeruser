@@ -23,15 +23,7 @@ out_path = os.path.join(root, "Registry/system_registry.json")
 with open(allow_path) as f:
     allow = json.load(f)
 
-# Handle both flat list and categorised dict
-if isinstance(allow, list):
-    allowed = allow
-elif isinstance(allow, dict):
-    allowed = []
-    for category, daemons in allow.items():
-        allowed.extend(daemons)
-else:
-    allowed = []
+allowed = allow if isinstance(allow, list) else []
 
 # Load alias map
 alias = {}

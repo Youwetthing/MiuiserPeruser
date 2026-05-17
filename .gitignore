@@ -31,3 +31,40 @@ __pycache__/
 # Temp
 *.tmp
 *.bak
+
+# Data / exports
+data/tmp/
+data/bugreport
+data/gdpr_export.txt
+
+# Databases
+*.db
+
+# Archives / patch zips
+*.zip
+
+# cre runtime locks
+cre/*.lock
+cre/ledger.log.lock
+
+# Root-level compiled binaries
+thermald
+cpud
+miuid
+storaged
+sysportd
+sysportd_pie
+foot_dual
+krang_dual
+krang_live
+krang_test
+splinter_live
+turtlecom_hub
+turtlecom_live
+granite_muscle
+miuiserperuser-daemon
+processd
+
+# Misc runtime
+pidfile
+targets.txt
