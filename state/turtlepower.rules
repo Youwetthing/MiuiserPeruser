@@ -28,7 +28,7 @@ RULE|crash>=1|restart:any
 RULE|thermal_peak>=52|throttle:all_non_critical
 
 # 5+ critical zones: widespread heat — kill non-essential apps
-RULE|thermal_zones>=12|throttle:all_non_critical
+RULE|thermal_zones>=5|throttle:all_non_critical
 
 # 58°C: serious thermal event — force-stop non-essential packages
 RULE|thermal_peak>=58|shutdown:non_essential

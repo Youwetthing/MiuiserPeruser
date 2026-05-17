@@ -6,7 +6,7 @@
 #include <sys/un.h>
 
 #define BUFFER_SIZE 4096
-#define DEX_SOCKET_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/dex.sock"
+#define DEX_SOCKET_PATH "/data/data/com.termux/files/home/tmp/dex.sock"
 
 char *dex_query(const char *msg) {
     int sock = socket(AF_UNIX, SOCK_STREAM, 0);

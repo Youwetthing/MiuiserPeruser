@@ -21,7 +21,7 @@ while true; do
             ISOLATE) echo "• Isolation: $detail" ;;
             *) echo "• Event: $src | $event | $detail" ;;
         esac
-    done < <(tail -n 50 "$EVT")
+    done < "$EVT"
 
     echo ""
     echo "🔁 refresh: 10s"
