@@ -3,8 +3,10 @@
 # TURTLEPOWER - JUDICIAL SYSTEM
 # ONLY decision making
 
-LOG="/data/data/com.termux/files/home/MiuiserPeruser/src/turtle_power/logs/turtlepower.log"
-INPUT="/data/data/com.termux/files/home/MiuiserPeruser/tmp/superhero.sock"
+source "$(dirname "$0")/../../env.sh"
+
+LOG="$TURTLEPOWER_LOG"
+INPUT="$SUPERHERO_SOCK"
 
 log() {
     echo "[TURTLEPOWER] $1" >> "$LOG"
@@ -40,4 +42,3 @@ while true; do
         decide "$sev" "$src" "$det"
     fi
 done
-
