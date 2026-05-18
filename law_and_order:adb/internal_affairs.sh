@@ -230,7 +230,7 @@ _check_enforcement_evidence() {
 
     done < <(awk -F'|' -v ws="$WINDOW_START" '$1 > ws' "$COURT_EVENTS" 2>/dev/null || true)
 
-    [[ $violations -eq 0 ]] && _ia_pass "ENFORCEMENT_EVIDENCE" "all verdicts corroborated"
+    if [[ $violations -eq 0 ]]; then _ia_pass "ENFORCEMENT_EVIDENCE" "all verdicts corroborated"; fi
 }
 
 # CHECK 4: Pipeline stalling
@@ -307,7 +307,7 @@ _check_self_exemption() {
         fi
     done
 
-    [[ $flagged -eq 0 ]] && _ia_pass "SELF_EXEMPTION" "all active daemons accounted for"
+    if [[ $flagged -eq 0 ]]; then _ia_pass "SELF_EXEMPTION" "all active daemons accounted for"; fi
 }
 
 # ── Ethical Floor Enforcement (hard limits — cannot be overridden) ─────────────
@@ -402,7 +402,7 @@ _check_ethical_floors() {
         done < "${STATE_DIR}/sovereignty.list"
     fi
 
-    [[ $violations -eq 0 ]] && _ia_pass "ETHICAL_FLOOR" "all floors intact"
+    if [[ $violations -eq 0 ]]; then _ia_pass "ETHICAL_FLOOR" "all floors intact"; fi
 }
 
 # ── Run full audit ─────────────────────────────────────────────────────────────
