@@ -215,13 +215,8 @@ while IFS='|' read -r action target ctx <&3; do
         ISOLATE)   do_isolate   "$target" "$ctx" ;;
         INTERVENE) do_intervene "$target" "$ctx" ;;
         *)         log "UNKNOWN action: $action (target=$target) — ignored" ;;
-        ;;
     esac
     rotate_court_events
-done
-
-log "OFFLINE — pipe closed"
-    esac
 done
 
 log "OFFLINE — pipe closed"
