@@ -68,3 +68,33 @@ processd
 # Misc runtime
 pidfile
 targets.txt
+
+# Runtime state - never commit
+state/court.events
+state/court.events.lock
+state/court.registry
+state/court.registry.lock
+state/daemon.registry
+state/jailhouse/
+state/quarantine.state
+state/quarantine.state.lock
+state/signal_window.state
+state/threat_scores.state
+state/turtlepower.lock
+state/.processed_cases
+state/cases.state
+state/consent_queue.state
+state/criminal_record/
+state/sandbox/
+state/quarantine/
+state/visitors_pass/
+state/pids/
+pipes/pids/
+pipes/state/
+pipes/logs/
+pipes/*.pid
+
+# Logs - never commit
+src/turtle_power/logs/
+logs/
+cre/
