@@ -1,130 +1,79 @@
 #!/data/data/com.termux/files/usr/bin/bash
-# =============================================================
-# court_dispatcher.sh
-# Bridges turtlecomd APRIL stream → judicial superhero.pipe
+# court_dispatcher.sh — Court Dispatcher v2
+# Part of MiuiserPeruser Judicial System v2
 #
-# turtlecomd stdout is redirected to logs/turtlecomd.log by
-# start_syndicate.sh. This daemon tails that log, picks up
-# every APRIL| line, scores it, and writes:
-#   SOURCE|SIGNAL|SCORE|CONTEXT
-# to pipes/superhero.pipe for april_o_neil to assemble.
-# =============================================================
+# CHANGES FROM v1:
+#   - Emits WEIGHT (base signal weight) instead of SCORE (final score)
+#   - Wire format: SOURCE|SIGNAL|WEIGHT|CONTEXT  (was SOURCE|SIGNAL|SCORE|CONTEXT)
+#   - Weight table replaces old score table
+#   - april_o_neil.sh now routes to scoring_engine.sh to compute final score
+#
+# This file remains a simple signal classifier — no scoring math lives here.
+# All score computation is in scoring_engine.sh.
+#
+# Reads from: judgement.pipe  (written to by daemon fleet)
+# Writes to:  april_o_neil.sh (via execution.pipe or direct call)
 
-BASE="$HOME/MiuiserPeruser"
-TCOMD_LOG="$BASE/logs/turtlecomd.log"
-PIPE="$BASE/pipes/superhero.pipe"
-LOG="$BASE/logs/court_dispatcher.log"
+set -euo pipefail
 
-mkdir -p "$BASE/logs"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-log() { echo "[DISPATCHER] $(date +%s) $1" >> "$LOG"; }
+PIPES_DIR="${BASE_DIR}/pipes"
+JUDGEMENT_PIPE="${PIPES_DIR}/judgement.pipe"
+EXECUTION_PIPE="${PIPES_DIR}/ingest.pipe"
+LOG_FILE="${BASE_DIR}/logs/court_dispatcher.log"
+IA_LOCK="${BASE_DIR}/state/internal_affairs.lock"
 
-emit() {
-    local src="$1" signal="$2" score="$3" ctx="$4"
-    local entry="$src|$signal|$score|$ctx"
-    log "EMIT: $entry"
-    # Non-blocking write — background fork so we never stall
-    ( echo "$entry" > "$PIPE" ) &
-    disown $!
+mkdir -p "$PIPES_DIR" "$(dirname "$LOG_FILE")"
+[[ -p "$JUDGEMENT_PIPE" ]] || mkfifo "$JUDGEMENT_PIPE"
+
+_log() {
+    echo "[DISPATCHER] $(date +%s) $*" | tee -a "$LOG_FILE" >&2
 }
 
-# Score table — maps APRIL signal types to score + canonical signal name
-score_signal() {
-    local src="$1"
-    local raw_signal="$2"
-    local payload="$3"
+# ── Base Signal Weight Table ───────────────────────────────────────────────────
+# These are BASE weights only. scoring_engine.sh applies all modifiers on top:
+#   user context, situational awareness, covariance, recidivism, source tier.
 
-    case "$raw_signal" in
-        thermal_critical)
-            # leatherheadd: peak_c=49.8 zone=CPU critical_zones=10
-            local peak
-            peak=$(echo "$payload" | grep -o 'peak_c=[0-9.]*' | cut -d= -f2)
-            local zones
-            zones=$(echo "$payload" | grep -o 'critical_zones=[0-9]*' | cut -d= -f2)
-            if [ "${peak%.*}" -ge 55 ] 2>/dev/null; then
-                emit "$src" "THERMAL_CRITICAL" 80 "$payload"
-            elif [ "${zones:-0}" -ge 5 ] 2>/dev/null; then
-                emit "$src" "THERMAL_CRITICAL" 70 "$payload"
-            else
-                emit "$src" "THERMAL_WARN" 40 "$payload"
-            fi
-            ;;
-
-        cpu_hog)
-            # ratkingd: pid=31092 name=com.anthropic.claude cpu_pct=56
-            local pct
-            pct=$(echo "$payload" | grep -o 'cpu_pct=[0-9]*' | cut -d= -f2)
-            if [ "${pct:-0}" -ge 80 ] 2>/dev/null; then
-                emit "$src" "CPU_HOG_CRITICAL" 75 "$payload"
-            elif [ "${pct:-0}" -ge 50 ] 2>/dev/null; then
-                emit "$src" "CPU_HOG" 50 "$payload"
-            fi
-            ;;
-
-        cpu_spike)
-            emit "$src" "CPU_THROTTLING" 60 "$payload"
-            ;;
-
-        netstate)
-            # rahzerd: suspicious=N divergence=N
-            local suspicious
-            suspicious=$(echo "$payload" | grep -o 'suspicious=[0-9]*' | cut -d= -f2)
-            local divergence
-            divergence=$(echo "$payload" | grep -o 'divergence=[0-9]*' | cut -d= -f2)
-            if [ "${suspicious:-0}" -gt 0 ] || [ "${divergence:-0}" -gt 0 ]; then
-                emit "$src" "NETWORK_ANOMALY" 70 "$payload"
-            fi
-            # Clean netstate — no emit
-            ;;
-
-        anomaly|connectivity_anomaly)
-            emit "$src" "NETWORK_ANOMALY" 70 "$payload"
-            ;;
-
-        wakelock)
-            emit "$src" "WAKELOCK_ANOMALY" 40 "$payload"
-            ;;
-
-        sysstate)
-            # granitord/shredderd: check score field
-            local score_val
-            score_val=$(echo "$payload" | grep -o 'SCORE=[0-9]*' | cut -d= -f2)
-            if [ "${score_val:-100}" -lt 80 ] 2>/dev/null; then
-                emit "$src" "INTEGRITY_VIOLATION" 95 "$payload"
-            fi
-            ;;
-
-        *)
-            # Unknown signal — log only, don't emit
-            log "UNSCORED: src=$src signal=$raw_signal payload=$payload"
-            ;;
+_signal_to_weight() {
+    local signal="$1"
+    case "$signal" in
+        INTEGRITY_VIOLATION)   echo 50 ;;
+        NETWORK_ANOMALY)       echo 35 ;;
+        THERMAL_CRITICAL)      echo 40 ;;
+        CPU_HOG_CRITICAL)      echo 30 ;;
+        CPU_THROTTLING)        echo 20 ;;
+        CPU_HOG)               echo 18 ;;
+        THERMAL_WARN)          echo 15 ;;
+        WAKELOCK_ANOMALY)      echo 10 ;;
+        # Fallback for unknown signal types — conservative low weight
+        *)                     echo 8  ;;
     esac
 }
 
-log "ONLINE — waiting for $TCOMD_LOG"
+# ── Dispatch loop ─────────────────────────────────────────────────────────────
+# Reads lines from judgement.pipe.
+# Input format (from daemon fleet):  SOURCE|SIGNAL|CONTEXT
+# Output format (to april_o_neil):   SOURCE|SIGNAL|WEIGHT|CONTEXT
 
-# Wait for log file to exist (turtlecomd may not have started yet)
-until [ -f "$TCOMD_LOG" ]; do
-    sleep 1
-done
+_log "START listening on ${JUDGEMENT_PIPE}"
 
-log "Tailing $TCOMD_LOG"
+while IFS='|' read -r SOURCE SIGNAL CONTEXT; do
+    [[ -z "$SOURCE" || -z "$SIGNAL" ]] && continue
 
-# tail -f keeps reading as turtlecomd appends
-# Pattern: [turtlecomd][INFO] Received: APRIL|source|signal|payload
-tail -f "$TCOMD_LOG" | while IFS= read -r line; do
+    # Check for pipeline suspend
+    if [[ -f "$IA_LOCK" ]]; then
+        _log "SUSPENDED src=${SOURCE} signal=${SIGNAL} — pipeline locked by internal_affairs"
+        continue
+    fi
 
-    # Only care about APRIL message lines
-    [[ "$line" != *"Received: APRIL|"* ]] && continue
+    WEIGHT=$(_signal_to_weight "$SIGNAL")
 
-    # Extract the APRIL payload after "Received: "
-    april="${line#*Received: APRIL|}"
-    # april is now: source|signal|payload
+    _log "DISPATCH src=${SOURCE} signal=${SIGNAL} weight=${WEIGHT}"
 
-    IFS='|' read -r src signal payload <<< "$april"
+    # Emit to execution pipe (april_o_neil reads this)
+    # Wire format: SOURCE|SIGNAL|WEIGHT|CONTEXT
+    echo "${SOURCE}|${SIGNAL}|${WEIGHT}|${CONTEXT:-}" >  "$EXECUTION_PIPE"
 
-    [ -z "$src" ] || [ -z "$signal" ] && continue
-
-    score_signal "$src" "$signal" "$payload"
-
-done
+done < <(tail -f "$JUDGEMENT_PIPE")
