@@ -112,3 +112,10 @@ step*.zip
 rish/
 rish_bridge/
 rish_shizuku_direct.dex
+state/.uctx_*
+state/.sitctx_*
+patch*.sh
+step*.zip
+rish/
+rish_bridge/
+rish_shizuku_direct.dex
