@@ -3,9 +3,11 @@
 # SUPERHERO MODE
 # Behaviour interpretation only
 
-INPUT="/data/data/com.termux/files/home/MiuiserPeruser/tmp/syndicate_feed.sock"
-OUTPUT="/data/data/com.termux/files/home/MiuiserPeruser/tmp/superhero.sock"
-LOG="/data/data/com.termux/files/home/MiuiserPeruser/logs/superhero.log"
+source "$(dirname "$0")/../../env.sh"
+
+INPUT="$SYNDICATE_FEED_SOCK"
+OUTPUT="$SUPERHERO_SOCK"
+LOG="$LOGS/superhero.log"
 
 log() {
     echo "[SUPERHERO] $1" >> "$LOG"
@@ -29,4 +31,3 @@ while true; do
         evaluate "$line"
     fi
 done
-
