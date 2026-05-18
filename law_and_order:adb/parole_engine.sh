@@ -18,7 +18,7 @@ SIGNAL_WINDOW_STATE="${STATE_DIR}/signal_window.state"
 COURT_EVENTS="${STATE_DIR}/court.events"
 COURT_EVENTS_LOCK="${STATE_DIR}/court.events.lock"
 PASS_REGISTRY="${STATE_DIR}/visitors_pass/pass_registry"
-PAROLE_LOG="${CRE_DIR}/judge_executor.log"
+PAROLE_LOG="${CRE_DIR}/parole_engine.log"
 IA_LOCK="${STATE_DIR}/internal_affairs.lock"
 
 DECAY_FACTOR="0.88"
