@@ -162,7 +162,8 @@ _log "START listening on ${EXECUTION_PIPE}"
 [[ -p "$EXECUTION_PIPE" ]] || mkfifo "$EXECUTION_PIPE"
 [[ -p "$JUDGE_PIPE"     ]] || mkfifo "$JUDGE_PIPE"
 
-while IFS='|' read -r SOURCE SIGNAL WEIGHT CONTEXT; do
+while true; do
+    while IFS='|' read -r SOURCE SIGNAL WEIGHT CONTEXT; do
     [[ -z "$SOURCE" || -z "$SIGNAL" ]] && continue
 
     if [[ -f "$IA_LOCK" ]]; then
@@ -172,4 +173,5 @@ while IFS='|' read -r SOURCE SIGNAL WEIGHT CONTEXT; do
 
     _assemble_case "$SOURCE" "$SIGNAL" "$WEIGHT" "$CONTEXT" &
 
-done < <(tail -f "$EXECUTION_PIPE")
+done < "$EXECUTION_PIPE"
+done
