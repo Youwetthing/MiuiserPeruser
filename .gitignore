@@ -119,3 +119,4 @@ step*.zip
 rish/
 rish_bridge/
 rish_shizuku_direct.dex
+!law_and_order:adb/cre/
