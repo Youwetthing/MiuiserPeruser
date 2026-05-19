@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 
-BASE="$HOME/MiuiserPeruser"
+BASE="$BASE"
 LEDGER="$BASE/state/criminal_record/ledger.log"
 mkdir -p "$(dirname "$LEDGER")"
 

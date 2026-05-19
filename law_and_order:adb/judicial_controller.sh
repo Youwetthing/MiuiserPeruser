@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-BASE="$HOME/MiuiserPeruser"
+source "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 LAW="$BASE/law_and_order:adb"
 REG="$BASE/state/court.registry"
 LOG="$BASE/logs/judicial_controller.log"

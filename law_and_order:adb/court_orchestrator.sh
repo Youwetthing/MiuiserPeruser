@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 
-BASE="$HOME/MiuiserPeruser"
+BASE="$BASE"
 LAW="$BASE/law_and_order:adb"
 REG="$BASE/state/court.registry"
 EVT="$BASE/state/court.events"

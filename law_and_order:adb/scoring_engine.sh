@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # scoring_engine.sh — Judicial Scoring Engine v2
 # Part of MiuiserPeruser Judicial System v2
 #
@@ -99,6 +100,8 @@ PRIOR_QUARANTINES="0"
 if grep -q "^${SOURCE}|" "$THREAT_SCORES_STATE" 2>/dev/null; then
     IFS='|' read -r _src CURRENT_SCORE LAST_UPDATED VERDICT_STATE PRIOR_JAILS PRIOR_QUARANTINES \
         < <(grep "^${SOURCE}|" "$THREAT_SCORES_STATE" | head -1)
+PRIOR_JAILS=$(printf "%d" "${PRIOR_JAILS:-0}" 2>/dev/null || echo 0)
+PRIOR_QUARANTINES=$(printf "%d" "${PRIOR_QUARANTINES:-0}" 2>/dev/null || echo 0)
 fi
 
 # ── Step 1: Base weight is supplied by court_dispatcher ───────────────────────
@@ -375,8 +378,8 @@ echo "${SOURCE}|${SIGNAL}|${NOW_EPOCH}" >> "$SIGNAL_WINDOW_STATE"
 # ── Update threat_scores.state ────────────────────────────────────────────────
 
 # Update prior_jails / prior_quarantines from live ledger counts
-NEW_PRIOR_JAILS="$PRIOR_JAILS_LIVE"
-NEW_PRIOR_QUARANTINES="$PRIOR_QUARANTINES_LIVE"
+NEW_PRIOR_JAILS=$(printf "%d" "${PRIOR_JAILS_LIVE:-0}")
+NEW_PRIOR_QUARANTINES=$(printf "%d" "${PRIOR_QUARANTINES_LIVE:-0}")
 
 NEW_ENTRY="${SOURCE}|${NEW_SCORE}|${NOW_EPOCH}|${NEW_VERDICT_STATE}|${NEW_PRIOR_JAILS}|${NEW_PRIOR_QUARANTINES}"
 

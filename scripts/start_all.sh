@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
-cd /data/data/com.termux/files/home/MiuiserPeruser
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
+cd $BASE
 echo "Starting all daemons + Daemon Hunter..."
 
 pkill -f "rocksteadyd|bebopd|leatherheadd|metalheadd|ratkingd|shredderd|granitord|rahzerd|daemonhunter" 2>/dev/null || true

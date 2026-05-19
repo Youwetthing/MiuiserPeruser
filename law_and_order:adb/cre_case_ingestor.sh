@@ -1,7 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 
-DISPATCH="$HOME/MiuiserPeruser/src/core/court_dispatcher.sh"
-LAW="$HOME/MiuiserPeruser/law_and_order:adb"
+DISPATCH="$BASE/src/core/court_dispatcher.sh"
+LAW="$BASE/law_and_order:adb"
 
 emit_case() {
     entity="$1"

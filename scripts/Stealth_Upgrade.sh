@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 echo "🛡️ [SYNDICATE HAUS] Applying Stealth Shizuku Mask..."
 
 # Define the stealth detection function in a temp file

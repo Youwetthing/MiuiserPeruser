@@ -1,10 +1,11 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # ═══════════════════════════════════════════════════════════
 #  MiuiserPeruser SWITCHBOARD v1.1
 #  Daemon control panel — start/stop/status + last state
 # ═══════════════════════════════════════════════════════════
 
-BASE="/data/data/com.termux/files/home/MiuiserPeruser"
+BASE="$BASE"
 BIN="$BASE/bin"
 PIDS="$BASE/pipes/pids"
 STATE="$BASE/pipes/state"

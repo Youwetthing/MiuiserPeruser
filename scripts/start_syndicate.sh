@@ -1,8 +1,9 @@
 #!/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # start_syndicate.sh — launch the full syndicate daemon fleet
 # Run from anywhere; resolves binaries relative to MiuiserPeruser base.
 
-BASE="${BASE:-$HOME/MiuiserPeruser}"
+BASE="${BASE:-$BASE}"
 BIN="$BASE/bin"
 
 # Ensure the pipes and pids directories exist before any daemon starts

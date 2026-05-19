@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # parole_engine.sh — Parole Engine Daemon v2
 # Part of MiuiserPeruser Judicial System v2
 #
@@ -22,7 +23,7 @@ PAROLE_LOG="${CRE_DIR}/parole_engine.log"
 IA_LOCK="${STATE_DIR}/internal_affairs.lock"
 
 DECAY_FACTOR="0.88"
-DECAY_INTERVAL=30
+DECAY_INTERVAL=120
 ACTIVE_SIGNAL_WINDOW=60
 
 # ── PID management ────────────────────────────────────────────────────────────

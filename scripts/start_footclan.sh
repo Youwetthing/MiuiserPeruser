@@ -1,9 +1,10 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 adb shell pm grant com.termux android.permission.READ_LOGS
 adb shell pm grant com.termux android.permission.GET_APP_OPS_STATS
 # Foot Clan Full Launch v12 - Using all existing binaries
 
-PROJECT_DIR="/data/data/com.termux/files/home/MiuiserPeruser"
+PROJECT_DIR="$BASE"
 LOG_DIR="$PROJECT_DIR/logs"
 DB_PATH="$PROJECT_DIR/logs/syndicate_footclan.db"
 
