@@ -1,7 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # Core Resurrection Test Launcher
 
-PROJECT_DIR="/data/data/com.termux/files/home/MiuiserPeruser"
+PROJECT_DIR="$BASE"
 LOG_DIR="$PROJECT_DIR/logs"
 
 cd "$PROJECT_DIR" || exit 1

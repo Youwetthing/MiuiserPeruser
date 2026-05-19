@@ -1,6 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 
-BASE="$HOME/MiuiserPeruser"
+BASE="$BASE"
 INSTALLERS="$BASE/installers"
 
 mkdir -p "$INSTALLERS"
@@ -14,7 +15,7 @@ echo "⚖️ Judicial System Bootstrap Starting..."
 cat <<'EOF1' > "$INSTALLERS/install_core.sh"
 #!/data/data/com.termux/files/usr/bin/bash
 
-BASE="$HOME/MiuiserPeruser"
+BASE="$BASE"
 PIPES="$BASE/pipes"
 
 mkdir -p "$PIPES"
@@ -31,7 +32,7 @@ chmod +x "$INSTALLERS/install_core.sh"
 cat <<'EOF2' > "$INSTALLERS/install_daemons.sh"
 #!/data/data/com.termux/files/usr/bin/bash
 
-BASE="$HOME/MiuiserPeruser"
+BASE="$BASE"
 
 chmod +x "$BASE/cre/april_o_neil.sh" 2>/dev/null
 chmod +x "$BASE/turtlepower_daemon.sh" 2>/dev/null
@@ -46,7 +47,7 @@ chmod +x "$INSTALLERS/install_daemons.sh"
 cat <<'EOF3' > "$INSTALLERS/install_ui.sh"
 #!/data/data/com.termux/files/usr/bin/bash
 
-BASE="$HOME/MiuiserPeruser"
+BASE="$BASE"
 
 chmod +x "$BASE/judicial_controller.sh" 2>/dev/null
 
@@ -58,7 +59,7 @@ chmod +x "$INSTALLERS/install_ui.sh"
 cat <<'EOF4' > "$INSTALLERS/install_recovery.sh"
 #!/data/data/com.termux/files/usr/bin/bash
 
-BASE="$HOME/MiuiserPeruser"
+BASE="$BASE"
 
 mkdir -p "$BASE/logs"
 

@@ -1,7 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # Create a clean bin/ directory with all Foot Clan daemons
 
-PROJECT_DIR="$HOME/MiuiserPeruser"
+PROJECT_DIR="$BASE"
 BIN_DIR="$PROJECT_DIR/bin"
 
 mkdir -p "$BIN_DIR"

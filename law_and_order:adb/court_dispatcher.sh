@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # court_dispatcher.sh — Court Dispatcher v2
 # Part of MiuiserPeruser Judicial System v2
 #

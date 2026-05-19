@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # source_tier_lib.sh — Source Tiering Library
 # Part of MiuiserPeruser Judicial System v2
 #

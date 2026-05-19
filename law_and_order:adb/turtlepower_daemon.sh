@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # ============================================================
 # turtlepower_daemon.sh
 # Owns two child processes:
@@ -8,7 +9,7 @@
 # turtlepower.lock gates startup: LOCK_STATE must be ACTIVE.
 # ============================================================
 
-BASE="$HOME/MiuiserPeruser"
+BASE="$BASE"
 LAW="$BASE/law_and_order:adb"
 TP_DIR="$BASE/src/turtle_power"
 CORE_SCRIPT="$TP_DIR/turtlepower_core.sh"

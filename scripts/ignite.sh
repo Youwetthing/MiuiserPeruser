@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 echo "[*] Compiling binaries..."
 # Add your specific build steps here if needed
 

@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 
 # ============================================================
 # SUPERHERO_ADAPTER
@@ -21,7 +22,7 @@
 # Note: native daemon = has a PID file in state/pids/
 # ============================================================
 
-BASE="$HOME/MiuiserPeruser"
+BASE="$BASE"
 LAW="$BASE/law_and_order:adb"
 PIPE="$BASE/pipes/execution.pipe"
 LOG="$BASE/cre/superhero_adapter.log"

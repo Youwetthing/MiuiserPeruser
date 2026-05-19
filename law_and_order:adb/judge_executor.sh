@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # judge_executor.sh — Judge Executor v2
 # Part of MiuiserPeruser Judicial System v2
 #

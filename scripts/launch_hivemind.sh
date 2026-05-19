@@ -1,4 +1,5 @@
 #!/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
 # --- SYNDICATE HIVEMIND BOOTLOADER ---
 
 echo "🧬 Initializing Lymphatic Hub..."
@@ -16,4 +17,4 @@ sleep 1
 
 echo "✨ Hivemind Circulating. Newsroom Online."
 echo "----------------------------------------"
-tail -f /data/data/com.termux/files/home/MiuiserPeruser/logs/sentinel.log 2>/dev/null || sleep 2
+tail -f $BASE/logs/sentinel.log 2>/dev/null || sleep 2

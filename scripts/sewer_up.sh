@@ -1,5 +1,6 @@
 #!/bin/bash
-BASE_DIR="$HOME/MiuiserPeruser"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../env.sh"
+BASE_DIR="$BASE"
 PIPES="$BASE_DIR/pipes"
 
 echo "--- Draining the Sewer ---"
