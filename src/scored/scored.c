@@ -652,11 +652,21 @@ int main(int argc, char *argv[]) {
 
     slog("INFO", "scored starting — base=%s", base_dir);
 
-    /* Write PID file */
+    /* Write PID file — guard against multiple instances */
     char pid_path[512];
     snprintf(pid_path, sizeof(pid_path), "%s/%s", base_dir, PID_FILE);
     {
-        FILE *pf = fopen(pid_path, "w");
+        FILE *pf = fopen(pid_path, "r");
+        if (pf) {
+            pid_t existing = 0;
+            fscanf(pf, "%d", &existing);
+            fclose(pf);
+            if (existing > 0 && kill(existing, 0) == 0) {
+                slog("ERROR", "already running as pid=%d — exiting", existing);
+                return 1;
+            }
+        }
+        pf = fopen(pid_path, "w");
         if (pf) { fprintf(pf, "%d\n", getpid()); fclose(pf); }
     }
 
