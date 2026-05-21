@@ -1,0 +1,2 @@
+=== SCAN REPORT Wed May 20 05:54:17 IST 2026 ===
+PROCESS: com.miui.analytics PID=12196 CPU=0.0 MEM=

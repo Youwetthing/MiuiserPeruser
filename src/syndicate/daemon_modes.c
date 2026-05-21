@@ -13,7 +13,7 @@ SENSEI_STATUS miuiserperuser_ipc_init(void);
 void miuiserperuser_ipc_shutdown(void);
 
 /* Global capability state */
-extern struct capabilities_state capabilities;
+extern capabilities_t capabilities;
 
 /* Pretty printer */
 void print_capabilities_pretty(void);

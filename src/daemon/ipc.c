@@ -6,18 +6,14 @@
  *   SEWER_SOCKET      — one-shot worker command/response
  *
  * Splinter notifications go out via ipc_splinter_emit().
- * No sensei/leo dependencies in this file.
+ * No sensei/leo/doctor/portbridge dependencies in this file.
  */
 
 #include "ipc_globals.h"
-#include "ipc_contract.h"
-#include "../core/ipc_utils.h"
 #include "../core/log_safe.h"
 #include "backend_sysinfo.h"
 #include "backend_thermals.h"
 #include "backend_adb.h"
-#include "backend_doctor.h"
-#include "backend_portbridge.h"
 
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -83,13 +79,6 @@ static void send_response(int fd, const char *msg)
 
 /* ── Splinter emit (fire-and-forget) ──────────────────────────────────── */
 
-/*
- * ipc_splinter_emit — send an APRIL event to splinterd
- *
- * Convenience wrapper for internal IPC events. Source is fixed as
- * "miuiserperuser"; use splinter_emit() directly for per-daemon sourcing.
- * Wire format: APRIL|source|type|payload\n  (no length prefix)
- */
 void ipc_splinter_emit(const char *event)
 {
     if (!event) return;
@@ -149,19 +138,13 @@ static void handle_worker(int fd)
         send_response(fd, info ? info : "sysinfo:error");
         free(info);
 
-    /* 4. Doctor */
-    } else if (strcmp(cmd, "DOCTOR") == 0) {
-        char *r = backend_doctor();
-        send_response(fd, r ? r : "doctor:error");
-        free(r);
-
-    /* 5. Thermals */
+    /* 4. Thermals */
     } else if (strcmp(cmd, "THERMALS") == 0) {
         char *t = backend_thermals();
         send_response(fd, t ? t : "thermals:error");
         free(t);
 
-    /* 5b. Thermal report → krang forward */
+    /* 5. Thermal report → krang forward */
     } else if (strncmp(cmd, "THERMAL_REPORT ", 15) == 0) {
         krang_send_command(cmd + 15);
         send_response(fd, "OK");
@@ -170,31 +153,25 @@ static void handle_worker(int fd)
     } else if (strcmp(cmd, "MIUI_PROBE") == 0) {
         send_response(fd, "miui_probe:ok");
 
-    /* 7. Portbridge probe */
-    } else if (strcmp(cmd, "PORTBRIDGE_PROBE") == 0) {
-        char *r = backend_portbridge_probe();
-        send_response(fd, r ? r : "portbridge:error");
-        free(r);
-
-    /* 8. RISH command (stub — wire when rish_pipe is ready) */
+    /* 7. RISH command (stub — wire when rish_pipe is ready) */
     } else if (strncmp(cmd, "RISH ", 5) == 0) {
         send_response(fd, "rish:ok");
 
-    /* 9. ADB command */
+    /* 8. ADB command */
     } else if (strncmp(cmd, "ADB ", 4) == 0) {
         char *r = backend_adb_exec(cmd + 4);
         send_response(fd, r ? r : "adb:error");
         free(r);
 
-    /* 10. /proc read (stub) */
+    /* 9. /proc read (stub) */
     } else if (strncmp(cmd, "PROC_READ ", 10) == 0) {
         send_response(fd, "proc_read:ok");
 
-    /* 11. /sys read (stub) */
+    /* 10. /sys read (stub) */
     } else if (strncmp(cmd, "SYSFS_READ ", 11) == 0) {
         send_response(fd, "sysfs_read:ok");
 
-    /* 12. Splinter emit passthrough */
+    /* 11. Splinter emit passthrough */
     } else if (strncmp(cmd, "EMIT ", 5) == 0) {
         ipc_splinter_emit(cmd + 5);
         send_response(fd, "OK");

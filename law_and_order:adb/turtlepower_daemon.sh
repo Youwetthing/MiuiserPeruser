@@ -23,7 +23,16 @@ EVAL_INTERVAL=10   # seconds between engine rule evaluations
 
 mkdir -p "$TP_DIR/logs" "$PIDDIR"
 
-log() { echo "[TP_DAEMON] $(date +%s) $1" | tee -a "$LOG"; }
+MAX_LOG_BYTES=524288  # 500KB
+
+_rotate_log() {
+    if [ -f "$LOG" ] && [ "$(stat -c%s "$LOG" 2>/dev/null || echo 0)" -gt "$MAX_LOG_BYTES" ]; then
+        mv "$LOG" "${LOG}.1"
+        > "$LOG"
+    fi
+}
+
+log() { _rotate_log; echo "[TP_DAEMON] $(date +%s) $1" >> "$LOG"; }
 
 # -------------------------
 # LOCK CHECK
@@ -69,7 +78,7 @@ while true; do
     fi
 
     # Run one-shot rule engine
-    bash "$ENGINE_SCRIPT" >> "$LOG" 2>&1
+    _rotate_log; bash "$ENGINE_SCRIPT" >> "$LOG" 2>&1
 
     sleep "$EVAL_INTERVAL"
 done

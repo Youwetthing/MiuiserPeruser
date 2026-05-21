@@ -1,5 +1,15 @@
 #!/data/data/com.termux/files/usr/bin/bash
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../env.sh"
+MAX_LOG_BYTES=524288  # 500KB
+
+_rotate_log() {
+    local f="${1:-$LOG}"
+    if [ -f "$f" ] && [ "$(stat -c%s "$f" 2>/dev/null || echo 0)" -gt "${MAX_LOG_BYTES:-524288}" ]; then
+        mv "$f" "${f}.1"
+        > "$f"
+    fi
+}
+
 # april_o_neil.sh — Case Reporter & Evidence Enrichment v2
 # Part of MiuiserPeruser Judicial System v2
 
@@ -13,7 +23,7 @@ STATE_DIR="${BASE_DIR}/state"
 
 INGEST_PIPE="${PIPES_DIR}/ingest.pipe"
 APRIL_LOG="${CRE_DIR}/april.log"
-SCORING_ENGINE="${LAW_DIR}/scoring_engine.sh"
+SCORING_ENGINE="${LAW_DIR}/score_query.sh"
 JUDGE_PIPE="${PIPES_DIR}/judgement.pipe"
 IA_LOCK="${STATE_DIR}/internal_affairs.lock"
 

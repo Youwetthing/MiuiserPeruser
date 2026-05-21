@@ -1,0 +1,1 @@
+/data/data/com.termux/files/usr/bin/cc -O3 -DNDEBUG -Xlinker --dependency-file=CMakeFiles/krangd.dir/link.d CMakeFiles/krangd.dir/krangd.c.o CMakeFiles/krangd.dir/ipc.c.o CMakeFiles/krangd.dir/daemon_core.c.o CMakeFiles/krangd.dir/krang.c.o -o krangd  ../core/libsensei_core.a -lpthread /data/data/com.termux/files/usr/lib/libcrypto.so
