@@ -11,6 +11,7 @@
  */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -27,6 +28,8 @@
 #include <dirent.h>
 
 #include "rahzerd.h"
+#include "gaveld_emit.h"
+volatile bool g_running = true;
 #include "ipc_globals.h"
 
 #define DEFAULT_POLL_SEC  15
@@ -35,7 +38,7 @@
 #define EMIT_BUF          4096
 
 static int           g_debug    = 0;
-static int           g_running  = 1;
+
 static int           g_poll_sec = DEFAULT_POLL_SEC;
 static const char   *g_splinter = SPLINTER_SOCKET;
 static const char   *g_dns_host = DEFAULT_DNS_HOST;
@@ -732,17 +735,21 @@ void rz_state_update(rz_state_t *state) {
     }
     if (state->prev.dns.resolves == 1 && state->curr.dns.resolves == 0) {
         state->dns_failing_since = now;
+        gaveld_emit("rahzerd", "NO_DNS_RESOLUTION", 1.0, "host=dns.google");
         rz_emit_anomaly("dns_failure", "{\"host\":\"dns.google\"}");
     } else if (state->curr.dns.resolves == 1) {
         state->dns_failing_since = 0;
     }
     if (state->curr.dns.latency_ms > 2000) {
         state->dns_spike_count++;
+        gaveld_emit("rahzerd", "DNS_ANOMALY", 1.0, "latency=high");
         rz_emit_anomaly("dns_latency_spike", "{\"latency_ms\":\"high\"}");
     }
     if (state->curr.xiaomi.divergence_detected && !state->prev.xiaomi.divergence_detected)
+        gaveld_emit("rahzerd", "DNS_ANOMALY", 1.0, state->curr.xiaomi.divergence_reason);
         rz_emit_anomaly("xiaomi_divergence", state->curr.xiaomi.divergence_reason);
     if (state->curr.ports.suspicious_listeners > state->prev.ports.suspicious_listeners)
+        gaveld_emit("rahzerd", "UNKNOWN_LISTENER", (double)state->curr.ports.suspicious_listeners, "layer=ports");
         rz_emit_anomaly("suspicious_listener", "{\"layer\":\"ports\"}");
 }
 
@@ -778,6 +785,15 @@ int rz_emit_netstate(const rz_snapshot_t *snap) {
         snap->bluetooth.enabled, snap->nfc.enabled, snap->usb.connected,
         snap->ports.listen_count, snap->ports.suspicious_listeners,
         snap->xiaomi.divergence_detected, snap->poll_duration_ms);
+        /* gaveld — network state signals */
+    if (snap->mobile.roaming == 1)
+        gaveld_emit("rahzerd", "ROAMING_DATA_ACTIVE", 1.0, "");
+    if (snap->mobile.dual_sim == 1)
+        gaveld_emit("rahzerd", "DUAL_SIM_ACTIVE", 1.0, "");
+    if (snap->dns.private_dns_active == 0)
+        gaveld_emit("rahzerd", "PRIVATE_DNS_INACTIVE", 1.0, "");
+    if (snap->ports.listen_count > 20)
+        gaveld_emit("rahzerd", "EXCESSIVE_CONNECTIONS", (double)snap->ports.listen_count, "");
     return splinter_send(buf);
 }
 

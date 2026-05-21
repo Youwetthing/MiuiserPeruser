@@ -85,7 +85,7 @@ static bool check_shizuku(void)
 
 /* ── Port bridge (direct TCP probe against MP_TCP_PORT) ──────────────── */
 
-static bool probe_port_bridge(void)
+bool probe_port_bridge(void)
 {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return false;
@@ -129,7 +129,7 @@ void detect_capabilities(void)
         }
     }
 
-    log_safe("INFO",
+    fprintf(stderr,
         "Capabilities: adb=%d shizuku=%d rish=%d port_bridge=%d",
         capabilities.adb,
         capabilities.shizuku,

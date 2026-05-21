@@ -81,7 +81,7 @@ static splinter_sub_t g_subscribers[] = {
 /* ── Globals ──────────────────────────────────────────────────────────── */
 
 static int  g_debug   = 0;
-static int  g_running = 1;
+volatile bool g_running = true;
 static int  g_srv_fd  = -1;
 static FILE *g_log_fp = NULL;
 

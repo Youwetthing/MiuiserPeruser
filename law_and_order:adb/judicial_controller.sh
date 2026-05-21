@@ -1,5 +1,15 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
+MAX_LOG_BYTES=524288  # 500KB
+
+_rotate_log() {
+    local f="${1:-$LOG}"
+    if [ -f "$f" ] && [ "$(stat -c%s "$f" 2>/dev/null || echo 0)" -gt "${MAX_LOG_BYTES:-524288}" ]; then
+        mv "$f" "${f}.1"
+        > "$f"
+    fi
+}
+
 source "$(dirname "${BASH_SOURCE[0]}")/../env.sh"
 LAW="$BASE/law_and_order:adb"
 REG="$BASE/state/court.registry"
@@ -24,6 +34,7 @@ declare -A DAEMON_SCRIPTS=(
     [judge_executor]="$LAW/judge_executor.sh"
     # v2 additions
     [parole_engine]="$LAW/parole_engine.sh"
+    [scored]="$BASE/bin/scored"
     [internal_affairs]="$LAW/internal_affairs.sh"
 )
 
@@ -35,13 +46,13 @@ LAUNCH_ORDER=(
     court_core_engine
     court_orchestrator
     court_dispatcher
+    scored
     april_o_neil
     escalation
     visitors_pass
     turtlepower
     baxter
     superhero
-    parole_engine      # v2: must be before judge_executor
     judge_executor
     internal_affairs   # v2: always last — reads all others' state
 )
@@ -50,7 +61,7 @@ LAUNCH_ORDER=(
 STOP_ORDER=(
     internal_affairs
     judge_executor
-    parole_engine
+    scored
     superhero
     baxter
     turtlepower
@@ -91,6 +102,26 @@ EOF
           "${CRE_DIR}/internal_affairs.log"
 
     echo "$(date +%s)|judicial_controller|V2_STATE_INIT|ok" >> "$BASE/state/court.events"
+
+    # Rotate court.events if over 500KB
+    _evsize=$(stat -c%s "$BASE/state/court.events" 2>/dev/null || echo 0)
+    if [ -f "$BASE/state/court.events" ] && [ "$_evsize" -gt 524288 ]; then
+        mv "$BASE/state/court.events" "$BASE/state/court.events.1"
+        > "$BASE/state/court.events"
+    fi
+
+    # Prune case files older than 7 days
+    find "$BASE/cre/cases" -name "case_*.json" -mtime +7 -delete 2>/dev/null || true
+
+    # Rotate court.events if over 500KB
+    _evsize=$(stat -c%s "$BASE/state/court.events" 2>/dev/null || echo 0)
+    if [ -f "$BASE/state/court.events" ] && [ "$_evsize" -gt 524288 ]; then
+        mv "$BASE/state/court.events" "$BASE/state/court.events.1"
+        > "$BASE/state/court.events"
+    fi
+
+    # Prune case files older than 7 days
+    find "$BASE/cre/cases" -name "case_*.json" -mtime +7 -delete 2>/dev/null || true
 }
 
 # ── Court status ──────────────────────────────────────────────────────────────
@@ -126,7 +157,15 @@ start_daemon() {
         return
     fi
 
-    bash "$script" >> "$LOG" 2>&1 &
+    if file "$script" | grep -q "ELF"; then
+        "$script" >> "$LOG" 2>&1 &
+    else
+        if file "$script" 2>/dev/null | grep -q "ELF"; then
+        "$script" >> "$LOG" 2>&1 &
+    else
+        bash "$script" >> "$LOG" 2>&1 &
+    fi
+    fi
     echo $! > "$pidfile"
     source "$LAW/court_registry_lib.sh"
     register "$name" RUNNING "$(cat "$pidfile")"

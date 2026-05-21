@@ -1,0 +1,1 @@
+/data/data/com.termux/files/usr/bin/cc -O3 -DNDEBUG -Xlinker --dependency-file=CMakeFiles/bebopd.dir/link.d CMakeFiles/bebopd.dir/bebopd.c.o CMakeFiles/bebopd.dir/ipc.c.o CMakeFiles/bebopd.dir/daemon_core.c.o -o bebopd  ../core/libsensei_core.a -lpthread /data/data/com.termux/files/usr/lib/libcrypto.so

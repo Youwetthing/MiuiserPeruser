@@ -1,85 +1,44 @@
-#include "daemon_core.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <fcntl.h>
+#include <sys/stat.h>
 
-#define SOCK_PATH "/data/data/com.termux/files/home/tmp/turtlecom.sock"
-#define BUF_SIZE 512
+#define HUB_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/turtlecom.sock"
+#define PIPE_DIR "/data/data/com.termux/files/home/MiuiserPeruser/pipes"
 
-static int create_server_socket(void) {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) { perror("socket"); exit(1); }
+int main() {
+    mkdir(PIPE_DIR, 0777);
+    unlink(HUB_PATH); // Self-heal stale socket
 
+    int serv_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     struct sockaddr_un addr;
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
-    strcpy(addr.sun_path, SOCK_PATH);
+    strncpy(addr.sun_path, HUB_PATH, sizeof(addr.sun_path)-1);
 
-    unlink(SOCK_PATH);
-
-    if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        perror("bind");
-        close(fd);
-        exit(1);
+    if (bind(serv_fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("HUB: Bind failed");
+        return 1;
     }
+    
+    chmod(HUB_PATH, 0666);
+    listen(serv_fd, 10);
+    printf("TURTLECOM: Sewer Hub Online. Path: %s\n", HUB_PATH);
 
-    if (listen(fd, 5) < 0) {
-        perror("listen");
-        close(fd);
-        exit(1);
-    }
-
-    fcntl(fd, F_SETFL, O_NONBLOCK);
-    return fd;
-}
-
-int main(void) {
-    if (!daemon_core_init("turtlecomd")) return 1;
-
-    int server_fd = create_server_socket();
-    daemon_log_info("ONLINE");
-
-    int clients[16] = {0};
-
-    for (;;) {
-        int cfd = accept(server_fd, NULL, NULL);
-        if (cfd >= 0) {
-            fcntl(cfd, F_SETFL, O_NONBLOCK);
-            for (int i = 0; i < 16; i++) {
-                if (clients[i] == 0) {
-                    clients[i] = cfd;
-                    daemon_log_info("client connected");
-                    break;
-                }
-            }
-        }
-
-        char buf[BUF_SIZE];
-
-        for (int i = 0; i < 16; i++) {
-            if (clients[i] == 0) continue;
-
-            int n = read(clients[i], buf, sizeof(buf) - 1);
+    char buf[1024];
+    while (1) {
+        int conn_fd = accept(serv_fd, NULL, NULL);
+        if (conn_fd >= 0) {
+            ssize_t n = read(conn_fd, buf, sizeof(buf)-1);
             if (n > 0) {
                 buf[n] = 0;
-                daemon_log_info("Received: %s", buf);
-
-                for (int j = 0; j < 16; j++) {
-                    if (clients[j] != 0 && j != i) {
-                        write(clients[j], buf, strlen(buf));
-                    }
-                }
+                printf("HUB_RECV: %s\n", buf);
             }
+            close(conn_fd);
         }
-
-        usleep(100000);
     }
-
-    daemon_core_shutdown();
     return 0;
 }
-

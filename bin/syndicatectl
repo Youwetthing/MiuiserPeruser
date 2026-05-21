@@ -1,9 +1,11 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 STATE="$HOME/MiuiserPeruser/Registry/daemon_state.json"
+RESULTS="$HOME/MiuiserPeruser/Registry/daemon_results"
 
 cmd="$1"
 daemon="$2"
+val="$3"
 
 if [ ! -f "$STATE" ]; then
   echo "[syndicatectl] state file missing"
@@ -13,24 +15,50 @@ fi
 case "$cmd" in
 
   enable)
-    jq ".\"$daemon\" = 1" "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+    jq ".\"$daemon\".enabled = 1" "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
     echo "[syndicatectl] enabled $daemon"
     ;;
 
   disable)
-    jq ".\"$daemon\" = 0" "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+    jq ".\"$daemon\".enabled = 0" "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
     echo "[syndicatectl] disabled $daemon"
     ;;
 
+  interval)
+    jq ".\"$daemon\".interval = $val" "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+    echo "[syndicatectl] $daemon interval set to ${val}s"
+    ;;
+
+  scan-count)
+    jq ".\"$daemon\".scan_count = $val" "$STATE" > "$STATE.tmp" && mv "$STATE.tmp" "$STATE"
+    echo "[syndicatectl] $daemon scan_count set to $val (0 = unlimited)"
+    ;;
+
+  results)
+    f="$RESULTS/${daemon}.json"
+    if [ -f "$f" ]; then
+      cat "$f"
+    else
+      echo "[syndicatectl] no results for $daemon yet"
+    fi
+    ;;
+
   status)
-    echo "[syndicatectl] daemon states:"
-    jq '.' "$STATE"
+    if [ -n "$daemon" ]; then
+      jq ".\"$daemon\"" "$STATE"
+    else
+      echo "[syndicatectl] daemon states:"
+      jq '.' "$STATE"
+    fi
     ;;
 
   *)
     echo "Usage:"
     echo "  syndicatectl enable <daemon>"
     echo "  syndicatectl disable <daemon>"
-    echo "  syndicatectl status"
+    echo "  syndicatectl interval <daemon> <seconds>"
+    echo "  syndicatectl scan-count <daemon> <n>  (0 = unlimited)"
+    echo "  syndicatectl results <daemon>"
+    echo "  syndicatectl status [daemon]"
     ;;
 esac

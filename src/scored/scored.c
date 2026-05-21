@@ -535,6 +535,9 @@ static void decay_tick(void) {
 
     pthread_mutex_unlock(&db_mutex);
     slog("INFO", "decay tick complete — %d sources processed", nrows);
+
+    /* Checkpoint WAL to keep wal file small */
+    sqlite3_exec(db, "PRAGMA wal_checkpoint(TRUNCATE);", NULL, NULL, NULL);
 }
 
 /* ── Decay thread ────────────────────────────────────────────────────────── */
@@ -652,24 +655,6 @@ int main(int argc, char *argv[]) {
 
     slog("INFO", "scored starting — base=%s", base_dir);
 
-    /* Write PID file — guard against multiple instances */
-    char pid_path[512];
-    snprintf(pid_path, sizeof(pid_path), "%s/%s", base_dir, PID_FILE);
-    {
-        FILE *pf = fopen(pid_path, "r");
-        if (pf) {
-            pid_t existing = 0;
-            fscanf(pf, "%d", &existing);
-            fclose(pf);
-            if (existing > 0 && kill(existing, 0) == 0) {
-                slog("ERROR", "already running as pid=%d — exiting", existing);
-                return 1;
-            }
-        }
-        pf = fopen(pid_path, "w");
-        if (pf) { fprintf(pf, "%d\n", getpid()); fclose(pf); }
-    }
-
     /* Signal handling */
     signal(SIGTERM, handle_sig);
     signal(SIGINT,  handle_sig);
@@ -722,7 +707,7 @@ int main(int argc, char *argv[]) {
     pthread_join(dtid, NULL);
     close(server_fd);
     unlink(sock_path);
-    unlink(pid_path);
+    /* PID owned by controller: unlink(pid_path); */
     if (db) sqlite3_close(db);
     if (logfp && logfp != stderr) fclose(logfp);
     slog("INFO", "scored stopped");

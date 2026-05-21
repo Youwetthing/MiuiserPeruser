@@ -1,12 +1,80 @@
 {
-  "rahzerd": 1,
-  "fugitoidd": 1,
-  "krangd": 0,
-  "bebopd": 1,
-  "rocksteadyd": 1,
-  "shredderd": 1,
-  "leatherheadd": 1,
-  "ratkingd": 1,
-  "splinterd": 1,
-  "metalheadd": 1
+  "rahzerd": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "fugitoidd": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "krangd": {
+    "enabled": 0,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "bebopd": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "rocksteadyd": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "shredderd": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "leatherheadd": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "ratkingd": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "splinterd": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "metalheadd": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "burned": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "granitord": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  },
+  "turtlecomd": {
+    "enabled": 1,
+    "scan_count": 0,
+    "interval": 30,
+    "last_scan": null
+  }
 }

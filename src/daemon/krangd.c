@@ -1,219 +1,77 @@
-/*
- * krangd.c — parse/format stage
- *
- * Topology:
- *   exec bridge  →  KRANG_SOCKET (listen)
- *                       ↓  truth_engine normalise/arbitrate
- *   DASHBOARD_SOCKET (connect out)
- *
- * Receives raw key=value payloads, normalises through truth_engine,
- * formats clean events and pushes to dashboard. Fire-and-forget
- * on the outbound leg — dashboard connection is not persistent.
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <signal.h>
-#include <errno.h>
-#include <stdint.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <arpa/inet.h>
+#include <sys/stat.h>
 
-#include "ipc_globals.h"
-#include "../core/truth_engine.h"
+#define KRANG_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/krang.sock"
+#define HUB_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/turtlecom.sock"
 
-static volatile int g_running = 1;
-
-static void handle_sig(int sig)
-{
-    (void)sig;
-    g_running = 0;
+int discover_serial(char *out_serial, size_t max_len) {
+    FILE *fp = popen("adb devices | grep -v 'emulator' | grep 'device$' | head -n 1 | awk '{print $1}'", "r");
+    if (!fp) return 0;
+    if (fgets(out_serial, max_len, fp) == NULL) {
+        pclose(fp);
+        return 0;
+    }
+    pclose(fp);
+    out_serial[strcspn(out_serial, "\n")] = 0;
+    return (strlen(out_serial) > 0);
 }
 
-/* ── PID ──────────────────────────────────────────────────────────────── */
-
-static void write_pid(void)
-{
-    FILE *f = fopen(KRANG_PID, "w");
-    if (!f) return;
-    fprintf(f, "%d\n", (int)getpid());
-    fclose(f);
+void harvest(int hub_fd, const char* serial) {
+    char buf[512], cmd[512];
+    snprintf(cmd, sizeof(cmd), "adb -s %s shell dumpsys thermalservice | grep 'Thermal Status'", serial);
+    FILE *fp = popen(cmd, "r");
+    if (fp) {
+        while (fgets(buf, sizeof(buf), fp)) dprintf(hub_fd, "SOB_THERM: %s", buf);
+        pclose(fp);
+    }
 }
 
-/* ── Framed I/O ───────────────────────────────────────────────────────── */
+int main() {
+    char serial[128] = {0};
+    unlink(KRANG_PATH);
 
-static ssize_t read_full(int fd, void *buf, size_t len)
-{
-    size_t off = 0;
-    while (off < len) {
-        ssize_t n = read(fd, (char *)buf + off, len - off);
-        if (n <= 0) {
-            if (errno == EINTR) continue;
-            return -1;
+    printf("KRANG: Muscle waiting for MIUI device...\n");
+    while (!discover_serial(serial, sizeof(serial))) sleep(1);
+    printf("KRANG: Locked onto [%s]\n", serial);
+
+    int serv_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, KRANG_PATH, sizeof(addr.sun_path)-1);
+    bind(serv_fd, (struct sockaddr*)&addr, sizeof(addr));
+    chmod(KRANG_PATH, 0666);
+    listen(serv_fd, 5);
+
+    while (1) {
+        int conn_fd = accept(serv_fd, NULL, NULL);
+        if (conn_fd >= 0) {
+            char cmd_in[128] = {0};
+            read(conn_fd, cmd_in, sizeof(cmd_in));
+            if (strstr(cmd_in, "SCAN")) {
+                int hub_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+                struct sockaddr_un h_addr;
+                memset(&h_addr, 0, sizeof(h_addr));
+                h_addr.sun_family = AF_UNIX;
+                strncpy(h_addr.sun_path, HUB_PATH, sizeof(h_addr.sun_path)-1);
+                if (connect(hub_fd, (struct sockaddr*)&h_addr, sizeof(h_addr)) == 0) {
+                    harvest(hub_fd, serial);
+                    close(hub_fd);
+                }
+            }
+            close(conn_fd);
         }
-        off += (size_t)n;
     }
-    return (ssize_t)off;
-}
-
-static ssize_t write_full(int fd, const void *buf, size_t len)
-{
-    size_t off = 0;
-    while (off < len) {
-        ssize_t n = write(fd, (const char *)buf + off, len - off);
-        if (n <= 0) {
-            if (errno == EINTR) continue;
-            return -1;
-        }
-        off += (size_t)n;
-    }
-    return (ssize_t)off;
-}
-
-static char *recv_msg(int fd)
-{
-    uint32_t net_len;
-    if (read_full(fd, &net_len, sizeof(net_len)) <= 0)
-        return NULL;
-
-    uint32_t len = ntohl(net_len);
-    if (len == 0 || len > 1024 * 1024)
-        return NULL;
-
-    char *buf = malloc(len + 1);
-    if (!buf)
-        return NULL;
-
-    if (read_full(fd, buf, len) <= 0) {
-        free(buf);
-        return NULL;
-    }
-
-    buf[len] = '\0';
-    return buf;
-}
-
-static int send_msg(int fd, const char *msg)
-{
-    uint32_t len     = (uint32_t)strlen(msg);
-    uint32_t net_len = htonl(len);
-    if (write_full(fd, &net_len, sizeof(net_len)) <= 0) return -1;
-    if (write_full(fd, msg, len)                  <= 0) return -1;
     return 0;
 }
 
-/* ── Formatting ───────────────────────────────────────────────────────── */
-
-static void format_event(const truth_event_t *ev, char *out, size_t out_size)
-{
-    snprintf(out, out_size,
-        "service=%s;source=%s;level=%d;voltage=%d;temp_c=%.1f;conflict=%d",
-        ev->service,
-        ev->source,
-        ev->level,
-        ev->voltage,
-        ev->temp_c,
-        ev->has_conflict);
-}
-
-/* ── Dashboard push (fire-and-forget) ────────────────────────────────── */
-
-static void push_to_dashboard(const char *payload)
-{
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return;
-
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, DASHBOARD_SOCKET, sizeof(addr.sun_path) - 1);
-
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0)
-        send_msg(fd, payload);
-    else
-        fprintf(stderr, "[KRANGD] dashboard not reachable — event dropped\n");
-
-    close(fd);
-}
-
-/* ── Client handler ───────────────────────────────────────────────────── */
-
-static void handle_client(int fd)
-{
-    char *raw = recv_msg(fd);
-    if (!raw) return;
-
-    truth_event_t ev;
-    if (truth_engine_normalise(raw, &ev) != 0) {
-        fprintf(stderr, "[KRANGD] normalise failed for payload: %.80s\n", raw);
-        free(raw);
-        return;
-    }
-
-    if (ev.has_conflict) {
-        fprintf(stderr, "[KRANGD] conflict — service=%s source=%s "
-                        "level=%d voltage=%d temp=%.1f\n",
-                ev.service, ev.source,
-                ev.level, ev.voltage, ev.temp_c);
-    }
-
-    char formatted[256];
-    format_event(&ev, formatted, sizeof(formatted));
-    push_to_dashboard(formatted);
-
-    free(raw);
-}
-
-/* ── Main ─────────────────────────────────────────────────────────────── */
-
-int main(void)
-{
-    signal(SIGTERM, handle_sig);
-    signal(SIGINT,  handle_sig);
-    signal(SIGPIPE, SIG_IGN);
-
-    write_pid();
-
-    int server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (server_fd < 0) { perror("krangd: socket"); return 1; }
-
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, KRANG_SOCKET, sizeof(addr.sun_path) - 1);
-
-    unlink(KRANG_SOCKET);
-
-    if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        perror("krangd: bind");
-        return 1;
-    }
-
-    if (listen(server_fd, 8) < 0) {
-        perror("krangd: listen");
-        return 1;
-    }
-
-    printf("krangd: ONLINE — %s\n", KRANG_SOCKET);
-
-    while (g_running) {
-        int client_fd = accept(server_fd, NULL, NULL);
-        if (client_fd < 0) {
-            if (errno == EINTR) continue;
-            if (g_running) perror("krangd: accept");
-            break;
-        }
-        handle_client(client_fd);
-        close(client_fd);
-    }
-
-    close(server_fd);
-    unlink(KRANG_SOCKET);
-    unlink(KRANG_PID);
-
-    printf("krangd: offline\n");
+int krang_send_command(const char *cmd) {
+    if (!cmd) return -1;
+    printf("[KRANG] Relaying command: %s\n", cmd);
     return 0;
 }

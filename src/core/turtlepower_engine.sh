@@ -18,6 +18,12 @@ LOCK="$BASE/state/turtlepower.lock"
 PIDDIR="$BASE/state/pids"
 EXEC_PIPE="$BASE/pipes/execution.pipe"
 TCOMD_LOG="$BASE/logs/turtlecomd.log"
+# Auto-rotate log if > 10MB
+MAX_LOG_BYTES=10485760  # 10MB
+if [ -f "$TCOMD_LOG" ] && [ "$(stat -c%s "$TCOMD_LOG" 2>/dev/null)" -gt "$MAX_LOG_BYTES" ]; then
+    mv "$TCOMD_LOG" "${TCOMD_LOG}.old"
+    echo "[TP_ENGINE] Log rotated at $(date)" > "$TCOMD_LOG"
+fi
 
 mkdir -p "$(dirname "$QUAR_FILE")"
 touch "$QUAR_FILE"
