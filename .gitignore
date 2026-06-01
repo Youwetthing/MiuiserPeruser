@@ -120,3 +120,11 @@ rish/
 rish_bridge/
 rish_shizuku_direct.dex
 !law_and_order:adb/cre/
+build_fresh/
+build_superhero/
+state/*.db-shm
+state/*.db-wal
+logs/
+pipes/
+bin/
+rish /
