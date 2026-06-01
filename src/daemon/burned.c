@@ -33,7 +33,6 @@
  */
 
 #include "ipc_globals.h"
-#include "backend_exec.h"
 #include "gaveld_emit.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -361,7 +360,7 @@ static void poll_burned(int scan_num)
     if (n_change > 0) {
         char ctx[128];
         snprintf(ctx, sizeof(ctx), "count=%d", n_change);
-        gaveld_emit(DAEMON_NAME, "MIUI_PROPERTY_CHANGED", (float)n_change, ctx);
+        gaveld_emit(DAEMON_NAME, "MIUI_PROPERTY_CHANGED", 0.0, ctx);
         splinterd_emit("miui_change", ctx);
     }
 

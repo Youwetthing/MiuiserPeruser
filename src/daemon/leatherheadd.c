@@ -389,7 +389,7 @@ static void poll(int scan_num)
     if (tstatus > 0) {
         char ctx[32];
         snprintf(ctx, sizeof(ctx), "status=%d", tstatus);
-        gaveld_emit(DAEMON_NAME, "THERMAL_STATUS_NONZERO", (float)tstatus, ctx);
+        gaveld_emit(DAEMON_NAME, "THERMAL_STATUS_NONZERO", 0.0, ctx);
         splinterd_emit("THERMAL_STATUS_NONZERO", ctx);
         score -= tstatus * 10;
         sigs++;
@@ -468,7 +468,7 @@ static void poll(int scan_num)
         char ctx[64];
         snprintf(ctx, sizeof(ctx), "throttled=%d total=%d",
                  throttled_count, ncores);
-        gaveld_emit(DAEMON_NAME, "CPU_THROTTLING", (float)throttled_count, ctx);
+        gaveld_emit(DAEMON_NAME, "CPU_THROTTLING", 0.0, ctx);
         splinterd_emit("CPU_THROTTLING", ctx);
         score -= 8 * throttled_count;
         sigs++;
@@ -479,7 +479,7 @@ static void poll(int scan_num)
     if (ncores > 0 && maxed_count == ncores) {
         char ctx[32];
         snprintf(ctx, sizeof(ctx), "cores=%d", ncores);
-        gaveld_emit(DAEMON_NAME, "ALL_CORES_MAXED", (float)ncores, ctx);
+        gaveld_emit(DAEMON_NAME, "ALL_CORES_MAXED", 0.0, ctx);
         splinterd_emit("ALL_CORES_MAXED", ctx);
         score -= 15;
         sigs++;

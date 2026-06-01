@@ -453,7 +453,7 @@ static void poll(int scan_num)
     if (throttled_count > 0) {
         char ctx[48];
         snprintf(ctx, sizeof(ctx), "throttled=%d/%d", throttled_count, ncores);
-        gaveld_emit(DAEMON_NAME, "CPU_THROTTLING", (float)throttled_count, ctx);
+        gaveld_emit(DAEMON_NAME, "CPU_THROTTLING", 0.0, ctx);
         splinterd_emit("CPU_THROTTLING", ctx);
         score -= 8 * throttled_count;
         sigs++;
@@ -464,7 +464,7 @@ static void poll(int scan_num)
     if (ncores > 0 && maxed_count == ncores) {
         char ctx[32];
         snprintf(ctx, sizeof(ctx), "cores=%d", ncores);
-        gaveld_emit(DAEMON_NAME, "ALL_CORES_MAXED", (float)ncores, ctx);
+        gaveld_emit(DAEMON_NAME, "ALL_CORES_MAXED", 0.0, ctx);
         splinterd_emit("ALL_CORES_MAXED", ctx);
         score -= 15;
         sigs++;
@@ -475,7 +475,7 @@ static void poll(int scan_num)
     if (perf_gov_count > 0) {
         char ctx[32];
         snprintf(ctx, sizeof(ctx), "cores=%d", perf_gov_count);
-        gaveld_emit(DAEMON_NAME, "GOVERNOR_PERFORMANCE", (float)perf_gov_count, ctx);
+        gaveld_emit(DAEMON_NAME, "GOVERNOR_PERFORMANCE", 0.0, ctx);
         splinterd_emit("GOVERNOR_PERFORMANCE", ctx);
         score -= 8;
         sigs++;
@@ -515,7 +515,7 @@ static void poll(int scan_num)
                 snprintf(ctx, sizeof(ctx), "pid=%d name=%.24s pct=%d",
                          procs[i].pid, procs[i].name, procs[i].cpu_pct);
                 gaveld_emit(DAEMON_NAME, "CPU_HOG_CRITICAL",
-                            (float)procs[i].cpu_pct, ctx);
+                            0.0, ctx);
                 splinterd_emit("CPU_HOG_CRITICAL", ctx);
                 score -= 25;
                 sigs++;
@@ -525,7 +525,7 @@ static void poll(int scan_num)
                 snprintf(ctx, sizeof(ctx), "pid=%d name=%.24s pct=%d",
                          procs[i].pid, procs[i].name, procs[i].cpu_pct);
                 gaveld_emit(DAEMON_NAME, "CPU_HOG",
-                            (float)procs[i].cpu_pct, ctx);
+                            0.0, ctx);
                 splinterd_emit("CPU_HOG", ctx);
                 score -= 15;
                 sigs++;
