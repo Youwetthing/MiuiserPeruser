@@ -28,4 +28,6 @@ for daemon in burned granitord leatherheadd rocksteadyd bebopd rahzerd ratkingd 
     sleep 0.2
 done
 
+bash scripts/superhero_gaveld_bridge.sh >> logs/superhero.log 2>&1 &
+echo "[syndicate] superhero bridge started (pid $!)"
 echo "[syndicate] fleet launched"
