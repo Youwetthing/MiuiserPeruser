@@ -1,74 +1,91 @@
 /*
- * bebopd.c — Wakelock & Power Anomaly Monitor
+ * bebopd.c -- Wakelock & Power Drain Audit Daemon
  *
- * Domain: wakelocks and power drain on HyperOS
- *   - Active wakelock list from `dumpsys power`
- *   - Full wakelock detection: non-system holder, duration
- *   - Doze interruption: repeated partial/full wakelock break
- *   - Battery drain estimation
- *   - InCall wakelock orphan: wakelock held without active call
+ * Redmi 15C ? HyperOS OS2.0 ? Android 15
  *
- * Signals emitted:
- *   WAKELOCK_ANOMALY        — unexpected wakelock pattern
- *   WAKELOCK_FULL_HELD      — FULL wakelock held by non-system package
- *   WAKELOCK_DRAIN_HIGH     — excessive wakelock-attributed drain
- *   DOZE_INTERRUPTED        — doze broken repeatedly
- *   INCALL_WAKELOCK_ORPHAN  — InCall wakelock with no active call
- *   BATTERY_LEVEL_CRITICAL  — battery < 10%
- *   BATTERY_SAVER_OFF_LOW   — battery low but saver not active
+ * Every poll:
+ *   - Parse dumpsys power for active wakelocks and suspend blockers
+ *   - Detect full wakelocks held by non-system processes
+ *   - Parse battery drain stats (interactive mAh/h)
+ *   - Detect orphaned InCall wakelocks (no active call)
+ *   - Count doze interruptions from wakelock history
+ *   - Check battery level and saver state
+ *   - Score power posture 0-100
+ *   - Emit gaveld signals and write results
  *
- * IPC (turtlecom worker):
- *   CAPABILITY?          → CAPABILITY POWER WAKELOCKS
- *                           CAPABILITY POWER DOZE
- *                           CAPABILITY POWER BATTERY
- *   POWER WAKELOCKS      → list of active wake locks
- *   POWER DOZE           → doze state + interruption count
- *   POWER BATTERY        → battery level + saver state
+ * Adaptive:
+ *   - Parses whatever wakelocks dumpsys power reports
+ *   - Works on any Android device with dumpsys power access
+ *   - Degrades gracefully if dumpsys unavailable
+ *
+ * Gaveld signals:
+ *   WAKELOCK_ANOMALY, WAKELOCK_FULL_HELD, WAKELOCK_DRAIN_HIGH,
+ *   DOZE_INTERRUPTED, INCALL_WAKELOCK_ORPHAN,
+ *   BATTERY_LEVEL_CRITICAL, BATTERY_SAVER_OFF_LOW
+ *
+ * Runtime config: enabled, interval (default 30), scan_count
  */
 
-#include "daemon_core.h"
+#include "ipc_globals.h"
 #include "gaveld_emit.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
+#include <time.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <signal.h>
-volatile sig_atomic_t g_running = 1;
+#include <stdbool.h>
 
-#define DAEMON_NAME "bebopd"
-#define BUS_PATH    "/data/data/com.termux/files/home/MiuiserPeruser/pipes/turtlecom.sock"
+#define DAEMON_NAME         "bebopd"
+#define DEFAULT_INTERVAL    30
+#define DRAIN_WARN_MAH_H    400.0f   /* interactive mAh/h = anomaly */
+#define FULL_WAKELOCK_WARN  2        /* non-system full wakelocks = warn */
+#define BATTERY_CRITICAL    10       /* % */
+#define SYSTEM_UID_MAX      9999     /* UIDs <= this are system */
 
-/* Thresholds */
-#define BATT_CRITICAL_PCT   10
-#define BATT_LOW_PCT        20
-#define MAX_WAKELOCK_LINES  64
+#ifndef MP_BASE_DIR
+#define MP_BASE_DIR "/data/data/com.termux/files/home/MiuiserPeruser"
+#endif
 
-/* Probe every ~20 seconds */
-#define PROBE_TICKS 200
+#define STATE_FILE   MP_BASE_DIR "/Registry/daemon_state.json"
+#define RESULTS_DIR  MP_BASE_DIR "/Registry/daemon_results"
+#define RESULTS_FILE RESULTS_DIR "/" DAEMON_NAME ".json"
 
-/* ── IPC ──────────────────────────────────────────────────────────────── */
+/* ?? Wakelock record ???????????????????????????????????????????????????? */
 
-static int connect_bus(void)
+typedef struct {
+    char  tag[80];
+    int   uid;
+    char  type[16];     /* FULL, PARTIAL, SCREEN_BRIGHT, etc. */
+    bool  is_system;
+    bool  is_full;
+} wakelock_t;
+
+/* ?? Config ????????????????????????????????????????????????????????????? */
+
+static int config_get_int(const char *key, int def)
 {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return -1;
-    struct sockaddr_un addr = {0};
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, BUS_PATH, sizeof(addr.sun_path) - 1);
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(fd);
-        return -1;
-    }
-    fcntl(fd, F_SETFL, O_NONBLOCK);
-    return fd;
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd),
+             "jq -r '.%s.%s // %d' %s 2>/dev/null",
+             DAEMON_NAME, key, def, STATE_FILE);
+    FILE *f = popen(cmd, "r");
+    if (!f) return def;
+    char buf[32] = {0};
+    int val = def;
+    if (fgets(buf, sizeof(buf), f) && buf[0] != 'n')
+        val = atoi(buf);
+    pclose(f);
+    return val;
 }
 
-#ifndef SPLINTER_SOCKET
-#define SPLINTER_SOCKET "/data/data/com.termux/files/home/MiuiserPeruser/pipes/splinterd.sock"
-#endif
+static int is_enabled(void)    { return config_get_int("enabled",    1); }
+static int get_interval(void)  { return config_get_int("interval",   DEFAULT_INTERVAL); }
+static int get_max_scans(void) { return config_get_int("scan_count", 0); }
+
+/* ?? Splinterd emit ????????????????????????????????????????????????????? */
 
 static void splinterd_emit(const char *type, const char *payload)
 {
@@ -87,326 +104,413 @@ static void splinterd_emit(const char *type, const char *payload)
     close(fd);
 }
 
-/* ── Wakelock data ────────────────────────────────────────────────────── */
+/* ?? Parse wakelocks from dumpsys power ?????????????????????????????????? */
 
-typedef struct {
-    char  tag[128];
-    char  pkg[128];
-    int   is_full;     /* FULL vs PARTIAL */
-    long  held_ms;
-} wakelock_t;
-
-typedef struct {
-    wakelock_t  locks[MAX_WAKELOCK_LINES];
-    int         count;
-    int         full_count;
-    int         has_incall;
-    char        doze_state[32];
-    int         doze_interrupted;   /* incremented if "awake" repeated */
-    int         battery_pct;
-    int         battery_saver;
-} power_state_t;
-
-/* ── System packages whitelist ────────────────────────────────────────── */
-
-static int is_system_pkg(const char *pkg)
-{
-    return (strstr(pkg, "android") ||
-            strstr(pkg, "com.google") ||
-            strstr(pkg, "com.miui")   ||
-            strstr(pkg, "com.xiaomi") ||
-            strstr(pkg, "com.qualcomm") ||
-            strstr(pkg, "*media*")    ||
-            strstr(pkg, "AudioMix")   ||
-            strstr(pkg, "NFC")        ||
-            strstr(pkg, "AlarmManager"));
-}
-
-/* ── Parse dumpsys power ──────────────────────────────────────────────── */
 /*
- * We run dumpsys power via rish (requires Shizuku/ADB).
- * Falls back to unprivileged dumpsys if rish unavailable.
- * Key sections parsed:
- *   - "Wake Locks: size=N"
- *   - "  FULL_WAKE_LOCK 'tag' (package, unimportant=...)"
- *   - "  PARTIAL_WAKE_LOCK 'tag' (package)"
- *   - "mWakefulness=..." for doze state
- *   - battery level from getprop
+ * Parses "Wake Locks: size=N" section.
+ * Each entry looks like:
+ *   SCREEN_BRIGHT_WAKE_LOCK  'WindowManager/displayId:0' ON_AFTER_RELEASE
+ *   ACQ=-1s508ms (uid=1000 pid=1650 pkg=android ws=WorkSource{...})
  */
-static power_state_t parse_power_state(void)
+static int parse_wakelocks(const char *dump,
+                             wakelock_t *wls, int max_wls)
 {
-    power_state_t ps;
-    memset(&ps, 0, sizeof(ps));
-    strncpy(ps.doze_state, "unknown", sizeof(ps.doze_state));
-    ps.battery_pct = -1;
+    if (!dump) return 0;
 
-    /* Try rish first, fall back to direct dumpsys */
-    const char *cmds[] = {
-        "/data/data/com.termux/files/home/.shizuku/rish -c 'dumpsys power 2>/dev/null'",
-        "dumpsys power 2>/dev/null",
-        NULL
-    };
+    const char *section = strstr(dump, "Wake Locks:");
+    if (!section) return 0;
 
-    FILE *f = NULL;
-    for (int i = 0; cmds[i] && !f; i++) {
-        f = popen(cmds[i], "r");
-    }
-    if (!f) return ps;
+    int count = 0;
+    const char *p = section;
 
-    char line[512];
-    int  in_wakelock_section = 0;
+    while (*p && count < max_wls) {
+        /* Find a line with wakelock type keywords */
+        const char *line = p;
+        const char *nl   = strchr(p, '\n');
+        if (!nl) break;
 
-    while (fgets(line, sizeof(line), f) && ps.count < MAX_WAKELOCK_LINES) {
-        line[strcspn(line, "\n\r")] = '\0';
+        char lbuf[512];
+        size_t llen = (size_t)(nl - line);
+        if (llen >= sizeof(lbuf)) llen = sizeof(lbuf) - 1;
+        strncpy(lbuf, line, llen);
+        lbuf[llen] = '\0';
 
-        /* Wakefulness / doze state */
-        char *wk = strstr(line, "mWakefulness=");
-        if (wk) {
-            sscanf(wk + 13, "%31s", ps.doze_state);
-            if (strcmp(ps.doze_state, "Awake") == 0)
-                ps.doze_interrupted++;
+        p = nl + 1;
+
+        /* Skip section headers and empty lines */
+        if (!strstr(lbuf, "WAKE_LOCK") && !strstr(lbuf, "ACQ="))
             continue;
+        /* Stop at next major section */
+        if (strstr(lbuf, "Suspend Blockers:") ||
+            strstr(lbuf, "Battery saving"))
+            break;
+
+        if (!strstr(lbuf, "WAKE_LOCK")) continue;
+
+        wakelock_t *wl = &wls[count];
+        memset(wl, 0, sizeof(*wl));
+
+        /* Type: first token on line */
+        char *tok = strtok(lbuf, " \t");
+        if (!tok) continue;
+        strncpy(wl->type, tok, sizeof(wl->type) - 1);
+
+        wl->is_full = (strstr(wl->type, "FULL") != NULL ||
+                       strstr(wl->type, "PARTIAL") != NULL);
+
+        /* Tag: in single quotes */
+        char *tq = strchr(lbuf + strlen(tok) + 1, '\'');
+        if (tq) {
+            tq++;
+            size_t i = 0;
+            while (*tq && *tq != '\'' && i < sizeof(wl->tag) - 1)
+                wl->tag[i++] = *tq++;
+            wl->tag[i] = '\0';
         }
 
-        /* Battery saver */
-        if (strstr(line, "mIsPowered=true") || strstr(line, "mBatterySaverEnabled=true"))
-            ps.battery_saver = 1;
+        /* UID from next line (ACQ line) */
+        const char *acq_line = p;
+        const char *acq_nl   = strchr(p, '\n');
+        if (acq_nl) {
+            char acq[256];
+            size_t alen = (size_t)(acq_nl - acq_line);
+            if (alen >= sizeof(acq)) alen = sizeof(acq) - 1;
+            strncpy(acq, acq_line, alen);
+            acq[alen] = '\0';
 
-        /* Enter/exit wake lock section */
-        if (strstr(line, "Wake Locks:")) { in_wakelock_section = 1; continue; }
-        if (in_wakelock_section && line[0] != ' ' && line[0] != '\t')
-            in_wakelock_section = 0;
-
-        if (!in_wakelock_section) continue;
-
-        /* Parse wakelock line:
-         *   "  PARTIAL_WAKE_LOCK 'tag' (pkg, unimportant=false, workSource=...)"
-         *   or
-         *   "  FULL_WAKE_LOCK    'tag' (pkg)"
-         */
-        int is_full = (strstr(line, "FULL_WAKE_LOCK") != NULL);
-        int is_part = (strstr(line, "PARTIAL_WAKE_LOCK") != NULL);
-        if (!is_full && !is_part) continue;
-
-        wakelock_t *wl = &ps.locks[ps.count];
-        wl->is_full = is_full;
-
-        /* Extract tag between single quotes */
-        char *q1 = strchr(line, '\'');
-        if (q1) {
-            char *q2 = strchr(q1 + 1, '\'');
-            if (q2) {
-                int len = (int)(q2 - q1 - 1);
-                if (len >= (int)sizeof(wl->tag)) len = sizeof(wl->tag) - 1;
-                strncpy(wl->tag, q1 + 1, (size_t)len);
-                wl->tag[len] = '\0';
-            }
+            const char *uid_p = strstr(acq, "uid=");
+            if (uid_p) wl->uid = atoi(uid_p + 4);
         }
 
-        /* Extract package between first '(' and ',' or ')' */
-        char *p1 = strchr(line, '(');
-        if (p1) {
-            char *p2 = strpbrk(p1 + 1, ",)");
-            if (p2) {
-                int len = (int)(p2 - p1 - 1);
-                if (len >= (int)sizeof(wl->pkg)) len = sizeof(wl->pkg) - 1;
-                strncpy(wl->pkg, p1 + 1, (size_t)len);
-                wl->pkg[len] = '\0';
-                /* Trim whitespace */
-                while (wl->pkg[0] == ' ') memmove(wl->pkg, wl->pkg + 1, strlen(wl->pkg));
-            }
-        }
-
-        if (is_full) ps.full_count++;
-        if (strstr(wl->tag, "InCall") || strstr(wl->pkg, "telecom") ||
-            strstr(wl->pkg, "phone"))
-            ps.has_incall = 1;
-
-        ps.count++;
-    }
-    pclose(f);
-
-    /* Battery level via getprop */
-    FILE *bf = popen("getprop 'sys.battery.level' 2>/dev/null || "
-                     "cat /sys/class/power_supply/battery/capacity 2>/dev/null", "r");
-    if (bf) {
-        fscanf(bf, "%d", &ps.battery_pct);
-        pclose(bf);
+        wl->is_system = (wl->uid <= SYSTEM_UID_MAX);
+        count++;
     }
 
-    /* Battery saver via getprop if not found in dumpsys */
-    if (!ps.battery_saver) {
-        FILE *sf = popen("getprop 'persist.sys.battery.saver' 2>/dev/null", "r");
-        if (sf) {
-            char sbuf[8] = {0};
-            fgets(sbuf, sizeof(sbuf), sf);
-            ps.battery_saver = (sbuf[0] == '1');
-            pclose(sf);
-        }
-    }
-
-    return ps;
+    return count;
 }
 
-/* ── Check for active phone call ──────────────────────────────────────── */
+/* ?? Parse battery level from dumpsys power ???????????????????????????? */
 
-static int is_call_active(void)
+static int parse_battery_level(const char *dump)
 {
-    FILE *f = popen("getprop 'gsm.call.state' 2>/dev/null", "r");
-    if (!f) return 0;
-    char buf[16] = {0};
-    fgets(buf, sizeof(buf), f);
-    pclose(f);
-    /* 0 = idle, 1 = ringing, 2 = active */
-    return (buf[0] != '0' && buf[0] != '\0' && buf[0] != '\n');
+    if (!dump) return -1;
+    const char *p = strstr(dump, "mBatteryLevel=");
+    if (!p) return -1;
+    return atoi(p + 14);
 }
 
-/* ── Format wakelock list for IPC ─────────────────────────────────────── */
-
-static void format_wakelock_list(const power_state_t *ps, char *out, size_t len)
+static bool parse_battery_low(const char *dump)
 {
-    out[0] = '\0';
-    for (int i = 0; i < ps->count && strlen(out) + 80 < len; i++) {
-        char item[96];
-        snprintf(item, sizeof(item), "[%s]%s(%s) ",
-                 ps->locks[i].is_full ? "FULL" : "PART",
-                 ps->locks[i].tag,
-                 ps->locks[i].pkg);
-        strncat(out, item, len - strlen(out) - 1);
-    }
-    if (!out[0]) strncpy(out, "(none)", len);
+    if (!dump) return false;
+    const char *p = strstr(dump, "mBatteryLevelLow=");
+    if (!p) return false;
+    return strncmp(p + 17, "true", 4) == 0;
 }
 
-/* ── Probe & emit ─────────────────────────────────────────────────────── */
-
-static int g_prev_doze_interrupted = 0;
-
-static void probe_and_emit(int ipc_fd, const char *cmd)
+static bool parse_battery_saver(const char *dump)
 {
-    power_state_t ps = parse_power_state();
+    if (!dump) return false;
+    /* "Battery Saver is currently: OFF" or "ON" */
+    const char *p = strstr(dump, "Battery Saver is currently:");
+    if (!p) return false;
+    p += 27;
+    while (*p == ' ') p++;
+    return strncmp(p, "ON", 2) == 0;
+}
 
-    char lock_list[1024] = {0};
-    format_wakelock_list(&ps, lock_list, sizeof(lock_list));
+/* ?? Parse interactive drain mAh/h ????????????????????????????????????? */
 
-    daemon_log_info("Power: locks=%d full=%d doze=%s batt=%d%% saver=%d",
-                    ps.count, ps.full_count,
-                    ps.doze_state, ps.battery_pct, ps.battery_saver);
+/*
+ * Looks for lines like:
+ *   NonDoze NonIntr:    275m    274mAh(  5%)     59.8mAh/h
+ *             Intr:   1306m  10999mAh(186%)    505.0mAh/h
+ * Returns the interactive (Intr) NonDoze mAh/h figure.
+ */
+static float parse_drain_mah_h(const char *dump)
+{
+    if (!dump) return 0.0f;
 
-    /* ── IPC responses ─────────────────────────────────────────────── */
-    if (ipc_fd >= 0 && cmd) {
-        if (strncmp(cmd, "POWER WAKELOCKS", 15) == 0) {
-            dprintf(ipc_fd, "POWER WAKELOCKS count=%d full=%d %s\n",
-                    ps.count, ps.full_count, lock_list);
-        } else if (strncmp(cmd, "POWER DOZE", 10) == 0) {
-            dprintf(ipc_fd, "POWER DOZE state=%s interrupted=%d\n",
-                    ps.doze_state, ps.doze_interrupted);
-        } else if (strncmp(cmd, "POWER BATTERY", 13) == 0) {
-            dprintf(ipc_fd, "POWER BATTERY level=%d%% saver=%d\n",
-                    ps.battery_pct, ps.battery_saver);
-        }
+    /* Find "NonDoze" section then "Intr:" */
+    const char *nd = strstr(dump, "NonDoze");
+    if (!nd) return 0.0f;
+
+    const char *intr = strstr(nd, "Intr:");
+    if (!intr) return 0.0f;
+
+    /* Skip to mAh/h value -- last number on that line */
+    const char *nl = strchr(intr, '\n');
+    if (!nl) return 0.0f;
+
+    /* Work backwards from newline to find last float before "mAh/h" */
+    const char *mah = NULL;
+    const char *p   = intr;
+    while (p < nl) {
+        const char *m = strstr(p, "mAh/h");
+        if (!m || m >= nl) break;
+        mah = m;
+        p   = m + 1;
+    }
+    if (!mah) return 0.0f;
+
+    /* Find the float before "mAh/h" */
+    const char *num_end = mah;
+    while (num_end > intr && (*num_end == 'm' || *num_end == 'A' ||
+                               *num_end == 'h' || *num_end == '/'))
+        num_end--;
+
+    /* Back up over digits and decimal */
+    const char *num_start = num_end;
+    while (num_start > intr &&
+           ((*num_start >= '0' && *num_start <= '9') || *num_start == '.'))
+        num_start--;
+    num_start++;
+
+    char nbuf[32] = {0};
+    size_t nlen = (size_t)(num_end - num_start + 1);
+    if (nlen >= sizeof(nbuf)) nlen = sizeof(nbuf) - 1;
+    strncpy(nbuf, num_start, nlen);
+
+    return strtof(nbuf, NULL);
+}
+
+/* ?? Parse doze interruptions ??????????????????????????????????????????? */
+
+static int count_doze_interrupted(const char *dump)
+{
+    if (!dump) return 0;
+    int count = 0;
+    const char *p = dump;
+    while ((p = strstr(p, "Intr:")) != NULL) {
+        /* Check it's in a doze context (Light or Deep section) */
+        count++;
+        p++;
+    }
+    /* Rough heuristic -- subtract the one in NonDoze section */
+    return count > 1 ? count - 1 : 0;
+}
+
+/* ?? Results writer ????????????????????????????????????????????????????? */
+
+static void write_results(int score, int scan_num, int sigs,
+                           int battery, float drain, int wl_count,
+                           int full_nonsys)
+{
+    FILE *f = fopen(RESULTS_FILE, "w");
+    if (!f) return;
+
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+
+    const char *grade = score >= 85 ? "CLEAN"
+                      : score >= 65 ? "ACTIVE"
+                      : score >= 45 ? "DRAINING"
+                      : "CRITICAL";
+
+    fprintf(f,
+        "{\n"
+        "  \"daemon\": \"" DAEMON_NAME "\",\n"
+        "  \"timestamp\": \"%s\",\n"
+        "  \"scan_number\": %d,\n"
+        "  \"signals_fired\": %d,\n"
+        "  \"power_score\": %d,\n"
+        "  \"grade\": \"%s\",\n"
+        "  \"battery_pct\": %d,\n"
+        "  \"drain_mah_h\": %.1f,\n"
+        "  \"active_wakelocks\": %d,\n"
+        "  \"full_nonsystem_wakelocks\": %d\n"
+        "}\n",
+        ts, scan_num, sigs, score, grade,
+        battery, drain, wl_count, full_nonsys);
+
+    fclose(f);
+}
+
+/* ?? Main poll ?????????????????????????????????????????????????????????? */
+
+static void poll(int scan_num)
+{
+    char ts[32];
+    time_t t = time(NULL);
+    strftime(ts, sizeof(ts), "%H:%M:%S", localtime(&t));
+
+    printf("\n[BEBOP] ?? Wakelock & Power Scan #%d  %s ?????????????????\n",
+           scan_num, ts);
+
+    int score = 100;
+    int sigs  = 0;
+
+    /* ?? Dump power ????????????????????????????????????????????????????? */
+    char *dump = bexec("dumpsys power 2>/dev/null");
+    if (!dump) {
+        printf("[BEBOP]  dumpsys power unavailable\n");
+        return;
     }
 
-    /* ── Signal evaluation ─────────────────────────────────────────── */
+    /* ?? Battery state ?????????????????????????????????????????????????? */
+    int  battery     = parse_battery_level(dump);
+    bool battery_low = parse_battery_low(dump);
+    bool saver_on    = parse_battery_saver(dump);
+    float drain      = parse_drain_mah_h(dump);
 
-    /* Full wakelock held by non-system package */
-    for (int i = 0; i < ps.count; i++) {
-        if (!ps.locks[i].is_full) continue;
-        if (!is_system_pkg(ps.locks[i].pkg)) {
-            char ctx[256];
-            snprintf(ctx, sizeof(ctx), "tag=%s pkg=%s",
-                     ps.locks[i].tag, ps.locks[i].pkg);
-            gaveld_emit(DAEMON_NAME, "WAKELOCK_FULL_HELD", 1.0f, ctx);
-            splinterd_emit("wakelock_full_held", ctx);
-            break;   /* one signal per poll */
-        }
-    }
-
-    /* Anomalous wakelock count */
-    if (ps.count > 10) {
-        char ctx[64];
-        snprintf(ctx, sizeof(ctx), "count=%d full=%d", ps.count, ps.full_count);
-        gaveld_emit(DAEMON_NAME, "WAKELOCK_ANOMALY", (float)ps.count, ctx);
-        splinterd_emit("wakelock_anomaly", ctx);
-    }
-
-    /* Doze interrupted: track delta */
-    int doze_delta = ps.doze_interrupted - g_prev_doze_interrupted;
-    if (doze_delta > 3) {
-        char ctx[64];
-        snprintf(ctx, sizeof(ctx), "interruptions_this_poll=%d total=%d",
-                 doze_delta, ps.doze_interrupted);
-        gaveld_emit(DAEMON_NAME, "DOZE_INTERRUPTED", (float)doze_delta, ctx);
-        splinterd_emit("doze_interrupted", ctx);
-    }
-    g_prev_doze_interrupted = ps.doze_interrupted;
-
-    /* InCall wakelock without active call */
-    if (ps.has_incall && !is_call_active()) {
-        gaveld_emit(DAEMON_NAME, "INCALL_WAKELOCK_ORPHAN", 1.0f,
-                    "InCall wakelock held with no active call");
-        splinterd_emit("incall_wakelock_orphan",
-                       "InCall wakelock with no active call");
-    }
+    printf("[BEBOP]  Battery    : %d%%  low=%s  saver=%s\n",
+           battery, battery_low ? "yes" : "no", saver_on ? "ON" : "off");
+    printf("[BEBOP]  Drain      : %.1f mAh/h (interactive)\n", drain);
 
     /* Battery critical */
-    if (ps.battery_pct >= 0 && ps.battery_pct < BATT_CRITICAL_PCT) {
+    if (battery >= 0 && battery <= BATTERY_CRITICAL) {
         char ctx[32];
-        snprintf(ctx, sizeof(ctx), "level=%d%%", ps.battery_pct);
-        gaveld_emit(DAEMON_NAME, "BATTERY_LEVEL_CRITICAL", (float)ps.battery_pct, ctx);
-        splinterd_emit("battery_critical", ctx);
-    } else if (ps.battery_pct >= 0 && ps.battery_pct < BATT_LOW_PCT &&
-               !ps.battery_saver) {
-        char ctx[32];
-        snprintf(ctx, sizeof(ctx), "level=%d%%", ps.battery_pct);
-        gaveld_emit(DAEMON_NAME, "BATTERY_SAVER_OFF_LOW", (float)ps.battery_pct, ctx);
-        splinterd_emit("battery_saver_off_low", ctx);
+        snprintf(ctx, sizeof(ctx), "level=%d%%", battery);
+        gaveld_emit(DAEMON_NAME, "BATTERY_LEVEL_CRITICAL", (float)battery, ctx);
+        splinterd_emit("BATTERY_LEVEL_CRITICAL", ctx);
+        score -= 15;
+        sigs++;
+        printf("[BEBOP]  !  Battery critical: %d%%\n", battery);
     }
+
+    /* Battery low + saver off */
+    if (battery_low && !saver_on) {
+        gaveld_emit(DAEMON_NAME, "BATTERY_SAVER_OFF_LOW", 0.0, "saver=off");
+        splinterd_emit("BATTERY_SAVER_OFF_LOW", "saver=off");
+        score -= 8;
+        sigs++;
+        printf("[BEBOP]  !  Battery low but Battery Saver is OFF\n");
+    }
+
+    /* High drain */
+    if (drain >= DRAIN_WARN_MAH_H) {
+        char ctx[48];
+        snprintf(ctx, sizeof(ctx), "drain=%.1f_mAh_h threshold=%.0f",
+                 drain, DRAIN_WARN_MAH_H);
+        gaveld_emit(DAEMON_NAME, "WAKELOCK_DRAIN_HIGH", drain, ctx);
+        splinterd_emit("WAKELOCK_DRAIN_HIGH", ctx);
+        score -= 18;
+        sigs++;
+        printf("[BEBOP]  !  High drain: %.1f mAh/h\n", drain);
+    }
+
+    /* ?? Wakelocks ?????????????????????????????????????????????????????? */
+    wakelock_t wls[32];
+    int nwls = parse_wakelocks(dump, wls, 32);
+
+    printf("[BEBOP]  Wakelocks  : %d active\n", nwls);
+    if (nwls > 0) {
+        printf("[BEBOP]  %-30s  %-8s  %-10s  %s\n",
+               "Tag", "Type", "UID", "System");
+        printf("[BEBOP]  ?????????????????????????????????????????????????\n");
+    }
+
+    int full_nonsys = 0;
+    bool incall_orphan = false;
+
+    for (int i = 0; i < nwls; i++) {
+        wakelock_t *wl = &wls[i];
+        printf("[BEBOP]  %-30.30s  %-8.8s  uid=%-6d  %s\n",
+               wl->tag, wl->type, wl->uid,
+               wl->is_system ? "system" : "APP");
+
+        if (!wl->is_system && wl->is_full) {
+            full_nonsys++;
+            char ctx[128];
+            snprintf(ctx, sizeof(ctx), "tag=%.48s uid=%d type=%.12s",
+                     wl->tag, wl->uid, wl->type);
+            gaveld_emit(DAEMON_NAME, "WAKELOCK_FULL_HELD", 1.0, ctx);
+            splinterd_emit("WAKELOCK_FULL_HELD", ctx);
+            score -= 20;
+            sigs++;
+            printf("[BEBOP]  !  Full wakelock by non-system: %s\n", wl->tag);
+        }
+
+        /* Orphaned InCall wakelock */
+        if (strstr(wl->tag, "InCall") || strstr(wl->tag, "incall")) {
+            incall_orphan = true;
+        }
+    }
+
+    if (incall_orphan) {
+        gaveld_emit(DAEMON_NAME, "INCALL_WAKELOCK_ORPHAN", 1.0,
+                    "tag=InCallWakeLockController");
+        splinterd_emit("INCALL_WAKELOCK_ORPHAN", "tag=InCallWakeLockController");
+        score -= 20;
+        sigs++;
+        printf("[BEBOP]  !  InCall wakelock active -- call in progress or orphaned\n");
+    }
+
+    /* General wakelock anomaly */
+    if (full_nonsys >= FULL_WAKELOCK_WARN) {
+        char ctx[32];
+        snprintf(ctx, sizeof(ctx), "count=%d", full_nonsys);
+        gaveld_emit(DAEMON_NAME, "WAKELOCK_ANOMALY", (float)full_nonsys, ctx);
+        splinterd_emit("WAKELOCK_ANOMALY", ctx);
+        score -= 10;
+        sigs++;
+    }
+
+    /* ?? Doze ??????????????????????????????????????????????????????????? */
+    int doze_intr = count_doze_interrupted(dump);
+    printf("[BEBOP]  Doze intr  : ~%d session(s)\n", doze_intr);
+    if (doze_intr > 2) {
+        char ctx[32];
+        snprintf(ctx, sizeof(ctx), "interruptions=%d", doze_intr);
+        gaveld_emit(DAEMON_NAME, "DOZE_INTERRUPTED", (float)doze_intr, ctx);
+        splinterd_emit("DOZE_INTERRUPTED", ctx);
+        score -= 10;
+        sigs++;
+        printf("[BEBOP]  !  Doze repeatedly interrupted\n");
+    }
+
+    free(dump);
+
+    if (score < 0) score = 0;
+    const char *grade = score >= 85 ? "CLEAN"
+                      : score >= 65 ? "ACTIVE"
+                      : score >= 45 ? "DRAINING"
+                      : "CRITICAL";
+
+    printf("[BEBOP]  Power score : %d/100  [%s]  signals=%d\n",
+           score, grade, sigs);
+
+    write_results(score, scan_num, sigs, battery, drain, nwls, full_nonsys);
 }
 
-/* ── Main ─────────────────────────────────────────────────────────────── */
+/* ?? Main ??????????????????????????????????????????????????????????????? */
 
 int main(void)
 {
-    
+    bexec_init();
 
-    int fd = connect_bus();
-    if (fd < 0) {
-        daemon_log_error(DAEMON_NAME ": cannot connect to turtlecom — exiting");
-        return 1;
+    if (!is_enabled()) {
+        printf("[BEBOP] disabled via syndicatectl -- exiting\n");
+        return 0;
     }
 
-    write(fd, "HELLO WORKER BEBOP\n", 19);
-    daemon_log_info(DAEMON_NAME " ONLINE — Wakelock & Power Monitor");
+    printf("[BEBOP] Wakelock & Power Drain Audit Daemon: ONLINE\n");
+    printf("[BEBOP] Drain threshold: %.0f mAh/h  Battery critical: %d%%\n",
+           DRAIN_WARN_MAH_H, BATTERY_CRITICAL);
 
-    char buf[512];
-    int  tick = 0;
+    int interval  = get_interval();
+    int max_scans = get_max_scans();
+    int scan_num  = 0;
 
     for (;;) {
-        usleep(100000);   /* 100ms */
-        tick++;
-
-        /* Periodic probe */
-        if (tick >= PROBE_TICKS) {
-            tick = 0;
-            probe_and_emit(-1, NULL);
+        if (!is_enabled()) {
+            printf("[BEBOP] disabled -- stopping\n");
+            break;
         }
 
-        /* IPC */
-        int n = read(fd, buf, sizeof(buf) - 1);
-        if (n <= 0) continue;
-        buf[n] = '\0';
+        interval  = get_interval();
+        max_scans = get_max_scans();
+        scan_num++;
 
-        if (strncmp(buf, "CAPABILITY?", 11) == 0) {
-            write(fd, "CAPABILITY POWER WAKELOCKS\n", 27);
-            write(fd, "CAPABILITY POWER DOZE\n",      22);
-            write(fd, "CAPABILITY POWER BATTERY\n",   25);
-            continue;
+        poll(scan_num);
+
+        if (max_scans > 0 && scan_num >= max_scans) {
+            printf("[BEBOP] reached scan_count=%d -- exiting\n", max_scans);
+            break;
         }
 
-        if (strncmp(buf, "POWER", 5) == 0) {
-            probe_and_emit(fd, buf);
-            continue;
-        }
+        printf("[BEBOP] Next scan in %ds\n", interval);
+        sleep(interval);
     }
 
     return 0;

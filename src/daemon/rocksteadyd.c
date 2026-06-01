@@ -1,75 +1,118 @@
 /*
- * rocksteadyd.c — CPU Load & Frequency Monitor
+ * rocksteadyd.c -- CPU Load, Frequency & Cluster Balance Daemon
  *
- * Domain: CPU muscle on MTK HyperOS
- *   - Per-core frequency: /sys/devices/system/cpu/cpuN/cpufreq/
- *   - CPU load: /proc/stat delta between polls
- *   - Governor per cluster
- *   - MTK topology: cpu0-3 = efficiency, cpu4-7 = performance
+ * Redmi 15C ? HyperOS OS2.0 ? MediaTek ? 8-core (cpu0-3 efficiency,
+ * cpu4-7 performance) ? Android 15
  *
- * Signals emitted:
- *   CPU_HOG              — single process > HOG_PCT of total CPU
- *   CPU_HOG_CRITICAL     — single process > CRIT_PCT
- *   CPU_CLUSTER_IMBALANCE— efficiency cluster busier than perf cluster
- *   GOVERNOR_PERFORMANCE — any core locked to "performance" governor
- *   ALL_CORES_MAXED      — all cores at 100% max freq sustained
+ * Every poll:
+ *   - Read cur/max/min freq + governor per core from cpufreq sysfs
+ *   - Compute per-cluster utilisation (efficiency vs performance)
+ *   - Read /proc/stat for system-wide CPU delta across polls
+ *   - Walk /proc/[pid]/stat for top CPU consumers
+ *   - Detect throttling, governor anomalies, cluster imbalance
+ *   - Score CPU posture 0-100
+ *   - Emit gaveld signals and write results
  *
- * IPC (turtlecom worker):
- *   CAPABILITY?      → CAPABILITY CPU FREQ
- *                       CAPABILITY CPU LOAD
- *                       CAPABILITY CPU CLUSTER
- *                       CAPABILITY CPU GOV
- *   CPU FREQ         → per-core cur/max/ratio table
- *   CPU LOAD         → overall CPU % (from /proc/stat)
- *   CPU CLUSTER      → efficiency vs performance cluster summary
- *   CPU GOV          → governor per cluster
- *   HEARTBEAT SEND   → HEARTBEAT ROCKSTEADY
+ * Adaptive:
+ *   - Discovers core count dynamically
+ *   - Detects cluster split by max_freq difference
+ *   - Works on any number of cores/clusters
+ *
+ * Gaveld signals:
+ *   CPU_HOG, CPU_HOG_CRITICAL, CPU_THROTTLING, CPU_CLUSTER_IMBALANCE,
+ *   GOVERNOR_PERFORMANCE, ALL_CORES_MAXED
+ *
+ * Runtime config: enabled, interval (default 15), scan_count
  */
 
-#include "daemon_core.h"
+#include "ipc_globals.h"
 #include "gaveld_emit.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
+#include <time.h>
+#include <dirent.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <signal.h>
-volatile sig_atomic_t g_running = 1;
+#include <stdbool.h>
 
-#define DAEMON_NAME "rocksteadyd"
-#define BUS_PATH    "/data/data/com.termux/files/home/MiuiserPeruser/pipes/turtlecom.sock"
+#define DAEMON_NAME       "rocksteadyd"
+#define DEFAULT_INTERVAL  15
+#define MAX_CORES         16
+#define MAX_PROCS         256
+#define HOG_PCT           40    /* single process CPU% = hog */
+#define HOG_CRITICAL_PCT  70    /* single process CPU% = critical */
+#define THROTTLE_RATIO    0.75f /* cur < max * ratio = throttled */
+#define TOP_N             5     /* top processes to display */
 
-#define NUM_CORES    8
-#define HOG_PCT     40.0f   /* % total CPU → CPU_HOG */
-#define CRIT_PCT    70.0f   /* % total CPU → CPU_HOG_CRITICAL */
+#ifndef MP_BASE_DIR
+#define MP_BASE_DIR "/data/data/com.termux/files/home/MiuiserPeruser"
+#endif
 
-/* Probe every ~15 seconds */
-#define PROBE_TICKS 150
-/* Heartbeat every ~30s */
-#define HB_TICKS    300
+#define STATE_FILE   MP_BASE_DIR "/Registry/daemon_state.json"
+#define RESULTS_DIR  MP_BASE_DIR "/Registry/daemon_results"
+#define RESULTS_FILE RESULTS_DIR "/" DAEMON_NAME ".json"
 
-/* ── IPC ──────────────────────────────────────────────────────────────── */
+/* ?? CPU core record ???????????????????????????????????????????????????? */
 
-static int connect_bus(void)
+typedef struct {
+    int  core;
+    long cur_khz;
+    long max_khz;
+    long min_khz;
+    char governor[32];
+    bool throttled;
+    bool at_max;
+    int  cluster;   /* 0 = efficiency, 1 = performance, -1 = unknown */
+} cpu_core_t;
+
+/* ?? /proc/stat snapshot ???????????????????????????????????????????????? */
+
+typedef struct {
+    unsigned long long user, nice, system, idle, iowait, irq, softirq;
+} cpu_stat_t;
+
+/* ?? Process CPU record ????????????????????????????????????????????????? */
+
+typedef struct {
+    int   pid;
+    char  name[32];
+    unsigned long long cpu_time;   /* utime + stime */
+    int   cpu_pct;                 /* computed delta */
+} proc_t;
+
+/* ?? State across polls ????????????????????????????????????????????????? */
+
+static cpu_stat_t g_prev_stat = {0};
+static proc_t     g_prev_procs[MAX_PROCS];
+static int        g_prev_nprocs = 0;
+static bool       g_first = true;
+
+/* ?? Config ????????????????????????????????????????????????????????????? */
+
+static int config_get_int(const char *key, int def)
 {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return -1;
-    struct sockaddr_un addr = {0};
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, BUS_PATH, sizeof(addr.sun_path) - 1);
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        close(fd);
-        return -1;
-    }
-    fcntl(fd, F_SETFL, O_NONBLOCK);
-    return fd;
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd),
+             "jq -r '.%s.%s // %d' %s 2>/dev/null",
+             DAEMON_NAME, key, def, STATE_FILE);
+    FILE *f = popen(cmd, "r");
+    if (!f) return def;
+    char buf[32] = {0};
+    int val = def;
+    if (fgets(buf, sizeof(buf), f) && buf[0] != 'n')
+        val = atoi(buf);
+    pclose(f);
+    return val;
 }
 
-#ifndef SPLINTER_SOCKET
-#define SPLINTER_SOCKET "/data/data/com.termux/files/home/MiuiserPeruser/pipes/splinterd.sock"
-#endif
+static int is_enabled(void)    { return config_get_int("enabled",    1); }
+static int get_interval(void)  { return config_get_int("interval",   DEFAULT_INTERVAL); }
+static int get_max_scans(void) { return config_get_int("scan_count", 0); }
+
+/* ?? Splinterd emit ????????????????????????????????????????????????????? */
 
 static void splinterd_emit(const char *type, const char *payload)
 {
@@ -88,311 +131,465 @@ static void splinterd_emit(const char *type, const char *payload)
     close(fd);
 }
 
-/* ── CPU frequency ────────────────────────────────────────────────────── */
+/* ?? sysfs helpers ?????????????????????????????????????????????????????? */
 
-typedef struct {
-    long cur_khz;
-    long max_khz;
-    char governor[32];
-    int  online;
-} core_info_t;
-
-static core_info_t g_cores[NUM_CORES];
-
-static void read_cpu_freq(void)
+static long read_long_sysfs(const char *path)
 {
-    for (int cpu = 0; cpu < NUM_CORES; cpu++) {
-        core_info_t *c = &g_cores[cpu];
-        char path[128];
-        FILE *f;
-
-        /* Online check */
-        snprintf(path, sizeof(path),
-                 "/sys/devices/system/cpu/cpu%d/online", cpu);
-        f = fopen(path, "r");
-        c->online = 1;   /* cpu0 has no online file, always online */
-        if (f) { fscanf(f, "%d", &c->online); fclose(f); }
-
-        if (!c->online) { c->cur_khz = 0; c->max_khz = 0; continue; }
-
-        /* Current frequency */
-        snprintf(path, sizeof(path),
-                 "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", cpu);
-        f = fopen(path, "r"); c->cur_khz = 0;
-        if (f) { fscanf(f, "%ld", &c->cur_khz); fclose(f); }
-
-        /* Hardware max */
-        snprintf(path, sizeof(path),
-                 "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", cpu);
-        f = fopen(path, "r"); c->max_khz = 0;
-        if (f) { fscanf(f, "%ld", &c->max_khz); fclose(f); }
-
-        /* Governor */
-        snprintf(path, sizeof(path),
-                 "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor", cpu);
-        f = fopen(path, "r"); c->governor[0] = '\0';
-        if (f) {
-            fgets(c->governor, sizeof(c->governor), f);
-            c->governor[strcspn(c->governor, "\n\r")] = '\0';
-            fclose(f);
-        }
-        if (!c->governor[0]) strncpy(c->governor, "unknown", sizeof(c->governor));
-    }
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    long v = -1;
+    fscanf(f, "%ld", &v);
+    fclose(f);
+    return v;
 }
 
-/* ── CPU load from /proc/stat ─────────────────────────────────────────── */
+/* ?? Enumerate CPU cores ??????????????????????????????????????????????? */
 
-typedef struct {
-    unsigned long long user, nice, system, idle, iowait, irq, softirq;
-} cpu_stat_t;
+static int enumerate_cpus(cpu_core_t *cores, int max_cores)
+{
+    int count = 0;
+    char path[256];
+    long max_seen = 0;
 
-static cpu_stat_t g_prev_stat;
-static int        g_first_stat = 1;
+    for (int i = 0; i < max_cores; i++) {
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", i);
+        long cur = read_long_sysfs(path);
+        if (cur < 0) break;
 
-static int read_proc_stat(cpu_stat_t *s)
+        cpu_core_t *c = &cores[count];
+        c->core = i;
+        c->cur_khz = cur;
+
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_max_freq", i);
+        c->max_khz = read_long_sysfs(path);
+
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpu%d/cpufreq/cpuinfo_min_freq", i);
+        c->min_khz = read_long_sysfs(path);
+
+        snprintf(path, sizeof(path),
+                 "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_governor", i);
+        FILE *gf = fopen(path, "r");
+        if (gf) {
+            fgets(c->governor, sizeof(c->governor), gf);
+            c->governor[strcspn(c->governor, "\n")] = '\0';
+            fclose(gf);
+        } else {
+            strncpy(c->governor, "unknown", sizeof(c->governor) - 1);
+        }
+
+        c->throttled = (c->max_khz > 0 &&
+                        (float)c->cur_khz < (float)c->max_khz * THROTTLE_RATIO);
+        c->at_max = (c->max_khz > 0 && c->cur_khz >= c->max_khz);
+
+        /* Track global max for cluster detection */
+        if (c->max_khz > max_seen) max_seen = c->max_khz;
+
+        c->cluster = -1; /* assigned below */
+        count++;
+    }
+
+    /* Cluster detection: cores with lower max_khz = efficiency */
+    if (count > 1 && max_seen > 0) {
+        long threshold = (long)((float)max_seen * 0.85f);
+        for (int i = 0; i < count; i++) {
+            cores[i].cluster = (cores[i].max_khz < threshold) ? 0 : 1;
+        }
+    }
+
+    return count;
+}
+
+/* ?? /proc/stat CPU total ??????????????????????????????????????????????? */
+
+static bool read_proc_stat(cpu_stat_t *st)
 {
     FILE *f = fopen("/proc/stat", "r");
-    if (!f) return 0;
-    /* First line: "cpu  user nice system idle iowait irq softirq ..." */
-    int ok = (fscanf(f, "cpu %llu %llu %llu %llu %llu %llu %llu",
-                     &s->user, &s->nice, &s->system, &s->idle,
-                     &s->iowait, &s->irq, &s->softirq) == 7);
+    if (!f) return false;
+    char line[256];
+    bool ok = false;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "cpu ", 4) == 0) {
+            sscanf(line + 4, "%llu %llu %llu %llu %llu %llu %llu",
+                   &st->user, &st->nice, &st->system, &st->idle,
+                   &st->iowait, &st->irq, &st->softirq);
+            ok = true;
+            break;
+        }
+    }
     fclose(f);
     return ok;
 }
 
-/* Returns overall CPU busy % since last call. -1 if first call. */
-static float cpu_busy_percent(void)
+static int compute_cpu_pct(const cpu_stat_t *prev, const cpu_stat_t *cur)
 {
-    cpu_stat_t cur;
-    if (!read_proc_stat(&cur)) return -1.0f;
-
-    if (g_first_stat) {
-        g_prev_stat  = cur;
-        g_first_stat = 0;
-        return -1.0f;
-    }
-
-    unsigned long long d_user    = cur.user    - g_prev_stat.user;
-    unsigned long long d_nice    = cur.nice    - g_prev_stat.nice;
-    unsigned long long d_system  = cur.system  - g_prev_stat.system;
-    unsigned long long d_idle    = cur.idle    - g_prev_stat.idle;
-    unsigned long long d_iowait  = cur.iowait  - g_prev_stat.iowait;
-    unsigned long long d_irq     = cur.irq     - g_prev_stat.irq;
-    unsigned long long d_softirq = cur.softirq - g_prev_stat.softirq;
-
-    unsigned long long busy  = d_user + d_nice + d_system + d_irq + d_softirq;
-    unsigned long long total = busy + d_idle + d_iowait;
-
-    g_prev_stat = cur;
-    if (!total) return 0.0f;
-    return (float)(busy * 100ULL) / (float)total;
+    unsigned long long prev_total = prev->user + prev->nice + prev->system +
+                                    prev->idle + prev->iowait + prev->irq +
+                                    prev->softirq;
+    unsigned long long cur_total  = cur->user  + cur->nice  + cur->system  +
+                                    cur->idle  + cur->iowait + cur->irq   +
+                                    cur->softirq;
+    unsigned long long dtotal = cur_total - prev_total;
+    if (dtotal == 0) return 0;
+    unsigned long long didle = cur->idle - prev->idle;
+    return (int)(100ULL * (dtotal - didle) / dtotal);
 }
 
-/* ── Top hog process ──────────────────────────────────────────────────── */
+/* ?? /proc/[pid]/stat reader ???????????????????????????????????????????? */
 
-static char g_hog_proc[128] = {0};
-static float g_hog_pct = 0.0f;
-
-static void find_hog_process(void)
+static int read_proc_procs(proc_t *procs, int max_procs)
 {
-    /* top -bn1: first data line after header is highest CPU consumer */
-    FILE *f = popen("top -bn1 -o %CPU 2>/dev/null | awk 'NR>7 && NF>0 {print $9,$12; exit}'", "r");
-    if (!f) return;
-    char cpu_str[16] = {0};
-    char name[96]    = {0};
-    if (fscanf(f, "%15s %95s", cpu_str, name) == 2) {
-        g_hog_pct = atof(cpu_str);
-        strncpy(g_hog_proc, name, sizeof(g_hog_proc) - 1);
-    }
-    pclose(f);
-}
+    DIR *d = opendir("/proc");
+    if (!d) return 0;
 
-/* ── Cluster analysis ─────────────────────────────────────────────────── */
+    int count = 0;
+    struct dirent *ent;
 
-typedef struct {
-    long avg_cur_khz;
-    long max_khz;
-    float util;   /* cur/max */
-    char governor[32];
-} cluster_t;
+    while ((ent = readdir(d)) != NULL && count < max_procs) {
+        /* Only numeric dirs */
+        if (ent->d_name[0] < '1' || ent->d_name[0] > '9') continue;
 
-static void cluster_stats(int start, int end, cluster_t *out)
-{
-    long sum_cur = 0, sum_max = 0;
-    int  count   = 0;
-    out->governor[0] = '\0';
+        int pid = atoi(ent->d_name);
+        if (pid <= 0) continue;
 
-    for (int i = start; i <= end; i++) {
-        if (!g_cores[i].online) continue;
-        sum_cur += g_cores[i].cur_khz;
-        sum_max += g_cores[i].max_khz;
+        char path[64];
+        snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+        FILE *f = fopen(path, "r");
+        if (!f) continue;
+
+        char line[512];
+        if (!fgets(line, sizeof(line), f)) { fclose(f); continue; }
+        fclose(f);
+
+        /* Format: pid (name) state ppid ... utime stime ... */
+        proc_t *p = &procs[count];
+        p->pid = pid;
+        p->cpu_time = 0;
+        p->cpu_pct  = 0;
+        p->name[0]  = '\0';
+
+        /* Extract name from (name) */
+        char *nb = strchr(line, '(');
+        char *ne = strrchr(line, ')');
+        if (nb && ne && ne > nb) {
+            size_t len = (size_t)(ne - nb - 1);
+            if (len >= sizeof(p->name)) len = sizeof(p->name) - 1;
+            strncpy(p->name, nb + 1, len);
+            p->name[len] = '\0';
+        }
+
+        /* Fields after ')': state ppid pgrp sid ... utime(14) stime(15) */
+        if (ne) {
+            unsigned long utime = 0, stime = 0;
+            int fields = sscanf(ne + 2,
+                "%*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u "
+                "%lu %lu", &utime, &stime);
+            if (fields == 2)
+                p->cpu_time = (unsigned long long)utime + (unsigned long long)stime;
+        }
+
         count++;
-        if (!out->governor[0])
-            strncpy(out->governor, g_cores[i].governor, sizeof(out->governor) - 1);
     }
-    if (!count) { out->avg_cur_khz = 0; out->max_khz = 0; out->util = 0.0f; return; }
-    out->avg_cur_khz = sum_cur / count;
-    out->max_khz     = sum_max / count;
-    out->util        = out->max_khz ? (float)out->avg_cur_khz / (float)out->max_khz : 0.0f;
+    closedir(d);
+    return count;
 }
 
-/* ── Probe & emit ─────────────────────────────────────────────────────── */
+/* ?? Compute per-process CPU delta ?????????????????????????????????????? */
 
-static void probe_and_emit(int ipc_fd, const char *cmd)
+static void compute_proc_pcts(proc_t *procs, int nprocs,
+                               unsigned long long total_delta)
 {
-    read_cpu_freq();
-    float overall_pct = cpu_busy_percent();
-    find_hog_process();
+    if (total_delta == 0 || g_first) return;
 
-    cluster_t eff, perf;
-    cluster_stats(0, 3, &eff);
-    cluster_stats(4, 7, &perf);
-
-    /* ── Log ──────────────────────────────────────────────────────── */
-    daemon_log_info("CPU: overall=%.1f%% eff_util=%.0f%% perf_util=%.0f%% hog=%s(%.1f%%)",
-                    overall_pct < 0 ? 0.0f : overall_pct,
-                    eff.util  * 100.0f,
-                    perf.util * 100.0f,
-                    g_hog_proc[0] ? g_hog_proc : "none",
-                    g_hog_pct);
-
-    /* ── IPC response ─────────────────────────────────────────────── */
-    if (ipc_fd >= 0 && cmd) {
-        if (strncmp(cmd, "CPU FREQ", 8) == 0) {
-            for (int i = 0; i < NUM_CORES; i++) {
-                dprintf(ipc_fd,
-                        "CPU FREQ core=%d cur=%ldkHz max=%ldkHz ratio=%.0f%% gov=%s\n",
-                        i,
-                        g_cores[i].cur_khz, g_cores[i].max_khz,
-                        g_cores[i].max_khz ?
-                            (float)g_cores[i].cur_khz / (float)g_cores[i].max_khz * 100.0f : 0.0f,
-                        g_cores[i].governor);
+    for (int i = 0; i < nprocs; i++) {
+        /* Find matching pid in prev */
+        for (int j = 0; j < g_prev_nprocs; j++) {
+            if (g_prev_procs[j].pid == procs[i].pid) {
+                unsigned long long dt = procs[i].cpu_time - g_prev_procs[j].cpu_time;
+                procs[i].cpu_pct = (int)(100ULL * dt / total_delta);
+                break;
             }
-        } else if (strncmp(cmd, "CPU LOAD", 8) == 0) {
-            dprintf(ipc_fd, "CPU LOAD overall=%.1f%% hog=%s(%.1f%%)\n",
-                    overall_pct < 0 ? 0.0f : overall_pct,
-                    g_hog_proc[0] ? g_hog_proc : "none",
-                    g_hog_pct);
-        } else if (strncmp(cmd, "CPU CLUSTER", 11) == 0) {
-            dprintf(ipc_fd,
-                    "CPU CLUSTER eff_avg=%ldkHz(%.0f%%) perf_avg=%ldkHz(%.0f%%)\n",
-                    eff.avg_cur_khz,  eff.util  * 100.0f,
-                    perf.avg_cur_khz, perf.util * 100.0f);
-        } else if (strncmp(cmd, "CPU GOV", 7) == 0) {
-            dprintf(ipc_fd, "CPU GOV eff=%s perf=%s\n",
-                    eff.governor[0]  ? eff.governor  : "unknown",
-                    perf.governor[0] ? perf.governor : "unknown");
+        }
+    }
+}
+
+/* Simple insertion sort top-N by cpu_pct */
+static void sort_top_n(proc_t *procs, int nprocs)
+{
+    for (int i = 1; i < nprocs; i++) {
+        proc_t key = procs[i];
+        int j = i - 1;
+        while (j >= 0 && procs[j].cpu_pct < key.cpu_pct) {
+            procs[j + 1] = procs[j];
+            j--;
+        }
+        procs[j + 1] = key;
+    }
+}
+
+/* ?? Results writer ????????????????????????????????????????????????????? */
+
+static void write_results(int score, int scan_num, int sigs,
+                           int sys_pct, int ncores, int throttled)
+{
+    FILE *f = fopen(RESULTS_FILE, "w");
+    if (!f) return;
+
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+
+    const char *grade = score >= 85 ? "HEALTHY"
+                      : score >= 65 ? "BUSY"
+                      : score >= 45 ? "STRESSED"
+                      : "OVERLOADED";
+
+    fprintf(f,
+        "{\n"
+        "  \"daemon\": \"" DAEMON_NAME "\",\n"
+        "  \"timestamp\": \"%s\",\n"
+        "  \"scan_number\": %d,\n"
+        "  \"signals_fired\": %d,\n"
+        "  \"cpu_score\": %d,\n"
+        "  \"grade\": \"%s\",\n"
+        "  \"system_cpu_pct\": %d,\n"
+        "  \"total_cores\": %d,\n"
+        "  \"throttled_cores\": %d\n"
+        "}\n",
+        ts, scan_num, sigs, score, grade,
+        sys_pct, ncores, throttled);
+
+    fclose(f);
+}
+
+/* ?? Main poll ?????????????????????????????????????????????????????????? */
+
+static void poll(int scan_num)
+{
+    char ts[32];
+    time_t t = time(NULL);
+    strftime(ts, sizeof(ts), "%H:%M:%S", localtime(&t));
+
+    printf("\n[ROCKY] ?? CPU Scan #%d  %s ??????????????????????????????\n",
+           scan_num, ts);
+
+    int score = 100;
+    int sigs  = 0;
+
+    /* ?? System CPU % ??????????????????????????????????????????????????? */
+    cpu_stat_t cur_stat = {0};
+    int sys_pct = 0;
+    if (read_proc_stat(&cur_stat)) {
+        if (!g_first)
+            sys_pct = compute_cpu_pct(&g_prev_stat, &cur_stat);
+        g_prev_stat = cur_stat;
+    }
+    printf("[ROCKY]  System CPU  : %d%%\n", sys_pct);
+
+    /* ?? CPU cores ?????????????????????????????????????????????????????? */
+    cpu_core_t cores[MAX_CORES];
+    int ncores = enumerate_cpus(cores, MAX_CORES);
+
+    int throttled_count  = 0;
+    int maxed_count      = 0;
+    int perf_gov_count   = 0;
+    long eff_cur = 0, eff_max = 0, perf_cur = 0, perf_max = 0;
+    int  eff_n   = 0, perf_n  = 0;
+
+    printf("[ROCKY]  %-5s  %-7s  %-7s  %-12s  %s\n",
+           "Core", "CurMHz", "MaxMHz", "Governor", "State");
+    printf("[ROCKY]  ??????????????????????????????????????????????????\n");
+
+    for (int i = 0; i < ncores; i++) {
+        cpu_core_t *c = &cores[i];
+        const char *state = c->throttled ? "THROTTLED"
+                          : c->at_max    ? "MAX"
+                          : "OK";
+        const char *cl = c->cluster == 0 ? "[E]"
+                       : c->cluster == 1 ? "[P]" : "   ";
+
+        printf("[ROCKY]  cpu%-2d%s %-7ld  %-7ld  %-12s  %s\n",
+               c->core, cl,
+               c->cur_khz / 1000, c->max_khz / 1000,
+               c->governor, state);
+
+        if (c->throttled) throttled_count++;
+        if (c->at_max)    maxed_count++;
+        if (strcmp(c->governor, "performance") == 0) perf_gov_count++;
+
+        /* Cluster utilisation */
+        if (c->cluster == 0) {
+            eff_cur += c->cur_khz; eff_max += c->max_khz; eff_n++;
+        } else if (c->cluster == 1) {
+            perf_cur += c->cur_khz; perf_max += c->max_khz; perf_n++;
         }
     }
 
-    /* ── Signal evaluation ─────────────────────────────────────────── */
+    /* Cluster balance */
+    float eff_util  = (eff_n  > 0 && eff_max  > 0) ? 100.0f * (float)eff_cur  / (float)eff_max  : 0;
+    float perf_util = (perf_n > 0 && perf_max > 0) ? 100.0f * (float)perf_cur / (float)perf_max : 0;
 
-    /* CPU hog */
-    if (g_hog_pct >= CRIT_PCT) {
-        char ctx[128];
-        snprintf(ctx, sizeof(ctx), "proc=%s pct=%.1f",
-                 g_hog_proc[0] ? g_hog_proc : "unknown", g_hog_pct);
-        gaveld_emit(DAEMON_NAME, "CPU_HOG_CRITICAL", g_hog_pct, ctx);
-        splinterd_emit("cpu_hog_critical", ctx);
-    } else if (g_hog_pct >= HOG_PCT) {
-        char ctx[128];
-        snprintf(ctx, sizeof(ctx), "proc=%s pct=%.1f",
-                 g_hog_proc[0] ? g_hog_proc : "unknown", g_hog_pct);
-        gaveld_emit(DAEMON_NAME, "CPU_HOG", g_hog_pct, ctx);
-        splinterd_emit("cpu_hog", ctx);
+    if (eff_n > 0 && perf_n > 0) {
+        printf("[ROCKY]  Efficiency cluster: %.0f%%  Performance cluster: %.0f%%\n",
+               eff_util, perf_util);
+
+        /* Efficiency running harder than performance = scheduler imbalance */
+        if (eff_util > perf_util + 20.0f) {
+            char ctx[80];
+            snprintf(ctx, sizeof(ctx),
+                     "eff=%.0f%% perf=%.0f%% delta=%.0f%%",
+                     eff_util, perf_util, eff_util - perf_util);
+            gaveld_emit(DAEMON_NAME, "CPU_CLUSTER_IMBALANCE", eff_util - perf_util, ctx);
+            splinterd_emit("CPU_CLUSTER_IMBALANCE", ctx);
+            score -= 12;
+            sigs++;
+            printf("[ROCKY]  !  Cluster imbalance -- efficiency overloaded\n");
+        }
     }
 
-    /* Cluster imbalance: efficiency cluster running harder than performance */
-    if (eff.util > 0.1f && perf.util > 0.1f && eff.util > perf.util + 0.20f) {
-        char ctx[128];
-        snprintf(ctx, sizeof(ctx),
-                 "eff_util=%.0f%% perf_util=%.0f%%",
-                 eff.util * 100.0f, perf.util * 100.0f);
-        gaveld_emit(DAEMON_NAME, "CPU_CLUSTER_IMBALANCE", eff.util * 100.0f, ctx);
-        splinterd_emit("cpu_cluster_imbalance", ctx);
+    /* Throttling */
+    if (throttled_count > 0) {
+        char ctx[48];
+        snprintf(ctx, sizeof(ctx), "throttled=%d/%d", throttled_count, ncores);
+        gaveld_emit(DAEMON_NAME, "CPU_THROTTLING", (float)throttled_count, ctx);
+        splinterd_emit("CPU_THROTTLING", ctx);
+        score -= 8 * throttled_count;
+        sigs++;
+        printf("[ROCKY]  !  %d/%d cores throttled\n", throttled_count, ncores);
     }
 
-    /* Governor locked to performance */
-    int gov_perf = (strcmp(eff.governor,  "performance") == 0 ||
-                    strcmp(perf.governor, "performance") == 0);
-    if (gov_perf) {
-        char ctx[128];
-        snprintf(ctx, sizeof(ctx), "eff_gov=%s perf_gov=%s",
-                 eff.governor, perf.governor);
-        gaveld_emit(DAEMON_NAME, "GOVERNOR_PERFORMANCE", 0.0f, ctx);
-        splinterd_emit("governor_performance", ctx);
+    /* All cores maxed */
+    if (ncores > 0 && maxed_count == ncores) {
+        char ctx[32];
+        snprintf(ctx, sizeof(ctx), "cores=%d", ncores);
+        gaveld_emit(DAEMON_NAME, "ALL_CORES_MAXED", (float)ncores, ctx);
+        splinterd_emit("ALL_CORES_MAXED", ctx);
+        score -= 15;
+        sigs++;
+        printf("[ROCKY]  !  All cores at max frequency\n");
     }
 
-    /* All cores maxed: both clusters at ≥ 95% utilisation */
-    if (eff.util >= 0.95f && perf.util >= 0.95f) {
-        char ctx[64];
-        snprintf(ctx, sizeof(ctx),
-                 "eff=%.0f%% perf=%.0f%%",
-                 eff.util * 100.0f, perf.util * 100.0f);
-        gaveld_emit(DAEMON_NAME, "ALL_CORES_MAXED", 100.0f, ctx);
-        splinterd_emit("all_cores_maxed", ctx);
+    /* Performance governor */
+    if (perf_gov_count > 0) {
+        char ctx[32];
+        snprintf(ctx, sizeof(ctx), "cores=%d", perf_gov_count);
+        gaveld_emit(DAEMON_NAME, "GOVERNOR_PERFORMANCE", (float)perf_gov_count, ctx);
+        splinterd_emit("GOVERNOR_PERFORMANCE", ctx);
+        score -= 8;
+        sigs++;
+        printf("[ROCKY]  !  %d core(s) locked to performance governor\n",
+               perf_gov_count);
     }
+
+    /* ?? Per-process CPU ???????????????????????????????????????????????? */
+    proc_t procs[MAX_PROCS];
+    int nprocs = read_proc_procs(procs, MAX_PROCS);
+
+    /* Compute total CPU delta for normalisation */
+    unsigned long long prev_total = g_prev_stat.user + g_prev_stat.nice +
+                                    g_prev_stat.system + g_prev_stat.idle +
+                                    g_prev_stat.iowait + g_prev_stat.irq +
+                                    g_prev_stat.softirq;
+    unsigned long long cur_total  = cur_stat.user + cur_stat.nice +
+                                    cur_stat.system + cur_stat.idle +
+                                    cur_stat.iowait + cur_stat.irq +
+                                    cur_stat.softirq;
+    unsigned long long total_delta = cur_total > prev_total ?
+                                     cur_total - prev_total : 0;
+
+    compute_proc_pcts(procs, nprocs, total_delta);
+    sort_top_n(procs, nprocs);
+
+    int top = nprocs < TOP_N ? nprocs : TOP_N;
+    if (!g_first && top > 0) {
+        printf("[ROCKY]  Top processes:\n");
+        for (int i = 0; i < top; i++) {
+            if (procs[i].cpu_pct <= 0) break;
+            printf("[ROCKY]    %3d%%  pid=%-6d  %s\n",
+                   procs[i].cpu_pct, procs[i].pid, procs[i].name);
+
+            if (procs[i].cpu_pct >= HOG_CRITICAL_PCT) {
+                char ctx[80];
+                snprintf(ctx, sizeof(ctx), "pid=%d name=%.24s pct=%d",
+                         procs[i].pid, procs[i].name, procs[i].cpu_pct);
+                gaveld_emit(DAEMON_NAME, "CPU_HOG_CRITICAL",
+                            (float)procs[i].cpu_pct, ctx);
+                splinterd_emit("CPU_HOG_CRITICAL", ctx);
+                score -= 25;
+                sigs++;
+                printf("[ROCKY]    !! CRITICAL HOG: %s\n", procs[i].name);
+            } else if (procs[i].cpu_pct >= HOG_PCT) {
+                char ctx[80];
+                snprintf(ctx, sizeof(ctx), "pid=%d name=%.24s pct=%d",
+                         procs[i].pid, procs[i].name, procs[i].cpu_pct);
+                gaveld_emit(DAEMON_NAME, "CPU_HOG",
+                            (float)procs[i].cpu_pct, ctx);
+                splinterd_emit("CPU_HOG", ctx);
+                score -= 15;
+                sigs++;
+                printf("[ROCKY]    !  HOG: %s\n", procs[i].name);
+            }
+        }
+    }
+
+    /* Save state for next poll */
+    if (nprocs > MAX_PROCS) nprocs = MAX_PROCS;
+    memcpy(g_prev_procs, procs, (size_t)nprocs * sizeof(proc_t));
+    g_prev_nprocs = nprocs;
+    g_first = false;
+
+    if (score < 0) score = 0;
+    const char *grade = score >= 85 ? "HEALTHY"
+                      : score >= 65 ? "BUSY"
+                      : score >= 45 ? "STRESSED"
+                      : "OVERLOADED";
+
+    printf("[ROCKY]  CPU score : %d/100  [%s]  signals=%d\n",
+           score, grade, sigs);
+
+    write_results(score, scan_num, sigs, sys_pct, ncores, throttled_count);
 }
 
-/* ── Main ─────────────────────────────────────────────────────────────── */
+/* ?? Main ??????????????????????????????????????????????????????????????? */
 
 int main(void)
 {
-    
+    bexec_init();
 
-    int fd = connect_bus();
-    if (fd < 0) {
-        daemon_log_error(DAEMON_NAME ": cannot connect to turtlecom — exiting");
-        return 1;
+    if (!is_enabled()) {
+        printf("[ROCKY] disabled via syndicatectl -- exiting\n");
+        return 0;
     }
 
-    write(fd, "HELLO WORKER ROCKSTEADY\n", 24);
-    daemon_log_info(DAEMON_NAME " ONLINE — CPU Load & Frequency Monitor");
+    printf("[ROCKY] CPU Load, Frequency & Cluster Balance Daemon: ONLINE\n");
+    printf("[ROCKY] HOG threshold: %d%%  Critical: %d%%\n",
+           HOG_PCT, HOG_CRITICAL_PCT);
 
-    char buf[256];
-    int  tick = 0, hb_tick = 0;
+    int interval  = get_interval();
+    int max_scans = get_max_scans();
+    int scan_num  = 0;
 
     for (;;) {
-        usleep(100000);   /* 100ms */
-        tick++;
-        hb_tick++;
-
-        /* Heartbeat */
-        if (hb_tick >= HB_TICKS) {
-            write(fd, "HEARTBEAT ROCKSTEADY\n", 21);
-            hb_tick = 0;
+        if (!is_enabled()) {
+            printf("[ROCKY] disabled -- stopping\n");
+            break;
         }
 
-        /* Periodic probe */
-        if (tick >= PROBE_TICKS) {
-            tick = 0;
-            probe_and_emit(-1, NULL);
+        interval  = get_interval();
+        max_scans = get_max_scans();
+        scan_num++;
+
+        poll(scan_num);
+
+        if (max_scans > 0 && scan_num >= max_scans) {
+            printf("[ROCKY] reached scan_count=%d -- exiting\n", max_scans);
+            break;
         }
 
-        /* IPC */
-        int n = read(fd, buf, sizeof(buf) - 1);
-        if (n <= 0) continue;
-        buf[n] = '\0';
-
-        if (strncmp(buf, "CAPABILITY?", 11) == 0) {
-            write(fd, "CAPABILITY CPU FREQ\n",    20);
-            write(fd, "CAPABILITY CPU LOAD\n",    20);
-            write(fd, "CAPABILITY CPU CLUSTER\n", 23);
-            write(fd, "CAPABILITY CPU GOV\n",     19);
-            write(fd, "CAPABILITY HEARTBEAT SEND\n", 26);
-            continue;
-        }
-
-        if (strncmp(buf, "HEARTBEAT SEND", 14) == 0) {
-            write(fd, "HEARTBEAT ROCKSTEADY\n", 21);
-            continue;
-        }
-
-        if (strncmp(buf, "CPU", 3) == 0) {
-            probe_and_emit(fd, buf);
-            continue;
-        }
+        printf("[ROCKY] Next scan in %ds\n", interval);
+        sleep(interval);
     }
 
     return 0;
