@@ -29,7 +29,7 @@
 
 #include "rahzerd.h"
 #include "gaveld_emit.h"
-volatile bool g_running = true;
+volatile bool g_rahzerd_running = true;
 #include "ipc_globals.h"
 
 #define DEFAULT_POLL_SEC  15
@@ -61,7 +61,7 @@ static void rzlog(const char *lvl, const char *fmt, ...) {
     va_end(ap);
 }
 
-static void handle_sig(int s) { (void)s; g_running = 0; }
+static void handle_sig(int s) { (void)s; g_rahzerd_running = 0; }
 
 char *rz_run(const char *cmd) {
     FILE *f = popen(cmd, "r");
@@ -854,7 +854,7 @@ int main(void) {
     memset(&state, 0, sizeof(state));
     state.first_poll = 1;
 
-    while (g_running) {
+    while (g_rahzerd_running) {
         rz_state_update(&state);
         if (!state.first_poll)
             rz_emit_netstate(&state.curr);
@@ -870,7 +870,7 @@ int main(void) {
               state.curr.xiaomi.divergence_detected,
               state.curr.poll_duration_ms);
         state.curr.poll_cycle++;
-        for (int i = 0; i < g_poll_sec && g_running; i++)
+        for (int i = 0; i < g_poll_sec && g_rahzerd_running; i++)
             sleep(1);
     }
 

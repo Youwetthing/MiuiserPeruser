@@ -17,7 +17,7 @@
 #include "daemon_core.h"
 #include <stdbool.h>
 #include "ipc_globals.h"
-volatile bool g_running = true;
+static volatile bool g_ratkingd_running = true;
 #include "gaveld_emit.h"
 #include <stdio.h>
 #include <stdlib.h>
