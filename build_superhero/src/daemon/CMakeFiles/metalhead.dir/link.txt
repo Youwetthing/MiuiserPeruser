@@ -1,1 +1,0 @@
-/data/data/com.termux/files/usr/bin/cc -O3 -DNDEBUG -Xlinker --dependency-file=CMakeFiles/metalhead.dir/link.d CMakeFiles/metalhead.dir/metalhead.c.o CMakeFiles/metalhead.dir/ipc.c.o CMakeFiles/metalhead.dir/daemon_core.c.o -o metalhead  ../core/libsensei_core.a -lpthread /data/data/com.termux/files/usr/lib/libcrypto.so
