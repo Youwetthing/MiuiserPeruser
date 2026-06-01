@@ -232,7 +232,7 @@ static void poll_integrity(void)
     if (suspicious_mod[0]) {
         char ev[128];
         snprintf(ev, sizeof(ev), "module=%.48s total=%d", suspicious_mod, nmod);
-        gaveld_emit(DAEMON_NAME, "KERNEL_MODULE_UNKNOWN", (float)nmod, ev);
+        gaveld_emit(DAEMON_NAME, "KERNEL_MODULE_UNKNOWN", 0.0, ev);
         splinterd_emit("kernel_module", ev);
     }
 
@@ -276,7 +276,7 @@ static void poll_integrity(void)
             snprintf(ev, sizeof(ev),
                      "streak=%d su=%d magisk=%d kernelsu=%d score=%d",
                      g_root_streak, su_found, magisk, kernelsu, score);
-            gaveld_emit(DAEMON_NAME, "ROOT_PERSISTENCE", (float)g_root_streak, ev);
+            gaveld_emit(DAEMON_NAME, "ROOT_PERSISTENCE", 0.0, ev);
             splinterd_emit("root_persistence", ev);
         }
     } else {
@@ -300,7 +300,7 @@ static void poll_integrity(void)
         snprintf(ev, sizeof(ev),
                  "score=%d grade=%.12s rooted=%d modules=%d",
                  score, grade, rooted, nmod);
-        gaveld_emit(DAEMON_NAME, "INTEGRITY_SCORE_LOW", (float)score, ev);
+        gaveld_emit(DAEMON_NAME, "INTEGRITY_SCORE_LOW", 0.0, ev);
         splinterd_emit("integrity_warn", ev);
     }
 

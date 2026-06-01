@@ -281,7 +281,7 @@ static void poll_procs(void)
         char ev[256];
         snprintf(ev, sizeof(ev),
                  "zombie_count=%d total_procs=%d", zombie_count, g_nprocs);
-        gaveld_emit(DAEMON_NAME, "ZOMBIE_DETECTED", (float)zombie_count, ev);
+        gaveld_emit(DAEMON_NAME, "ZOMBIE_DETECTED", 0.0, ev);
         splinterd_emit("zombie_detected", ev);
     }
 
@@ -291,7 +291,7 @@ static void poll_procs(void)
         snprintf(ev, sizeof(ev),
                  "pid=%d name=%.24s cpu_pct=%d",
                  sorted_cpu[0].pid, sorted_cpu[0].name, sorted_cpu[0].cpu_pct);
-        gaveld_emit(DAEMON_NAME, "CPU_HOG_PROCESS", (float)sorted_cpu[0].cpu_pct, ev);
+        gaveld_emit(DAEMON_NAME, "CPU_HOG_PROCESS", 0.0, ev);
         splinterd_emit("cpu_hog", ev);
         printf("[RATKING]  *** HOG: %s (pid %d) consuming %d%% CPU\n",
                sorted_cpu[0].name, sorted_cpu[0].pid, sorted_cpu[0].cpu_pct);
@@ -302,7 +302,7 @@ static void poll_procs(void)
         char ev[256];
         snprintf(ev, sizeof(ev),
                  "avail_mb=%ld total_mb=%ld pct=%d", avail_mb, total_mb, mem_pct);
-        gaveld_emit(DAEMON_NAME, "MEM_PRESSURE", (float)avail_mb, ev);
+        gaveld_emit(DAEMON_NAME, "MEM_PRESSURE", 0.0, ev);
         splinterd_emit("mem_pressure", ev);
         printf("[RATKING]  *** LOW MEMORY: %ldMB available\n", avail_mb);
     }

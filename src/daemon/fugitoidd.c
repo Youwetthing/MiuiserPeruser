@@ -218,7 +218,7 @@ static void poll(int scan_num)
             }
             char ev[256];
             snprintf(ev, sizeof(ev), "count=%d target=%.48s", anrs, target);
-            gaveld_emit(DAEMON_NAME, "ANR_DETECTED", (float)anrs, ev);
+            gaveld_emit(DAEMON_NAME, "ANR_DETECTED", 0.0, ev);
             splinterd_emit("anr_detected", ev);
             printf("[FUGITOID]  ⚠  ANR: %s\n", target);
         }
@@ -238,7 +238,7 @@ static void poll(int scan_num)
             }
             char ev[256];
             snprintf(ev, sizeof(ev), "count=%d process=%.48s", crashes, target);
-            gaveld_emit(DAEMON_NAME, "CRASH_DETECTED", (float)crashes, ev);
+            gaveld_emit(DAEMON_NAME, "CRASH_DETECTED", 0.0, ev);
             splinterd_emit("crash_detected", ev);
             printf("[FUGITOID]  ⚠  CRASH: %s\n", target);
         }
@@ -246,7 +246,7 @@ static void poll(int scan_num)
         if (ooms > 0) {
             char ev[64];
             snprintf(ev, sizeof(ev), "oom_events=%d", ooms);
-            gaveld_emit(DAEMON_NAME, "OOM_KILL_EVENT", (float)ooms, ev);
+            gaveld_emit(DAEMON_NAME, "OOM_KILL_EVENT", 0.0, ev);
             splinterd_emit("oom_kill", ev);
             printf("[FUGITOID]  ⚠  OOM kill: %d event(s)\n", ooms);
         }

@@ -749,7 +749,7 @@ void rz_state_update(rz_state_t *state) {
         gaveld_emit("rahzerd", "DNS_ANOMALY", 1.0, state->curr.xiaomi.divergence_reason);
         rz_emit_anomaly("xiaomi_divergence", state->curr.xiaomi.divergence_reason);
     if (state->curr.ports.suspicious_listeners > state->prev.ports.suspicious_listeners)
-        gaveld_emit("rahzerd", "UNKNOWN_LISTENER", (double)state->curr.ports.suspicious_listeners, "layer=ports");
+        gaveld_emit("rahzerd", "UNKNOWN_LISTENER", 0.0->curr.ports.suspicious_listeners, "layer=ports");
         rz_emit_anomaly("suspicious_listener", "{\"layer\":\"ports\"}");
 }
 
@@ -793,7 +793,7 @@ int rz_emit_netstate(const rz_snapshot_t *snap) {
     if (snap->dns.private_dns_active == 0)
         gaveld_emit("rahzerd", "PRIVATE_DNS_INACTIVE", 1.0, "");
     if (snap->ports.listen_count > 20)
-        gaveld_emit("rahzerd", "EXCESSIVE_CONNECTIONS", (double)snap->ports.listen_count, "");
+        gaveld_emit("rahzerd", "EXCESSIVE_CONNECTIONS", 0.0->ports.listen_count, "");
     return splinter_send(buf);
 }
 

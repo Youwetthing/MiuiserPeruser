@@ -361,7 +361,7 @@ static void poll(int scan_num)
     if (battery >= 0 && battery <= BATTERY_CRITICAL) {
         char ctx[32];
         snprintf(ctx, sizeof(ctx), "level=%d%%", battery);
-        gaveld_emit(DAEMON_NAME, "BATTERY_LEVEL_CRITICAL", (float)battery, ctx);
+        gaveld_emit(DAEMON_NAME, "BATTERY_LEVEL_CRITICAL", 0.0, ctx);
         splinterd_emit("BATTERY_LEVEL_CRITICAL", ctx);
         score -= 15;
         sigs++;
@@ -440,7 +440,7 @@ static void poll(int scan_num)
     if (full_nonsys >= FULL_WAKELOCK_WARN) {
         char ctx[32];
         snprintf(ctx, sizeof(ctx), "count=%d", full_nonsys);
-        gaveld_emit(DAEMON_NAME, "WAKELOCK_ANOMALY", (float)full_nonsys, ctx);
+        gaveld_emit(DAEMON_NAME, "WAKELOCK_ANOMALY", 0.0, ctx);
         splinterd_emit("WAKELOCK_ANOMALY", ctx);
         score -= 10;
         sigs++;
@@ -452,7 +452,7 @@ static void poll(int scan_num)
     if (doze_intr > 2) {
         char ctx[32];
         snprintf(ctx, sizeof(ctx), "interruptions=%d", doze_intr);
-        gaveld_emit(DAEMON_NAME, "DOZE_INTERRUPTED", (float)doze_intr, ctx);
+        gaveld_emit(DAEMON_NAME, "DOZE_INTERRUPTED", 0.0, ctx);
         splinterd_emit("DOZE_INTERRUPTED", ctx);
         score -= 10;
         sigs++;

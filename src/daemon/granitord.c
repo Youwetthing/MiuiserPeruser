@@ -221,7 +221,7 @@ static void poll_security(void)
         char ev[128];
         snprintf(ev, sizeof(ev),
                  "score=%d grade=%.12s vboot=%.16s", score, grade, vb_state);
-        gaveld_emit(DAEMON_NAME, "SECURITY_SCORE_LOW", (float)score, ev);
+        gaveld_emit(DAEMON_NAME, "SECURITY_SCORE_LOW", 0.0, ev);
         splinterd_emit("security_warn", ev);
     }
 }
