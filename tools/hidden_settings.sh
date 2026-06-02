@@ -20,8 +20,8 @@
 export PATH="$PATH:$HOME/.shizuku:$PREFIX/bin"
 source lib/miuiserperuser_common.sh 2>/dev/null || {
     run_shell() {
-        if [[ -x "$HOME/.shizuku/rish" ]]; then
-            "$HOME/.shizuku/rish" -c "$*" 2>/dev/null
+        if [[ -x "$HOME/rish" ]]; then
+            "$HOME/rish" -c "$*" 2>/dev/null
         elif command -v adb >/dev/null 2>&1; then
             adb shell "$@" 2>/dev/null
         fi
@@ -213,7 +213,7 @@ echo ""
 echo -e "${C_CYAN}📡 Connecting...${RESET}"
 if command -v adb >/dev/null 2>&1 && adb shell echo ready 2>/dev/null | grep -q ready; then
     echo -e "${C_GREEN}   ✅ Connected via ADB${RESET}"
-elif [[ -x "$HOME/.shizuku/rish" ]] && "$HOME/.shizuku/rish" -c "echo ready" 2>/dev/null | grep -q ready; then
+elif [[ -x "$HOME/rish" ]] && "$HOME/rish" -c "echo ready" 2>/dev/null | grep -q ready; then
     echo -e "${C_GREEN}   ✅ Connected via Shizuku rish${RESET}"
 else
     echo -e "${C_RED}   ❌ No connection — ensure ADB or Shizuku is running${RESET}"
