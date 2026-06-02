@@ -28,8 +28,8 @@ mkdir -p "$TMP_DIR"
 #  Shell Dispatcher
 # ------------------------------------------------------------
 run_shell() {
-    if [[ -x "$HOME/.shizuku/rish" ]]; then
-        "$HOME/.shizuku/rish" -c "$*" 2>/dev/null
+    if [[ -x "$HOME/rish" ]]; then
+        "$HOME/rish" -c "$*" 2>/dev/null
     elif command -v adb >/dev/null 2>&1; then
         adb shell "$@" 2>/dev/null
     else
@@ -49,7 +49,7 @@ echo ""
 
 echo -e "${C_CYAN}📡 Connecting to device...${RESET}"
 
-if [[ -x "$HOME/.shizuku/rish" ]] && "$HOME/.shizuku/rish" -c "getprop ro.product.model" 2>/dev/null | grep -q .; then
+if [[ -x "$HOME/rish" ]] && "$HOME/rish" -c "getprop ro.product.model" 2>/dev/null | grep -q .; then
     echo -e "${C_GREEN}   ✅ Connected via Shizuku rish${RESET}"
 elif adb shell getprop ro.product.model 2>/dev/null | grep -q .; then
     echo -e "${C_GREEN}   ✅ Connected via ADB${RESET}"
