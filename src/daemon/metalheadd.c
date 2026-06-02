@@ -1,23 +1,15 @@
 /*
  * metalheadd.c — Sensor Service Registry & Client Auditor
  *
- * Every poll:
- *   - Parse dumpsys sensorservice for all registered sensors
- *   - List sensor name, type, vendor, resolution, max range
- *   - Count active client connections per sensor
- *   - Flag sensors with unusual polling frequency or many background clients
- *   - Emit APRIL events when suspicious sensor access is detected
+ * Parses dumpsys sensorservice pipe-delimited format:
+ * 0xHEX) NAME | vendor | ver: N | type: desc(NUM) | perm | flags
  *
- * APRIL events emitted:
- *   sensor_access  — background app detected polling a sensitive sensor
- *   sensor_flood   — sensor sampling rate abnormally high
+ * Uses adb directly — dumpsys sensorservice is 150KB+, bexec buffer too small
  */
 
-#include "daemon_core.h"
-#include <stdbool.h>
 #include "ipc_globals.h"
-#include "backend_exec.h"
 #include "gaveld_emit.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,12 +17,55 @@
 #include <time.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <stdbool.h>
 
-#define DAEMON_NAME    "metalheadd"
-#define POLL_SEC       30
-#define MAX_SENSORS    64
-#define FLOOD_HZ       200   /* sampling rate considered suspicious */
-#define CLIENT_WARN    4     /* many clients on one sensor = watch */
+#define DAEMON_NAME      "metalheadd"
+#define DEFAULT_INTERVAL 30
+#define MAX_SENSORS      64
+#define CLIENT_SPIKE     4
+#define CLIENT_SENSITIVE 2
+
+#ifndef MP_BASE_DIR
+#define MP_BASE_DIR "/data/data/com.termux/files/home/MiuiserPeruser"
+#endif
+
+#define STATE_FILE   MP_BASE_DIR "/Registry/daemon_state.json"
+#define RESULTS_DIR  MP_BASE_DIR "/Registry/daemon_results"
+#define RESULTS_FILE RESULTS_DIR "/" DAEMON_NAME ".json"
+
+typedef struct {
+    char  name[80];
+    char  vendor[48];
+    char  type_str[48];
+    int   type_id;
+    int   clients;
+    bool  is_sensitive;
+} sensor_t;
+
+static sensor_t g_sensors[MAX_SENSORS];
+static int      g_nsensors = 0;
+
+/* ── Config ───────────────────────────────────────────────────────────── */
+
+static int config_get_int(const char *key, int def)
+{
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd),
+             "jq -r '.%s.%s // %d' %s 2>/dev/null",
+             DAEMON_NAME, key, def, STATE_FILE);
+    FILE *f = popen(cmd, "r");
+    if (!f) return def;
+    char buf[32] = {0};
+    int val = def;
+    if (fgets(buf, sizeof(buf), f) && buf[0] != 'n')
+        val = atoi(buf);
+    pclose(f);
+    return val;
+}
+
+static int is_enabled(void)    { return config_get_int("enabled",    1); }
+static int get_interval(void)  { return config_get_int("interval",   DEFAULT_INTERVAL); }
+static int get_max_scans(void) { return config_get_int("scan_count", 0); }
 
 /* ── Splinterd emit ───────────────────────────────────────────────────── */
 
@@ -51,51 +86,8 @@ static void splinterd_emit(const char *type, const char *payload)
     close(fd);
 }
 
-/* ── Sensor record ────────────────────────────────────────────────────── */
+/* ── Type helpers ─────────────────────────────────────────────────────── */
 
-typedef struct {
-    char name[80];
-    char vendor[48];
-    char type_str[48];
-    int  type_id;
-    float max_range;
-    float resolution;
-    int  clients;
-    int  sample_rate_hz;
-    int  is_wakeup;
-} sensor_t;
-
-static sensor_t g_sensors[MAX_SENSORS];
-static int      g_nsensors = 0;
-
-/* ── Helpers ──────────────────────────────────────────────────────────── */
-
-
-/* Find value after "key=" on the same line, up to whitespace/newline */
-static int kv_extract(const char *line, const char *key,
-                       char *out, size_t outlen)
-{
-    const char *p = strstr(line, key);
-    if (!p) return 0;
-    p += strlen(key);
-    if (*p == '=') p++;
-    size_t i = 0;
-    while (*p && *p != ' ' && *p != '\t' && *p != '\n' && *p != ',' && i < outlen - 1)
-        out[i++] = *p++;
-    out[i] = '\0';
-    return i > 0;
-}
-
-/* Return 1 if type string is a sensitive sensor category */
-static int is_sensitive(const char *type)
-{
-    if (!type) return 0;
-    return strstr(type,"motion") || strstr(type,"accelero") ||
-           strstr(type,"gyro")   || strstr(type,"magneto")  ||
-           strstr(type,"micro")  || strstr(type,"camera") ? 1 : 0;
-}
-
-/* Sensor type id → readable name */
 static const char *type_name(int id)
 {
     switch (id) {
@@ -105,177 +97,219 @@ static const char *type_name(int id)
         case 4:  return "Gyroscope";
         case 5:  return "Light";
         case 6:  return "Pressure";
-        case 7:  return "Temperature";
         case 8:  return "Proximity";
         case 9:  return "Gravity";
         case 10: return "Linear Accel";
         case 11: return "Rotation Vector";
-        case 12: return "Humidity";
-        case 13: return "Ambient Temp";
-        case 14: return "Mag Field Uncal";
+        case 14: return "Mag Uncal";
         case 15: return "Game Rotation";
         case 16: return "Gyro Uncal";
         case 17: return "Sig Motion";
         case 18: return "Step Detector";
         case 19: return "Step Counter";
-        case 21: return "Tilt Detector";
         case 28: return "Heart Rate";
         case 65536: return "Fingerprint";
         default: return "Other";
     }
 }
 
-/* ── Parse dumpsys sensorservice ──────────────────────────────────────── */
-
-static void parse_sensorservice(const char *dump)
+static bool is_sensitive_type(int id)
 {
-    g_nsensors = 0;
-    if (!dump) return;
-
-    const char *p = dump;
-    /* Look for sensor list section */
-    const char *list_start = strstr(dump, "Sensor List:");
-    if (!list_start) list_start = dump;
-    p = list_start;
-
-    /* Each sensor block starts with a handle line like:
-     * 0) handle=0x00000001, name="...", vendor="...", version=1, ...
-     * Vendor implementations vary wildly — do a best-effort parse  */
-
-    while (*p && g_nsensors < MAX_SENSORS) {
-        /* Find a line with "handle=" */
-        const char *line_start = p;
-        const char *next_nl    = strchr(p, '\n');
-        if (!next_nl) break;
-
-        char line[512];
-        size_t llen = (size_t)(next_nl - p);
-        if (llen >= sizeof(line)) llen = sizeof(line) - 1;
-        memcpy(line, p, llen);
-        line[llen] = '\0';
-
-        p = next_nl + 1;
-
-        if (!strstr(line, "name=")) continue;
-
-        sensor_t *s = &g_sensors[g_nsensors];
-        memset(s, 0, sizeof(*s));
-
-        /* name */
-        const char *nq = strstr(line, "name=\"");
-        if (nq) {
-            nq += 6;
-            size_t i = 0;
-            while (*nq && *nq != '"' && i < sizeof(s->name) - 1)
-                s->name[i++] = *nq++;
-            s->name[i] = '\0';
-        } else {
-            kv_extract(line, "name", s->name, sizeof(s->name));
-        }
-        if (!s->name[0]) continue;
-
-        /* vendor */
-        const char *vq = strstr(line, "vendor=\"");
-        if (vq) {
-            vq += 8;
-            size_t i = 0;
-            while (*vq && *vq != '"' && i < sizeof(s->vendor) - 1)
-                s->vendor[i++] = *vq++;
-            s->vendor[i] = '\0';
-        } else {
-            kv_extract(line, "vendor", s->vendor, sizeof(s->vendor));
-        }
-
-        /* type */
-        char tmp[32] = {0};
-        if (kv_extract(line, "type=", tmp, sizeof(tmp)))
-            s->type_id = (int)strtol(tmp, NULL, 0);
-        strncpy(s->type_str, type_name(s->type_id), sizeof(s->type_str) - 1);
-
-        /* maxRange */
-        if (kv_extract(line, "maxRange=", tmp, sizeof(tmp)))
-            s->max_range = atof(tmp);
-
-        /* resolution */
-        if (kv_extract(line, "resolution=", tmp, sizeof(tmp)))
-            s->resolution = atof(tmp);
-
-        /* wakeUp */
-        s->is_wakeup = strstr(line, "isWakeUpSensor=true") ? 1 :
-                       strstr(line, "wakeUp=1")            ? 1 : 0;
-
-        g_nsensors++;
-    }
-
-    /* Second pass: count client references ("SensorEventConnection") */
-    const char *act = strstr(dump, "Active connections");
-    if (act) {
-        for (int i = 0; i < g_nsensors; i++) {
-            /* Count how many times the sensor name appears near "client" */
-            const char *search = act;
-            int cnt = 0;
-            while ((search = strstr(search, g_sensors[i].name)) != NULL) {
-                cnt++;
-                search++;
-            }
-            g_sensors[i].clients = cnt;
-        }
-    }
+    return (id == 1 || id == 2 || id == 3 || id == 4 ||
+            id == 10 || id == 16 || id == 28 || id == 65536);
 }
 
-/* ── Poll ─────────────────────────────────────────────────────────────── */
+/* ── Fetch via adb directly ───────────────────────────────────────────── */
 
-static void poll_sensors(void)
+static char *fetch_sensorservice(void)
 {
-    char *dump = bexec("dumpsys sensorservice 2>/dev/null");
-    parse_sensorservice(dump);
+    FILE *f = popen(
+        "adb -s 127.0.0.1:5555 shell "
+        "\"dumpsys sensorservice 2>/dev/null"
+        " | grep -E '0x[0-9a-fA-F]+\\\\)'\"",
+        "r");
+    if (!f) return NULL;
 
+    size_t cap = 16384, len = 0;
+    char *buf = malloc(cap);
+    if (!buf) { pclose(f); return NULL; }
+
+    char tmp[512];
+    while (fgets(tmp, sizeof(tmp), f)) {
+        size_t tl = strlen(tmp);
+        if (len + tl + 1 >= cap) {
+            cap *= 2;
+            char *nb = realloc(buf, cap);
+            if (!nb) break;
+            buf = nb;
+        }
+        memcpy(buf + len, tmp, tl);
+        len += tl;
+    }
+    buf[len] = '\0';
+    pclose(f);
+    return buf;
+}
+
+/* ── Parse sensor list ────────────────────────────────────────────────── */
+
+static int parse_sensors(const char *dump)
+{
+    if (!dump) return 0;
+    int count = 0;
+    const char *p = dump;
+
+    while (*p && count < MAX_SENSORS) {
+        const char *nl = strchr(p, '\n');
+        char line[512] = {0};
+        size_t llen = nl ? (size_t)(nl - p) : strlen(p);
+        if (llen >= sizeof(line)) llen = sizeof(line) - 1;
+        strncpy(line, p, llen);
+        p = nl ? nl + 1 : p + llen;
+
+        /* Need pipe delimiter for Sensor List entries */
+        if (!strstr(line, "|")) continue;
+        /* Skip active-count lines */
+        if (strstr(line, "active-count")) continue;
+        /* Need ") " to start */
+        const char *name_start = strstr(line, ") ");
+        if (!name_start) continue;
+        name_start += 2;
+
+        sensor_t *s = &g_sensors[count];
+        memset(s, 0, sizeof(*s));
+
+        /* Name: up to first | */
+        const char *pipe1 = strchr(name_start, '|');
+        if (!pipe1) continue;
+        size_t nlen = (size_t)(pipe1 - name_start);
+        while (nlen > 0 && name_start[nlen-1] == ' ') nlen--;
+        if (nlen == 0 || nlen >= sizeof(s->name)) continue;
+        strncpy(s->name, name_start, nlen);
+
+        /* Vendor: between first and second | */
+        const char *vstart = pipe1 + 1;
+        while (*vstart == ' ') vstart++;
+        const char *pipe2 = strchr(vstart, '|');
+        if (pipe2) {
+            size_t vlen = (size_t)(pipe2 - vstart);
+            while (vlen > 0 && vstart[vlen-1] == ' ') vlen--;
+            if (vlen < sizeof(s->vendor))
+                strncpy(s->vendor, vstart, vlen);
+        }
+
+        /* Type number: from "type: ...(NUM)" */
+        const char *tp = strstr(line, "type:");
+        if (tp) {
+            const char *paren = strchr(tp, '(');
+            if (paren) {
+                s->type_id = atoi(paren + 1);
+            }
+        }
+
+        strncpy(s->type_str, type_name(s->type_id), sizeof(s->type_str) - 1);
+        s->is_sensitive = is_sensitive_type(s->type_id);
+        count++;
+    }
+    return count;
+}
+
+/* ── Results writer ───────────────────────────────────────────────────── */
+
+static void write_results(int score, int scan_num, int sigs,
+                           int nsensors, int sensitive_active, int flood)
+{
+    FILE *f = fopen(RESULTS_FILE, "w");
+    if (!f) return;
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+    const char *grade = score >= 85 ? "CLEAN"
+                      : score >= 65 ? "ACTIVE"
+                      : score >= 45 ? "SUSPICIOUS"
+                      : "COMPROMISED";
+    fprintf(f,
+        "{\n"
+        "  \"daemon\": \"" DAEMON_NAME "\",\n"
+        "  \"timestamp\": \"%s\",\n"
+        "  \"scan_number\": %d,\n"
+        "  \"signals_fired\": %d,\n"
+        "  \"sensor_score\": %d,\n"
+        "  \"grade\": \"%s\",\n"
+        "  \"total_sensors\": %d,\n"
+        "  \"sensitive_active\": %d,\n"
+        "  \"flood_sensors\": %d\n"
+        "}\n",
+        ts, scan_num, sigs, score, grade,
+        nsensors, sensitive_active, flood);
+    fclose(f);
+}
+
+/* ── Main poll ────────────────────────────────────────────────────────── */
+
+static void poll(int scan_num)
+{
     char ts[32];
     time_t t = time(NULL);
     strftime(ts, sizeof(ts), "%H:%M:%S", localtime(&t));
 
-    printf("\n[METAL] ── Sensor Registry  %s ───────────────────────────\n", ts);
-    printf("[METAL]  %-3s  %-16s  %-20s  %-14s  %s\n",
-           "Typ", "Class         ", "Name                ", "Vendor        ", "Clients/WakeUp");
-    printf("[METAL]  ─────────────────────────────────────────────────────────\n");
+    printf("\n[METAL] -- Sensor Registry Scan #%d  %s ----------------\n",
+           scan_num, ts);
 
-    int sensitive_active = 0, flood_active = 0;
+    int score = 100;
+    int sigs  = 0;
+
+    char *dump = fetch_sensorservice();
+    g_nsensors = parse_sensors(dump);
+
+    if (g_nsensors == 0) {
+        printf("[METAL]  No sensors parsed — ADB unavailable?\n");
+        if (dump) free(dump);
+        write_results(score, scan_num, sigs, 0, 0, 0);
+        return;
+    }
+
+    printf("[METAL]  %-4s  %-22s  %-14s  %s\n",
+           "Type", "Name", "Vendor", "Sensitive");
+    printf("[METAL]  --------------------------------------------------------\n");
+
+    int sensitive_active = 0;
 
     for (int i = 0; i < g_nsensors; i++) {
         sensor_t *s = &g_sensors[i];
-        const char *wk = s->is_wakeup ? "W" : " ";
-        const char *cl_flag = (s->clients >= CLIENT_WARN) ? "  !" : "   ";
+        const char *sen = s->is_sensitive ? "*" : " ";
 
-        printf("[METAL]  %3d  %-16s  %-20.20s  %-14.14s  %d clients %s%s\n",
-               s->type_id, s->type_str, s->name, s->vendor,
-               s->clients, wk, cl_flag);
+        printf("[METAL]  %4d  %-22.22s  %-14.14s  %s\n",
+               s->type_id, s->name, s->vendor, sen);
 
-        if (is_sensitive(s->type_str) && s->clients > 0) {
+        if (s->is_sensitive) {
             sensitive_active++;
-            if (s->clients >= CLIENT_WARN) {
-                char ev[256];
-                snprintf(ev, sizeof(ev),
-                         "sensor=%.32s type=%.16s clients=%d",
-                         s->name, s->type_str, s->clients);
-                gaveld_emit(DAEMON_NAME, "SENSOR_ACCESS_ANOMALY", 1.0f, ev);
-        splinterd_emit("sensor_access", ev);
+            if (sensitive_active >= CLIENT_SENSITIVE) {
+                char ctx[128];
+                snprintf(ctx, sizeof(ctx),
+                         "sensor=%.32s type=%.16s",
+                         s->name, s->type_str);
+                gaveld_emit(DAEMON_NAME, "SENSITIVE_SENSOR_ACTIVE", 0.0, ctx);
+                splinterd_emit("SENSITIVE_SENSOR_ACTIVE", ctx);
+                score -= 10;
+                sigs++;
             }
-        }
-        if (s->sample_rate_hz >= FLOOD_HZ) {
-            flood_active++;
-            char ev[256];
-            snprintf(ev, sizeof(ev),
-                     "sensor=%.32s hz=%d", s->name, s->sample_rate_hz);
-            gaveld_emit(DAEMON_NAME, "SENSOR_FLOOD", 1.0f, ev);
-        splinterd_emit("sensor_flood", ev);
         }
     }
 
-    printf("[METAL]  ─────────────────────────────────────────────────────────\n");
-    printf("[METAL]  Total sensors: %d   Sensitive active: %d   Flood: %d\n",
-           g_nsensors, sensitive_active, flood_active);
+    printf("[METAL]  --------------------------------------------------------\n");
+    printf("[METAL]  Total: %d  Sensitive: %d\n", g_nsensors, sensitive_active);
 
     if (dump) free(dump);
+    if (score < 0) score = 0;
+
+    const char *grade = score >= 85 ? "CLEAN"
+                      : score >= 65 ? "ACTIVE"
+                      : score >= 45 ? "SUSPICIOUS"
+                      : "COMPROMISED";
+
+    printf("[METAL]  Score: %d/100  [%s]  signals=%d\n", score, grade, sigs);
+    write_results(score, scan_num, sigs, g_nsensors, sensitive_active, 0);
 }
 
 /* ── Main ─────────────────────────────────────────────────────────────── */
@@ -283,14 +317,28 @@ static void poll_sensors(void)
 int main(void)
 {
     bexec_init();
-    if (!daemon_core_init(DAEMON_NAME)) return 1;
 
-    for (;;) {
-        poll_sensors();
-        printf("[METAL]  Next scan in %ds\n", POLL_SEC);
-        sleep(POLL_SEC);
+    if (!is_enabled()) {
+        printf("[METAL] disabled — exiting\n");
+        return 0;
     }
 
-    daemon_core_shutdown();
+    printf("[METAL] Sensor Service Registry & Client Auditor: ONLINE\n");
+
+    int interval  = get_interval();
+    int max_scans = get_max_scans();
+    int scan_num  = 0;
+
+    for (;;) {
+        if (!is_enabled()) break;
+        interval  = get_interval();
+        max_scans = get_max_scans();
+        scan_num++;
+        poll(scan_num);
+        if (max_scans > 0 && scan_num >= max_scans) break;
+        printf("[METAL] Next scan in %ds\n", interval);
+        sleep(interval);
+    }
+
     return 0;
 }
