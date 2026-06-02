@@ -1,0 +1,11 @@
+{
+  "daemon": "rocksteadyd",
+  "timestamp": "2026-06-02T02:01:29",
+  "scan_number": 9,
+  "signals_fired": 0,
+  "cpu_score": 100,
+  "grade": "HEALTHY",
+  "system_cpu_pct": 0,
+  "total_cores": 8,
+  "throttled_cores": 0
+}

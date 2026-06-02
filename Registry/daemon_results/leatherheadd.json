@@ -1,0 +1,12 @@
+{
+  "daemon": "leatherheadd",
+  "timestamp": "2026-06-02T02:01:29",
+  "scan_number": 9,
+  "signals_fired": 1,
+  "thermal_score": 52,
+  "grade": "HOT",
+  "throttled_cores": 6,
+  "total_cores": 8,
+  "temperatures": [
+  ]
+}
