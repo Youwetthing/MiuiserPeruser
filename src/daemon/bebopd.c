@@ -194,9 +194,10 @@ static int parse_wakelocks(const char *dump,
 static int parse_battery_level(const char *dump)
 {
     if (!dump) return -1;
-    const char *p = strstr(dump, "mBatteryLevel=");
+    const char *p = strstr(dump, "level:");
     if (!p) return -1;
-    return atoi(p + 14);
+    p += 6; while (*p == ' ') p++;
+    return atoi(p);
 }
 
 static bool parse_battery_low(const char *dump)
@@ -230,47 +231,23 @@ static float parse_drain_mah_h(const char *dump)
 {
     if (!dump) return 0.0f;
 
-    /* Find "NonDoze" section then "Intr:" */
-    const char *nd = strstr(dump, "NonDoze");
-    if (!nd) return 0.0f;
-
-    const char *intr = strstr(nd, "Intr:");
-    if (!intr) return 0.0f;
-
-    /* Skip to mAh/h value -- last number on that line */
-    const char *nl = strchr(intr, '\n');
-    if (!nl) return 0.0f;
-
-    /* Work backwards from newline to find last float before "mAh/h" */
-    const char *mah = NULL;
-    const char *p   = intr;
-    while (p < nl) {
-        const char *m = strstr(p, "mAh/h");
-        if (!m || m >= nl) break;
-        mah = m;
-        p   = m + 1;
+    /* HyperOS format: "  Computed drain: 2320, actual drain: 2058-2176" */
+    const char *cd = strstr(dump, "Computed drain:");
+    if (cd) {
+        cd += strlen("Computed drain:");
+        while (*cd == ' ') cd++;
+        return strtof(cd, NULL);
     }
-    if (!mah) return 0.0f;
 
-    /* Find the float before "mAh/h" */
-    const char *num_end = mah;
-    while (num_end > intr && (*num_end == 'm' || *num_end == 'A' ||
-                               *num_end == 'h' || *num_end == '/'))
-        num_end--;
+    /* Fallback: "Screen off discharge: 680 mAh" */
+    const char *sd = strstr(dump, "Screen off discharge:");
+    if (sd) {
+        sd += strlen("Screen off discharge:");
+        while (*sd == ' ') sd++;
+        return strtof(sd, NULL);
+    }
 
-    /* Back up over digits and decimal */
-    const char *num_start = num_end;
-    while (num_start > intr &&
-           ((*num_start >= '0' && *num_start <= '9') || *num_start == '.'))
-        num_start--;
-    num_start++;
-
-    char nbuf[32] = {0};
-    size_t nlen = (size_t)(num_end - num_start + 1);
-    if (nlen >= sizeof(nbuf)) nlen = sizeof(nbuf) - 1;
-    strncpy(nbuf, num_start, nlen);
-
-    return strtof(nbuf, NULL);
+    return 0.0f;
 }
 
 /* ?? Parse doze interruptions ??????????????????????????????????????????? */
@@ -342,16 +319,19 @@ static void poll(int scan_num)
 
     /* ?? Dump power ????????????????????????????????????????????????????? */
     char *dump = bexec("dumpsys power 2>/dev/null");
+    char *bstats = bexec("dumpsys batterystats | grep -E Computed.drain | head -5");
     if (!dump) {
         printf("[BEBOP]  dumpsys power unavailable\n");
         return;
     }
 
     /* ?? Battery state ?????????????????????????????????????????????????? */
-    int  battery     = parse_battery_level(dump);
+    char *batdump = bexec("dumpsys battery");
+    int  battery     = parse_battery_level(batdump ? batdump : dump);
+    if (batdump) free(batdump);
     bool battery_low = parse_battery_low(dump);
     bool saver_on    = parse_battery_saver(dump);
-    float drain      = parse_drain_mah_h(dump);
+    float drain      = parse_drain_mah_h(bstats ? bstats : dump);
 
     printf("[BEBOP]  Battery    : %d%%  low=%s  saver=%s\n",
            battery, battery_low ? "yes" : "no", saver_on ? "ON" : "off");
@@ -460,6 +440,7 @@ static void poll(int scan_num)
     }
 
     free(dump);
+    if (bstats) free(bstats);
 
     if (score < 0) score = 0;
     const char *grade = score >= 85 ? "CLEAN"
