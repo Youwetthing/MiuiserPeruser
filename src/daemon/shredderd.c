@@ -148,7 +148,7 @@ static int count_modules(char *first_unfamiliar, size_t flen)
             /* Heuristic: magisk, ksu, frida in module name = suspicious */
             char name[64] = {0};
             sscanf(line, "%63s", name);
-            if (strstr(name, "magisk") || strstr(name, "ksu") ||
+            if (strstr(name, "frida") ||  /* magisk/ksu are user choice, not flagged */
                 strstr(name, "frida")  || strstr(name, "xposed")) {
                 strncpy(first_unfamiliar, name, flen - 1);
             }
@@ -248,7 +248,8 @@ static void poll_integrity(void)
 
     /* ── Kernel security ──────────────────────────────────────────────── */
     char enforce[32] = "unknown";
-    FILE *ef = popen("getenforce 2>/dev/null", "r");
+    char *_se = bexec("getenforce 2>/dev/null");
+    FILE *ef = _se ? fmemopen(_se, strlen(_se), "r") : NULL;
     if (ef) { fgets(enforce, sizeof(enforce), ef); pclose(ef); }
     enforce[strcspn(enforce, "\n")] = '\0';
     int enforcing = (strcasecmp(enforce, "Enforcing") == 0);
