@@ -10,7 +10,7 @@
 #define HUB_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/turtlecom.sock"
 
 int discover_serial(char *out_serial, size_t max_len) {
-    FILE *fp = popen("adb devices | grep -v 'emulator' | grep 'device$' | head -n 1 | awk '{print $1}'", "r");
+    FILE *fp = popen("adb -s 127.0.0.1:5555 shell echo ok 2>/dev/null && echo 127.0.0.1:5555", "r");
     if (!fp) return 0;
     if (fgets(out_serial, max_len, fp) == NULL) {
         pclose(fp);
