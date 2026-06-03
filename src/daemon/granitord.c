@@ -114,7 +114,8 @@ static void poll_security(void)
     getprop("ro.boot.selinux", selinux, sizeof(selinux));
     /* Also check live enforcement */
     char enforce[32] = "unknown";
-    FILE *f = popen("getenforce 2>/dev/null", "r");
+    char *_se_out = bexec("getenforce");
+    FILE *f = _se_out ? fmemopen(_se_out, strlen(_se_out), "r") : NULL;
     if (f) { fgets(enforce, sizeof(enforce), f); pclose(f); }
     enforce[strcspn(enforce, "\n")] = '\0';
     int enforcing = (strcasecmp(enforce, "Enforcing") == 0);
