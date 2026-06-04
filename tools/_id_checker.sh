@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(dirname "$0")/lib/tool_backend.sh"
 
 stty -ixon 2>/dev/null
 stty cols 200 2>/dev/null

@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(dirname "$0")/lib/tool_backend.sh"
 # ==============================================================================
 #  The Bell Tower — Power & Wakelock Companion
 #  Companion to: bebopd daemon

@@ -33,6 +33,7 @@
 #define DAEMON_NAME      "shredderd"
 #define POLL_SEC         60
 #define SCORE_WARN       65
+#define RESULTS_FILE "/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/shredderd.json"
 #define BUF_SIZE         2048
 #define ROOT_PERSIST_MIN 2   /* consecutive polls with root → emit APRIL */
 
@@ -248,7 +249,7 @@ static void poll_integrity(void)
 
     /* ── Kernel security ──────────────────────────────────────────────── */
     char enforce[32] = "unknown";
-    char *_se = bexec("getenforce 2>/dev/null");
+    char *_se = bexec("getenforce");
     FILE *ef = _se ? fmemopen(_se, strlen(_se), "r") : NULL;
     if (ef) { fgets(enforce, sizeof(enforce), ef); pclose(ef); }
     enforce[strcspn(enforce, "\n")] = '\0';
@@ -306,6 +307,27 @@ static void poll_integrity(void)
     }
 
     g_prev_score = score;
+
+    /* Write results JSON */
+    FILE *rf = fopen(RESULTS_FILE, "w");
+    if (rf) {
+        time_t _t = time(NULL);
+        char _ts[32];
+        strftime(_ts, sizeof(_ts), "%Y-%m-%dT%H:%M:%S", localtime(&_t));
+        fprintf(rf,
+            "{\n"
+            "  \"daemon\": \"shredderd\",\n"
+            "  \"timestamp\": \"%s\",\n"
+            "  \"integrity_score\": %d,\n"
+            "  \"grade\": \"%s\",\n"
+            "  \"unknown_modules\": %d,\n"
+            "  \"changed_binaries\": 0,\n"
+            "  \"signals_fired\": %d,\n"
+            "  \"root_detected\": %d\n"
+            "}\n",
+            _ts, score, grade, nmod, 0, rooted);
+        fclose(rf);
+    }
 }
 
 /* ── Main ─────────────────────────────────────────────────────────────── */

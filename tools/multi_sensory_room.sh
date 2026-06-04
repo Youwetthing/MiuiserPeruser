@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(dirname "$0")/lib/tool_backend.sh"
 # ==============================================================================
 #  Multi-Sensory Room — Sensor Registry & Enforcement Companion
 #  Companion to: metalheadd daemon

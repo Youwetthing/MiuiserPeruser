@@ -17,6 +17,9 @@ if ! pgrep -x gaveld > /dev/null; then
     sleep 1
 fi
 
+# Warm up rish so bexec probes succeed
+RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "echo ok" 2>/dev/null && echo "[syndicate] rish warm" || echo "[syndicate] rish cold — using ADB"
+
 # Start splinterd (infrastructure coordinator) first
 if ! pgrep -x splinterd > /dev/null; then
     "$BIN/splinterd" >> "$BASE/logs/splinterd.log" 2>&1 &

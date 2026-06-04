@@ -27,7 +27,7 @@ static char            g_rish_path[256] = "";
 static int             g_rish_disabled  = 0;
 
 #define ADB_TRANSPORT  "adb -s 127.0.0.1:5555 shell"
-#define RISH_TIMEOUT   2
+#define RISH_TIMEOUT   3
 #define TIMEOUT_BIN    "/data/data/com.termux/files/usr/bin/timeout"
 
 /* ── Timeout availability ─────────────────────────────────────────────────── */
@@ -142,6 +142,9 @@ static int probe_rish(void)
 
 static int probe_adb(void)
 {
+    /* Pre-connect ADB in case it dropped */
+    system("adb connect 127.0.0.1:5555 >/dev/null 2>&1");
+    sleep(2);
     return try_run(ADB_TRANSPORT " echo adb_ok", "adb_ok");
 }
 
