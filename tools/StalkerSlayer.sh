@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+source "$(dirname "$0")/lib/tool_backend.sh"
 # ==============================================================================
 # StalkerSlayer v9.1 - Xiaomi Telemetry Blocker (Clean, Working)
 # ==============================================================================

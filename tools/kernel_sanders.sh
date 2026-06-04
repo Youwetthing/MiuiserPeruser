@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(dirname "$0")/lib/tool_backend.sh"
 # ==============================================================================
 #  Kernel Sanders — Integrity Truth Companion
 #  Companion to: shredderd daemon
@@ -26,7 +27,7 @@ RESET='\033[0m'
 COLS=$(tput cols 2>/dev/null || echo 60)
 W=$(( COLS - 4 )); [ "$W" -gt 64 ] && W=64
 
-run_cmd() { $ADB shell "$*" 2>/dev/null; }
+privileged_old() { $ADB shell "$*" 2>/dev/null; }
 
 # ── Retro divider ─────────────────────────────────────────────────────────────
 divider() {
@@ -117,9 +118,9 @@ show_last_scan() {
 show_modules() {
     box_top "KERNEL MODULES" "$BO"
     local out
-    out=$(run_cmd "cat /proc/modules 2>/dev/null | awk '{print \$1, \$3}' | head -15")
+    out=$(privileged "cat /proc/modules 2>/dev/null | awk '{print \$1, \$3}' | head -15")
     if [ -z "$out" ]; then
-        out=$(run_cmd "lsmod 2>/dev/null | tail -n +2 | awk '{print \$1, \$3}' | head -15")
+        out=$(privileged "lsmod 2>/dev/null | tail -n +2 | awk '{print \$1, \$3}' | head -15")
     fi
     if [ -z "$out" ]; then
         box_row "$BO" "  /proc/modules unavailable" "  /proc/modules unavailable"
@@ -140,7 +141,7 @@ show_modules() {
 show_selinux() {
     box_top "SELINUX + KERNEL PARAMS" "$AV"
     local sel
-    sel=$(run_cmd "getenforce 2>/dev/null || cat /sys/fs/selinux/enforce 2>/dev/null")
+    sel=$(privileged "getenforce 2>/dev/null || cat /sys/fs/selinux/enforce 2>/dev/null")
     sel=$(echo "$sel" | tr -d '\r\n')
 
     local col="$AV"
@@ -151,7 +152,7 @@ show_selinux() {
     # Key kernel params
     for param in kptr_restrict dmesg_restrict perf_event_paranoid modules_disabled; do
         local val
-        val=$(run_cmd "cat /proc/sys/kernel/${param} 2>/dev/null" | tr -d '\r\n')
+        val=$(privileged "cat /proc/sys/kernel/${param} 2>/dev/null" | tr -d '\r\n')
         local pc="$CR"
         [ "${val:-0}" -eq 0 ] 2>/dev/null && pc="$BO"
         box_row "$AV" "  ${param}: ${pc}${val:-n/a}${RESET}" "  ${param}: ${val:-n/a}"
@@ -166,7 +167,7 @@ show_binaries() {
     local found=0
     for path in $critical; do
         local exists
-        exists=$(run_cmd "test -f ${path} && echo YES || echo NO" | tr -d '\r\n')
+        exists=$(privileged "test -f ${path} && echo YES || echo NO" | tr -d '\r\n')
         if [ "$exists" = "YES" ]; then
             box_row "$BG" "  ${RD}FOUND${RESET} ${CR}${path}${RESET}" "  FOUND ${path}"
             found=$((found+1))
@@ -176,7 +177,7 @@ show_binaries() {
 
     # Check for magisk
     local magisk
-    magisk=$(run_cmd "pm list packages 2>/dev/null | grep -i magisk" | tr -d '\r')
+    magisk=$(privileged "pm list packages 2>/dev/null | grep -i magisk" | tr -d '\r')
     if [ -n "$magisk" ]; then
         box_row "$BG" "  ${RD}MAGISK${RESET} ${CR}${magisk}${RESET}" "  MAGISK ${magisk}"
     fi
