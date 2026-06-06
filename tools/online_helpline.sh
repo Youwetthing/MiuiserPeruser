@@ -9,7 +9,7 @@ source "$(dirname "$0")/lib/tool_backend.sh"
 
 BASE="$HOME/MiuiserPeruser"
 RAHZERD_RESULTS="$BASE/Registry/daemon_results/rahzerd.json"
-DB="$BASE/data/sensei_dojo.db"
+DB="$BASE/data/miuiserperuser.db"
 RAHZERD_BIN="$BASE/bin/rahzerd"
 
 # ── Childline palette ─────────────────────────────────────────────────────────
@@ -47,55 +47,36 @@ rsh() { _backend_exec "$@" 2>/dev/null; }
 # ── Show stored RAPH findings from sensei_dojo.db ─────────────────────────────
 show_stored_findings() {
     banner
-    printf "${YL}${BOLD}  [LOG] Stored Network Findings${RESET}\n"
+    printf "${YL}${BOLD}  [LOG] Stored Network Findings${RESET}
+"
     hline
 
-    if [ ! -f "$DB" ]; then
-        printf "${OR}  No scan database found. Run a fresh scan first.${RESET}\n\n"
+    SCAN_JSON="$HOME/MiuiserPeruser/data/last_scan.json"
+    if [ ! -f "$SCAN_JSON" ]; then
+        printf "${OR}  No scan results found. Run superhero --standard first.${RESET}
+
+"
         return
     fi
 
-    local findings
-    findings=$(sqlite3 "$DB" \
-        "SELECT priority, detection_type, description FROM detections
-         WHERE detection_class='NETWORK' OR detection_class='BEHAVIOR'
-         ORDER BY priority DESC LIMIT 50;" 2>/dev/null)
+    printf "${TL}  Last scan results:${RESET}
 
-    if [ -z "$findings" ]; then
-        printf "${GR}  [OK]  No network findings stored.${RESET}\n\n"
-    else
-        echo "$findings" | while IFS='|' read -r pri type desc; do
-            case "$pri" in
-                CRITICAL) col="${RD}" icon="[!!]" ;;
-                HIGH)     col="${OR}" icon="[HI]" ;;
-                MEDIUM)   col="${YL}" icon="[MD]" ;;
-                *)        col="${TL}" icon="[LO]" ;;
-            esac
-            printf "${col}  ${icon} [${pri}] ${type}${RESET}\n"
-            printf "${WH}     ${desc}${RESET}\n\n"
-        done
-    fi
-    hline
-
-    # Also show rahzerd results if available
-    if [ -f "$RAHZERD_RESULTS" ]; then
-        printf "\n${TL}${BOLD}  [NET] rahzerd Last Report${RESET}\n"
-        hline
-        python3 -c "
-import json, sys
-try:
-    d = json.load(open('$RAHZERD_RESULTS'))
-    for k, v in d.items():
-        if isinstance(v, dict):
-            status = v.get('status', v.get('result', 'unknown'))
-            flag = '[OK]' if 'ok' in str(status).lower() or 'pass' in str(status).lower() else '[!!]'
-            print(f'  {flag}  {k}: {status}')
-        else:
-            print(f'  →  {k}: {v}')
-except Exception as e:
-    print(f'  Could not parse rahzerd results: {e}')
-" 2>/dev/null
-    fi
+"
+    python3 << 'PYEOF2'
+import json
+path = __import__('os').path.expanduser('~/MiuiserPeruser/data/last_scan.json')
+data = json.load(open(path))
+for f in data:
+    pri = f.get('priority','LOW')
+    typ = f.get('type','?')
+    desc = f.get('description','')
+    turtle = f.get('turtle','?')
+    icons = {'CRITICAL':'[!!]','HIGH':'[HI]','MEDIUM':'[MD]','LOW':'[LO]'}
+    icon = icons.get(pri,'[??]')
+    print(f'  {icon} [{pri}][{turtle}] {typ}')
+    print(f'     {desc}')
+    print()
+PYEOF2
 }
 
 # ── Run fresh scan ────────────────────────────────────────────────────────────
@@ -215,6 +196,58 @@ action_menu() {
     read -r
 }
 
+
+# ── Explanations ──────────────────────────────────────────────────────────────
+show_explanations() {
+    banner
+    printf "${YL}${BOLD}  [?] What Does It All Mean?${RESET}\n"
+    hline
+    echo
+
+    printf "${YL}  SNO_TRACKING${RESET}\n"
+    printf "${WH}  Xiaomi bakes a unique Serial Number Order ID into every device at the factory.\n"
+    printf "${WH}  It survives factory resets and is used to track you across devices and ad networks.\n"
+    printf "${TL}  Action: Cannot be removed without reflashing the ROM.${RESET}\n\n"
+
+    printf "${YL}  FB_PARTNER_ID${RESET}\n"
+    printf "${WH}  A Facebook partnership token pre-installed by Xiaomi. Any app using the\n"
+    printf "${WH}  Facebook SDK will automatically attribute installs to Xiaomi without your consent.\n"
+    printf "${TL}  Action: Disable Facebook app and block com.facebook.* via netpolicy.${RESET}\n\n"
+
+    printf "${YL}  MIUI_ANALYTICS${RESET}\n"
+    printf "${WH}  Confirmed by TCD Dublin academic research (2021) to send encrypted telemetry\n"
+    printf "${WH}  including screen touches and app interaction logs to data.mistat.intl.xiaomi.com.\n"
+    printf "${TL}  Action: Online Helpline > Actions > Disable MIUI Analytics.${RESET}\n\n"
+
+    printf "${YL}  MIUI_DAEMON${RESET}\n"
+    printf "${WH}  Background data collection service. Runs continuously, collects device\n"
+    printf "${WH}  usage patterns and hardware telemetry.\n"
+    printf "${TL}  Action: Online Helpline > Actions > Disable MiuiDaemon.${RESET}\n\n"
+
+    printf "${YL}  MILLET_ACTIVE${RESET}\n"
+    printf "${WH}  Xiaomi kernel-level process scheduler. Monitors binder IPC calls between\n"
+    printf "${WH}  all apps. Cannot be disabled without losing system stability.\n"
+    printf "${TL}  Action: Informational only — baked into HyperOS kernel.${RESET}\n\n"
+
+    printf "${YL}  GDPR_OPT_OUT${RESET}\n"
+    printf "${WH}  Your device is in Ireland (EEA). Xiaomi is legally required to obtain\n"
+    printf "${WH}  explicit consent before collecting telemetry. The opt-out prop is not set,\n"
+    printf "${WH}  meaning consent may not have been properly recorded.\n"
+    printf "${TL}  Action: Settings > Privacy > opt out of all Xiaomi data programmes.${RESET}\n\n"
+
+    printf "${YL}  ADB_TCP_ACTIVE${RESET}\n"
+    printf "${WH}  ADB over TCP is enabled on port 5555. This is how MiuiserPeruser talks\n"
+    printf "${WH}  to your device. Only a risk if exposed beyond loopback (127.0.0.1).\n"
+    printf "${TL}  Action: Disable when not in use: adb disconnect.${RESET}\n\n"
+
+    printf "${YL}  PARTNER_TOKEN (AppsFlyer/Netflix/Google)${RESET}\n"
+    printf "${WH}  Pre-installed attribution tokens that tell third parties this device\n"
+    printf "${WH}  is a Xiaomi unit. Used for ad attribution and partnership tracking.\n"
+    printf "${TL}  Action: Cannot be removed without reflashing. Passive — no active transmission.${RESET}\n\n"
+
+    hline
+}
+
 # ── Main loop ─────────────────────────────────────────────────────────────────
 while true; do
     banner
@@ -224,6 +257,7 @@ while true; do
     printf "${TL}  [1]${RESET} ${WH}View stored findings${RESET}\n"
     printf "${TL}  [2]${RESET} ${WH}Run fresh scan${RESET}\n"
     printf "${TL}  [3]${RESET} ${WH}Network actions (block/kill)${RESET}\n"
+    printf "${TL}  [4]${RESET} ${WH}What does it all mean?${RESET}\n"
     printf "${TL}  [q]${RESET} ${WH}Quit${RESET}\n"
     echo
     hline
@@ -234,6 +268,7 @@ while true; do
         1) show_stored_findings; printf "${YL}  Press enter...${RESET}"; read -r ;;
         2) run_fresh_scan;       printf "${YL}  Press enter...${RESET}"; read -r ;;
         3) action_menu ;;
+        4) show_explanations; printf "${YL}  Press enter...${RESET}"; read -r ;;
         q|Q) break ;;
     esac
 done

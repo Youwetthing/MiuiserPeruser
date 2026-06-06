@@ -54,6 +54,10 @@ SENSEI_STATUS splinter_init(void) {
     return SENSEI_STATUS_OK;
 }
 
+#define FINDINGS_LOG "/data/data/com.termux/files/home/MiuiserPeruser/data/last_scan.json"
+static FILE *g_findings_log = NULL;
+static int   g_findings_count = 0;
+
 static void print_findings(const char *turtle, SENSEI_DETECTION_LIST *r) {
     if (!r || r->count == 0) {
         april_log("INFO", "%s: clean", turtle);
@@ -67,6 +71,15 @@ static void print_findings(const char *turtle, SENSEI_DETECTION_LIST *r) {
         if (d->priority == SENSEI_EVENT_PRIORITY_HIGH)     pri = "HIGH";
         if (d->priority == SENSEI_EVENT_PRIORITY_CRITICAL) pri = "CRITICAL";
         printf("  [%s][%s] %s\n", pri, d->detection_type, d->description);
+        /* Write to JSON log */
+        if (g_findings_log) {
+            if (g_findings_count > 0) fprintf(g_findings_log, ",\n");
+            fprintf(g_findings_log,
+                "  {\"turtle\":\"%s\",\"priority\":\"%s\","
+                "\"type\":\"%s\",\"description\":\"%s\"}",
+                turtle, pri, d->detection_type, d->description);
+            g_findings_count++;
+        }
         d = d->next;
     }
 }
@@ -83,6 +96,9 @@ SENSEI_STATUS splinter_run_scan_cycle(uint32_t interval_ms) {
     int standard = deep || (strcmp(g_scan_depth, "standard") == 0);
 
     april_log("INFO", "Splinter Dojo: starting full scan cycle (depth=%s)", g_scan_depth);
+    g_findings_log = fopen(FINDINGS_LOG, "w");
+    g_findings_count = 0;
+    if (g_findings_log) fprintf(g_findings_log, "[\n");
     april_emit_event(APRIL_EVENT_SCAN_START, 0);
     SENSEI_DETECTION_LIST results = {0};
 
@@ -176,6 +192,7 @@ SENSEI_STATUS splinter_run_scan_cycle(uint32_t interval_ms) {
     }
 
     april_emit_event(APRIL_EVENT_SCAN_END, 0);
+    if (g_findings_log) { fprintf(g_findings_log, "\n]\n"); fclose(g_findings_log); g_findings_log = NULL; }
     april_log("INFO", "Splinter Dojo: scan cycle complete");
     return SENSEI_STATUS_OK;
 }
