@@ -1,81 +1,76 @@
 #include "compat/sensei_compat.h"
-/*
- * MiuiserPeruser – Donatello's Memory Pressure Monitor
- * Watches RAM and swap usage, warns when resources are low.
- */
-
-#include <leo_detection.h>
-#include <sensei_types.h>
+#include "sensei_types.h"
+#include "rish_pipe.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <ctype.h>
 
 extern void april_log(const char* level, const char* format, ...);
+extern SENSEI_STATUS april_detection_list_append(SENSEI_DETECTION_LIST *list, const SENSEI_DETECTION *det);
 
-// Thresholds (percent)
-#define RAM_CRITICAL 85   // Available RAM less than 15%? Actually we want low available, so...
-#define SWAP_HIGH    80   // Swap usage above 80%
-
-// We'll track previous values to avoid repeated logs
-static unsigned long long last_ram_warning = 0;
-static unsigned long long last_swap_warning = 0;
-
-/* Parse /proc/meminfo for a specific key */
-static unsigned long long get_mem_value(const char *key) {
-    FILE *fp = fopen("/proc/meminfo", "r");
-    if (!fp) return 0;
-    char line[256];
-    unsigned long long val = 0;
-    while (fgets(line, sizeof(line), fp)) {
-        if (strncmp(line, key, strlen(key)) == 0) {
-            sscanf(line, "%*s %llu", &val);
-            break;
-        }
+static char *rish_cmd(const char *cmd) {
+    char full[2048];
+    snprintf(full, sizeof(full),
+        "RISH_APPLICATION_ID=com.termux "
+        "/data/data/com.termux/files/home/Rish/rish -c '%s' 2>/dev/null", cmd);
+    FILE *fp = popen(full, "r");
+    if (!fp) return NULL;
+    size_t sz = 8192; char *out = malloc(sz);
+    if (!out) { pclose(fp); return NULL; }
+    out[0] = 0; size_t pos = 0; char buf[512];
+    while (fgets(buf, sizeof(buf), fp)) {
+        size_t len = strlen(buf);
+        if (pos + len + 1 >= sz) { sz *= 2; char *t = realloc(out, sz); if (!t) break; out = t; }
+        memcpy(out + pos, buf, len); pos += len;
     }
-    fclose(fp);
-    return val;
+    out[pos] = 0; pclose(fp); return out;
 }
 
+static void add_det(SENSEI_DETECTION_LIST *r,
+                    SENSEI_DETECTION_CLASS cls, SENSEI_EVENT_PRIORITY pri,
+                    SENSEI_MITRE_TECHNIQUE mitre, int conf,
+                    const char *type, const char *desc) {
+    SENSEI_DETECTION det = {0};
+    det.detection_class = cls; det.priority = pri;
+    det.mitre_id = mitre; det.confidence = conf;
+    strncpy(det.detection_type, type, SENSEI_MAX_DETECTION_TYPE - 1);
+    strncpy(det.description,    desc, SENSEI_MAX_DESCRIPTION    - 1);
+    april_detection_list_append(r, &det);
+}
+
+
 SENSEI_STATUS don_memorypressure_check(SENSEI_DETECTION_LIST *results) {
-    (void)results;  // Not adding detections, just logging
+    char *out = rish_cmd("cat /proc/meminfo 2>/dev/null");
+    if (!out) return SENSEI_STATUS_ERROR;
 
-    unsigned long long mem_total = get_mem_value("MemTotal:");
-    unsigned long long mem_avail = get_mem_value("MemAvailable:");
-    unsigned long long swap_total = get_mem_value("SwapTotal:");
-    unsigned long long swap_free = get_mem_value("SwapFree:");
-
-    if (mem_total == 0) {
-        // /proc/meminfo not readable? shouldn't happen.
-        return SENSEI_STATUS_OK;
+    long total = 0, available = 0;
+    char *line = strtok(out, "\n");
+    while (line) {
+        if (strncmp(line, "MemTotal:", 9) == 0)     total     = atol(line + 9);
+        if (strncmp(line, "MemAvailable:", 13) == 0) available = atol(line + 13);
+        line = strtok(NULL, "\n");
     }
+    free(out);
 
-    // Calculate percentages
-    int ram_used_percent = 100 - (mem_avail * 100 / mem_total);
-    int swap_used_percent = (swap_total > 0) ? ( (swap_total - swap_free) * 100 / swap_total ) : 0;
-
-    // Log current status occasionally (e.g., every 10 scans) to keep user informed
-    static int counter = 0;
-    counter++;
-    if (counter % 10 == 0) {
-        april_log("MEMORY", "RAM used: %d%%, swap used: %d%%", ram_used_percent, swap_used_percent);
-    }
-
-    // Critical RAM warning
-    if (ram_used_percent >= RAM_CRITICAL) {
-        if (last_ram_warning == 0 || last_ram_warning + 5 < counter) {  // warn at most every 5 scans
-            april_log("THREAT", "Woah Nelly! RAM critically low (%d%% used). MIUI may start killing processes.", ram_used_percent);
-            last_ram_warning = counter;
+    if (total > 0) {
+        int used_pct = (int)(100 - (available * 100 / total));
+        if (used_pct >= 90) {
+            char desc[SENSEI_MAX_DESCRIPTION];
+            snprintf(desc, sizeof(desc),
+                "RAM critically low (%d%% used). MIUI may start killing processes.", used_pct);
+            add_det(results, SENSEI_DETECTION_CLASS_BEHAVIOR, SENSEI_EVENT_PRIORITY_CRITICAL,
+                    SENSEI_MITRE_NONE, 90, "RAM_CRITICAL", desc);
+            april_log("THREAT", "Woah Nelly! RAM critically low (%d%% used). MIUI may start killing processes.", used_pct);
+        } else if (used_pct >= 80) {
+            char desc[SENSEI_MAX_DESCRIPTION];
+            snprintf(desc, sizeof(desc), "RAM pressure high (%d%% used)", used_pct);
+            add_det(results, SENSEI_DETECTION_CLASS_BEHAVIOR, SENSEI_EVENT_PRIORITY_HIGH,
+                    SENSEI_MITRE_NONE, 80, "RAM_HIGH", desc);
+            april_log("WARN", "DON_MEM: RAM high (%d%%)", used_pct);
         }
     }
-
-    // High swap usage warning
-    if (swap_used_percent >= SWAP_HIGH) {
-        if (last_swap_warning == 0 || last_swap_warning + 5 < counter) {
-            april_log("WARN", "Swap usage high (%d%%) – system is paging heavily.", swap_used_percent);
-            last_swap_warning = counter;
-        }
-    }
-
     return SENSEI_STATUS_OK;
 }
