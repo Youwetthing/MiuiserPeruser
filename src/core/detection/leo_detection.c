@@ -14,7 +14,7 @@ static sqlite3 *db = NULL;
 static volatile int running = 1;
 static int cycle = 0;
 
-static void april_log(const char *level, const char *format, ...) {
+void april_log(const char *level, const char *format, ...) {
     va_list args;
     va_start(args, format);
     printf("%s [%s] ", LOG_PREFIX, level);
@@ -93,16 +93,4 @@ void leo_shutdown(void) {
         db = NULL;
     }
     printf("%s Turtles scanner shutdown complete.\n", LOG_PREFIX);
-}
-
-int main(void) {
-    if (leo_init() != SENSEI_STATUS_OK) return 1;
-
-    while (running) {
-        leo_full_scan();
-        sleep(6);   /* Rolling speed — change if you want it faster or slower */
-    }
-
-    leo_shutdown();
-    return 0;
 }
