@@ -42,10 +42,31 @@ static void log_detection(const char *module, const char *description, int prior
 static void signal_handler(int sig) { running = 0; }
 
 SENSEI_STATUS leo_init(void) {
-    if (sqlite3_open("/data/data/com.termux/files/home/MiuiserPeruser/data/syndicate.db", &db) != SQLITE_OK) {
+    if (sqlite3_open("/data/data/com.termux/files/home/MiuiserPeruser/data/superhero.db", &db) != SQLITE_OK) {
         printf("%s SQLite open failed\n", LOG_PREFIX);
         return SENSEI_STATUS_ERROR;
     }
+
+    sqlite3_exec(db,
+        "CREATE TABLE IF NOT EXISTS detections ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "timestamp INTEGER,"
+        "pid INTEGER,"
+        "name TEXT,"
+        "type TEXT,"
+        "description TEXT,"
+        "priority INTEGER,"
+        "confidence INTEGER"
+        ");",
+        NULL, NULL, NULL);
+    sqlite3_exec(db,
+        "CREATE TABLE IF NOT EXISTS scan_history ("
+        "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "timestamp TEXT DEFAULT (datetime('now')),"
+        "depth TEXT,"
+        "finding_count INTEGER"
+        ");",
+        NULL, NULL, NULL);
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     printf("%s Turtles Behaviour Anomaly Scanner initialized — deep rolling live feed with learning active\n", LOG_PREFIX);
