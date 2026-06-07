@@ -125,6 +125,21 @@ static const char *get_saved_depth(void) {
 }
 
 int main(int argc, char **argv) {
+    /* Handle --verbose */
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--verbose") == 0) leo_set_verbose(1);
+    }
+
+    /* Handle --export-sar */
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--export-sar") == 0) {
+            leo_init();
+            leo_export_sar();
+            leo_shutdown();
+            return 0;
+        }
+    }
+
     /* Handle --purge */
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--purge") == 0) {
