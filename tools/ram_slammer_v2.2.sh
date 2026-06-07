@@ -262,12 +262,7 @@ show_live_scan() {
 
             # Skip unkillable system processes
             case "$pkg" in
-                init|zygote|zygote64|surfaceflinger|vold|logd|installd|\
-                com.android.systemui|com.android.phone|com.miui.home|\
-                com.termux|com.termux.api|com.termux.boot|\
-                moe.shizuku.privileged.api|\
-                com.google.android.gms|com.google.android.gsf|\
-                android) continue ;;
+                init|zygote|zygote64|surfaceflinger|installd|vold|logd) continue ;;
             esac
 
             local mem_mb=$(( mem_kb / 1024 ))
