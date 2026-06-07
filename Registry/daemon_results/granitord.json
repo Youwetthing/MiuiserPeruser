@@ -1,0 +1,43 @@
+{
+  "daemon": "granitord",
+  "version": "2.0",
+  "timestamp": "14:20:24",
+  "poll_interval_sec": 30,
+
+  "posture": {
+    "score": 93,
+    "grade": "SECURE",
+    "selinux": "Enforcing",
+    "verified_boot_state": "green",
+    "verified_boot_mode": "enforcing",
+    "ro_secure": "1",
+    "ro_debuggable": "0",
+    "encryption": "encrypted",
+    "root_present": false,
+    "su_found": false,
+    "magisk": false
+  },
+
+  "kernel_params": {
+    "kptr_restrict": -1,
+    "dmesg_restrict": -1,
+    "perf_paranoid": -1,
+    "aslr": -1,
+    "protected_hardlinks": -1,
+    "protected_symlinks": -1
+  },
+
+  "drift": {
+    "detected": false,
+    "confirmed_degradation": false,
+    "param_changes": []
+  },
+
+  "hardware_attestation": [{"type":"tee_present","path":"/dev/teei_client"}],
+
+  "filesystem_integrity": [],
+
+  "persistence_audit": [],
+
+  "threat_indicators": [{"type":"correlated","confidence":80,"score":93,"description":"Hardware attestation failure without root = possible hardware attack","degradation_confirmed":false}]
+}
