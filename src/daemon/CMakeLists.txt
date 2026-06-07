@@ -23,3 +23,6 @@ foreach(DAEMON bebopd burned fugitoidd granitord krangd leatherheadd metalheadd 
     target_include_directories(${DAEMON} PRIVATE ${DAEMON_INCLUDES})
     set_target_properties(${DAEMON} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 endforeach()
+
+# shredderd needs OpenSSL for SHA256
+target_link_libraries(shredderd PRIVATE crypto)
