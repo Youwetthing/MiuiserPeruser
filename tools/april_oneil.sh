@@ -128,21 +128,49 @@ parse_metalheadd() {
 
 parse_shredderd() {
     local f="$RESULTS/shredderd.json"; [ ! -f "$f" ] && return
-    local score grade mods changed
-    score=$(jq -r '.integrity_score // 100' "$f" 2>/dev/null)
-    grade=$(jq -r '.grade // "CLEAN"' "$f" 2>/dev/null)
-    mods=$(jq -r '.unknown_modules // 0' "$f" 2>/dev/null)
-    changed=$(jq -r '.changed_binaries // 0' "$f" 2>/dev/null)
+    local score grade drift confirmed selinux
+    score=$(jq -r '.integrity.score // .integrity_score // 100' "$f" 2>/dev/null)
+    grade=$(jq -r '.integrity.grade // .grade // "CLEAN"' "$f" 2>/dev/null)
+    drift=$(jq -r '.drift.confirmed // false' "$f" 2>/dev/null)
+    selinux=$(jq -r '.integrity.selinux // "unknown"' "$f" 2>/dev/null)
 
-    [ "${mods:-0}" -gt 0 ] && add_finding "URGENT" "shredderd" \
-        "${mods} UNKNOWN KERNEL MODULES LOADED" \
-        "Kernel modules outside expected baseline detected. Possible tampering." \
-        "kernel_sanders.sh" "Check kernel modules (option 2)"
+    [ "${score:-100}" -lt 80 ] && add_finding "WARNING" "shredderd"         "KERNEL INTEGRITY ${score}/100 — ${grade}"         "Kernel integrity degraded. SELinux: ${selinux}. Review kernel parameters."         "kernel_sanders.sh" "Kernel audit (option 2)"
 
-    [ "${score:-100}" -lt 80 ] && add_finding "WARNING" "shredderd" \
-        "INTEGRITY SCORE ${score}/100 — ${grade}" \
-        "Kernel integrity degraded. Review SELinux status and kernel parameters." \
-        "kernel_sanders.sh" "SELinux + kernel params (option 3)"
+    [ "$drift" = "true" ] && add_finding "URGENT" "shredderd"         "CONFIRMED KERNEL MODULE DRIFT"         "Module count changed since baseline — possible rootkit insertion."         "kernel_sanders.sh" "Module audit (option 4)"
+}
+
+parse_granitord() {
+    local f="$RESULTS/granitord.json"; [ ! -f "$f" ] && return
+    local score grade selinux vboot root drift_detected
+    score=$(jq -r '.posture.score // 100' "$f" 2>/dev/null)
+    grade=$(jq -r '.posture.grade // "SECURE"' "$f" 2>/dev/null)
+    selinux=$(jq -r '.posture.selinux // "unknown"' "$f" 2>/dev/null)
+    vboot=$(jq -r '.posture.verified_boot_state // "unknown"' "$f" 2>/dev/null)
+    root=$(jq -r '.posture.root_present // false' "$f" 2>/dev/null)
+    drift_detected=$(jq -r '.drift.detected // false' "$f" 2>/dev/null)
+
+    [ "${score:-100}" -lt 70 ] && add_finding "URGENT" "granitord"         "SECURITY POSTURE ${score}/100 — ${grade}"         "System security posture degraded. SELinux: ${selinux}, Boot: ${vboot}."         "kernel_sanders.sh" "Full security audit"
+
+    [ "$root" = "true" ] && add_finding "WARNING" "granitord"         "ROOT PRESENCE DETECTED"         "Root indicators found on device. Verify this is intentional."         "StalkerSlayer.sh" "Check root indicators"
+
+    [ "$drift_detected" = "true" ] && add_finding "WARNING" "granitord"         "SECURITY PARAMETER DRIFT"         "Kernel security parameters changed since baseline."         "kernel_sanders.sh" "Parameter audit"
+}
+
+parse_ratkingd() {
+    local f="$RESULTS/ratkingd.json"; [ ! -f "$f" ] && return
+    local total zombies hidden orphans mem_low pressure
+    total=$(jq -r '.processes.total // 0' "$f" 2>/dev/null)
+    zombies=$(jq -r '.processes.zombies // 0' "$f" 2>/dev/null)
+    hidden=$(jq -r '.processes.hidden_gap // 0' "$f" 2>/dev/null)
+    orphans=$(jq -r '.processes.orphans // 0' "$f" 2>/dev/null)
+    mem_low=$(jq -r '.pressure.memory_low // false' "$f" 2>/dev/null)
+    pressure=$(jq -r '.pressure.avail_mb // 0' "$f" 2>/dev/null)
+
+    [ "${zombies:-0}" -gt 5 ] && add_finding "WARNING" "ratkingd"         "${zombies} ZOMBIE PROCESSES"         "High zombie count may indicate process management issues."         "ram_slammer_v2.sh" "Process scan (option 2)"
+
+    [ "$mem_low" = "true" ] && add_finding "URGENT" "ratkingd"         "MEMORY PRESSURE — ${pressure}MB AVAILABLE"         "Device memory critically low. Performance and stability at risk."         "ram_slammer_v2.sh" "Memory summary (option 3)"
+
+    [ "${orphans:-0}" -gt 3 ] && add_finding "WARNING" "ratkingd"         "${orphans} ORPHAN PROCESSES DETECTED"         "Processes with no parent — possible injection or crash remnants."         "ram_slammer_v2.sh" "Process investigation (option 2)"
 }
 
 parse_leatherheadd() {
@@ -373,7 +401,7 @@ menu() {
 
 run_parsers() {
     FINDINGS=()
-    parse_burned; parse_metalheadd; parse_shredderd
+    parse_burned; parse_metalheadd; parse_shredderd; parse_granitord; parse_ratkingd
     parse_leatherheadd; parse_rocksteadyd; parse_bebopd; parse_fugitoidd
 }
 
