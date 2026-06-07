@@ -32,6 +32,12 @@
 volatile bool g_rahzerd_running = true;
 #include "ipc_globals.h"
 
+#include <stdbool.h>
+
+volatile bool g_running = true;
+
+#define RESULTS_FILE "/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/rahzerd.json"
+#define BASELINE_FILE "/data/data/com.termux/files/home/MiuiserPeruser/data/rahzerd_baseline.json"
 #define DEFAULT_POLL_SEC  15
 #define DEFAULT_DNS_HOST  "dns.google"
 #define MAX_CMD_OUT       8192
@@ -64,7 +70,10 @@ static void rzlog(const char *lvl, const char *fmt, ...) {
 static void handle_sig(int s) { (void)s; g_rahzerd_running = 0; }
 
 char *rz_run(const char *cmd) {
-    FILE *f = popen(cmd, "r");
+    /* Wrap command with timeout to prevent hanging */
+    char safe_cmd[2048];
+    snprintf(safe_cmd, sizeof(safe_cmd), "timeout 15 %s", cmd);
+    FILE *f = popen(safe_cmd, "r");
     if (!f) return NULL;
     char *buf = malloc(MAX_CMD_OUT);
     if (!buf) { pclose(f); return NULL; }
@@ -116,7 +125,7 @@ static char *ds(const char *svc) {
     char *r = NULL;
     if (g_backend == RZ_BACKEND_RISH) {
         char cmd[256];
-        snprintf(cmd, sizeof(cmd), "rish -c 'dumpsys %s' 2>/dev/null", svc);
+        snprintf(cmd, sizeof(cmd), "RISH_APPLICATION_ID=com.termux /data/data/com.termux/files/home/Rish/rish -c 'dumpsys %s' 2>/dev/null", svc);
         r = rz_run(cmd);
         if (r) return r;
     }
@@ -146,14 +155,19 @@ static int sysfs_exists(const char *path) {
 }
 
 rz_backend_t rz_detect_backend(void) {
+    /* Force rish backend — always available via Shizuku */
+    rzlog("INFO", "backend=rish (forced)");
+    return RZ_BACKEND_RISH;
+    /* DEAD CODE BELOW — kept for reference */
+
     const char *no_rish = getenv("RAHZERD_NO_RISH");
     if (!no_rish || strcmp(no_rish, "1") != 0) {
-        char *t = rz_run("rish -c 'echo rish_ok' 2>/dev/null");
+        char *t = rz_run("RISH_APPLICATION_ID=com.termux /data/data/com.termux/files/home/Rish/rish -c 'echo rish_ok' 2>/dev/null");
         if (t && strstr(t, "rish_ok")) { free(t);
             rzlog("INFO", "backend=rish"); return RZ_BACKEND_RISH; }
         free(t);
     }
-    char *d = rz_run("dumpsys wifi 2>/dev/null");
+    char *d = rz_run("RISH_APPLICATION_ID=com.termux /data/data/com.termux/files/home/Rish/rish -c 'dumpsys wifi 2>/dev/null'");
     if (d && strlen(d) > 32) { free(d);
         rzlog("INFO", "backend=dumpsys"); return RZ_BACKEND_DUMPSYS; }
     free(d);
@@ -745,12 +759,14 @@ void rz_state_update(rz_state_t *state) {
         gaveld_emit("rahzerd", "DNS_ANOMALY", 1.0, "latency=high");
         rz_emit_anomaly("dns_latency_spike", "{\"latency_ms\":\"high\"}");
     }
-    if (state->curr.xiaomi.divergence_detected && !state->prev.xiaomi.divergence_detected)
-        gaveld_emit("rahzerd", "DNS_ANOMALY", 1.0, state->curr.xiaomi.divergence_reason);
+    if (state->curr.xiaomi.divergence_detected && !state->prev.xiaomi.divergence_detected) {
+        gaveld_emit("rahzerd", "XIAOMI_DIVERGENCE", 1.0, state->curr.xiaomi.divergence_reason);
         rz_emit_anomaly("xiaomi_divergence", state->curr.xiaomi.divergence_reason);
-    if (state->curr.ports.suspicious_listeners > state->prev.ports.suspicious_listeners)
-        gaveld_emit("rahzerd", "UNKNOWN_LISTENER", 0.0->curr.ports.suspicious_listeners, "layer=ports");
+    }
+    if (state->curr.ports.suspicious_listeners > state->prev.ports.suspicious_listeners) {
+        gaveld_emit("rahzerd", "PORT_ANOMALY", 1.0, "suspicious_listener_detected");
         rz_emit_anomaly("suspicious_listener", "{\"layer\":\"ports\"}");
+    }
 }
 
 /* ── Splinterd Emitters ────────────────────────────────────────── */
@@ -793,7 +809,7 @@ int rz_emit_netstate(const rz_snapshot_t *snap) {
     if (snap->dns.private_dns_active == 0)
         gaveld_emit("rahzerd", "PRIVATE_DNS_INACTIVE", 1.0, "");
     if (snap->ports.listen_count > 20)
-        gaveld_emit("rahzerd", "EXCESSIVE_CONNECTIONS", 0.0->ports.listen_count, "");
+        gaveld_emit("rahzerd", "EXCESSIVE_CONNECTIONS", (double)snap->ports.listen_count, "");
     return splinter_send(buf);
 }
 
@@ -821,6 +837,83 @@ int rz_emit_lifecycle(const char *event_type) {
 }
 
 /* ── Main ──────────────────────────────────────────────────────── */
+
+
+/* ── JSON + Baseline additions ─────────────────────────────────── */
+static char g_baseline_bssid[18] = {0};
+static int  g_baseline_dns_ms   = 0;
+static int  g_baseline_established = 0;
+
+static void rz_write_json(const rz_snapshot_t *snap) {
+    FILE *f = fopen(RESULTS_FILE, "w");
+    if (!f) return;
+    char ts[32];
+    time_t t = time(NULL);
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+
+    fprintf(f,
+        "{\n"
+        "  \"daemon\": \"rahzerd\",\n"
+        "  \"version\": \"2.0\",\n"
+        "  \"timestamp\": \"%s\",\n"
+        "  \"poll_interval_sec\": %d,\n"
+        "  \"wifi\": {\n"
+        "    \"connected\": %d,\n"
+        "    \"ssid\": \"%s\",\n"
+        "    \"bssid\": \"%s\",\n"
+        "    \"rssi_dbm\": %d,\n"
+        "    \"tx_bytes\": %ld,\n"
+        "    \"rx_bytes\": %ld\n"
+        "  },\n"
+        "  \"mobile\": {\n"
+        "    \"rat\": \"%s\",\n"
+        "    \"roaming\": %d,\n"
+        "    \"signal_dbm\": %d,\n"
+        "    \"data_active\": %d\n"
+        "  },\n"
+        "  \"dns\": {\n"
+        "    \"resolves\": %d,\n"
+        "    \"latency_ms\": %d,\n"
+        "    \"private_dns\": %d\n"
+        "  },\n"
+        "  \"ports\": {\n"
+        "    \"established_tcp4\": %d,\n"
+        "    \"established_tcp6\": %d,\n"
+        "    \"suspicious_listeners\": %d\n"
+        "  },\n"
+        "  \"baseline\": {\n"
+        "    \"established\": %s,\n"
+        "    \"wifi_bssid\": \"%s\",\n"
+        "    \"dns_latency_ms\": %d\n"
+        "  },\n"
+        "  \"xiaomi_divergence\": %d,\n"
+        "  \"poll_duration_ms\": %d\n"
+        "}\n",
+        ts, g_poll_sec,
+        snap->wifi.connected, snap->wifi.ssid, snap->wifi.bssid,
+        snap->wifi.rssi_dbm, snap->wifi.tx_bytes, snap->wifi.rx_bytes,
+        snap->mobile.rat_type, snap->mobile.roaming,
+        snap->mobile.signal_dbm, snap->mobile.data_active,
+        snap->dns.resolves, snap->dns.latency_ms, snap->dns.private_dns_active,
+        snap->ports.established_tcp4, snap->ports.established_tcp6,
+        snap->ports.suspicious_listeners,
+        g_baseline_established ? "true" : "false",
+        g_baseline_bssid, g_baseline_dns_ms,
+        snap->xiaomi.divergence_detected,
+        snap->poll_duration_ms);
+    fflush(f);
+    fclose(f);
+}
+
+static void rz_establish_baseline(const rz_snapshot_t *snap) {
+    if (g_baseline_established) return;
+    if (!snap->wifi.connected) return;
+    strncpy(g_baseline_bssid, snap->wifi.bssid, sizeof(g_baseline_bssid)-1);
+    g_baseline_dns_ms = snap->dns.latency_ms;
+    g_baseline_established = 1;
+    fprintf(stderr, "[RAHZERD] Baseline established: bssid=%s dns=%dms\n",
+            g_baseline_bssid, g_baseline_dns_ms);
+}
 
 int main(void) {
     const char *env;
