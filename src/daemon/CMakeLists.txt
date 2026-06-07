@@ -26,3 +26,4 @@ endforeach()
 
 # shredderd needs OpenSSL for SHA256
 target_link_libraries(shredderd PRIVATE crypto)
+target_link_libraries(granitord PRIVATE crypto)
