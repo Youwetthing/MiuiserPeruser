@@ -11,7 +11,7 @@ IFS=$'\n\t'
 readonly BASE_DIR="${HOME}/MiuiserPeruser"
 readonly LOG_DIR="${BASE_DIR}/log_cabin/telemetry"
 readonly LOCK_DIR="${HOME}/.StalkerSlayer.lock"
-readonly RISH_PATH="${HOME}/rish"
+readonly RISH_PATH="${HOME}/Rish/rish"
 readonly KILLER_PID_FILE="${BASE_DIR}/.killer.pid"
 
 # Colors (using tput for reliability)
@@ -39,6 +39,9 @@ readonly PACKAGES=(
     "com.miui.systemAdSolution"
     "com.xiaomi.adfeedback"
     "com.miui.msa"
+    "com.miui.msa.global"
+    "com.miui.cloudbackup"
+    "com.xiaomi.discover"
 )
 
 # --- Helpers ---
@@ -187,6 +190,7 @@ run_status() {
 
 # --- Scan ---
 run_scan() {
+    show_mikey_findings
     clear
     print_header
     
@@ -309,6 +313,139 @@ show_help() {
 }
 
 # --- Menu ---
+
+# --- Mikey findings from last superhero scan ---
+show_mikey_findings() {
+    local json="${HOME}/MiuiserPeruser/data/last_scan.json"
+    echo -e "\n${BOLD}${CYAN}=== MIKEY Telemetry Findings ===${RESET}"
+    if [ ! -f "$json" ]; then
+        echo -e "${YELLOW}  No scan data. Run: superhero --standard${RESET}"
+        return
+    fi
+    python3 << 'PY'
+import json, os
+path = os.path.expanduser("~/MiuiserPeruser/data/last_scan.json")
+try:
+    data = json.load(open(path))
+    mikey = [f for f in data if f.get("turtle") == "MIKEY"]
+    if not mikey:
+        print("  No MIKEY findings.")
+    else:
+        actionable = {"MIUI_ANALYTICS","MSA_ACTIVE","MIUI_DAEMON","GDPR_OPT_OUT"}
+        for f in mikey:
+            pri = f.get("priority","?")
+            typ = f.get("type","?")
+            desc = f.get("description","")
+            icons = {"CRITICAL":"[!!]","HIGH":"[HI]","MEDIUM":"[MD]","LOW":"[LO]"}
+            act = "[ACTIONABLE]" if typ in actionable else "[INFO]"
+            print(f"  {icons.get(pri,'[?]')} [{pri}] {typ} {act}")
+            print(f"      {desc}")
+            print()
+except Exception as e:
+    print(f"  Error: {e}")
+PY
+}
+
+slay_mikey_findings() {
+    local json="${HOME}/MiuiserPeruser/data/last_scan.json"
+    echo -e "\n${BOLD}${RED}=== Slaying MIKEY Findings ===${RESET}"
+    if [ ! -f "$json" ]; then
+        echo -e "${YELLOW}  No scan data.${RESET}"; return
+    fi
+
+    local findings
+    findings=$(python3 << 'PY'
+import json, os
+data = json.load(open(os.path.expanduser("~/MiuiserPeruser/data/last_scan.json")))
+for f in data:
+    if f.get("turtle") == "MIKEY":
+        print(f.get("type",""))
+PY
+)
+
+    echo -e "${YELLOW}  Actions to execute:${RESET}"
+    echo "$findings" | while read -r typ; do
+        case "$typ" in
+            MIUI_ANALYTICS) echo "    - Restrict MIUI Analytics" ;;
+            MSA_ACTIVE)     echo "    - Force-stop MSA" ;;
+            MIUI_DAEMON)    echo "    - Force-stop MiuiDaemon" ;;
+            GDPR_OPT_OUT)   echo "    - Set GDPR opt-out prop" ;;
+            *)              echo "    - $typ (info only)" ;;
+        esac
+    done
+
+    printf "${CYAN}  Proceed? [y/N]: ${RESET}"
+    read -r confirm
+    [[ "$confirm" != "y" && "$confirm" != "Y" ]] && { echo "Cancelled."; return; }
+
+    echo "$findings" | while read -r typ; do
+        case "$typ" in
+            MIUI_ANALYTICS)
+                echo -e "  ${YELLOW}-> Restricting Analytics...${RESET}"
+                exec_priv "am force-stop com.miui.analytics"
+                exec_priv "cmd appops set com.miui.analytics RUN_IN_BACKGROUND ignore" ;;
+            MSA_ACTIVE)
+                echo -e "  ${YELLOW}-> Stopping MSA...${RESET}"
+                exec_priv "am force-stop com.miui.msa.global" ;;
+            MIUI_DAEMON)
+                echo -e "  ${YELLOW}-> Stopping Daemon...${RESET}"
+                exec_priv "am force-stop com.miui.daemon" ;;
+            GDPR_OPT_OUT)
+                echo -e "  ${YELLOW}-> Setting GDPR prop...${RESET}"
+                exec_priv "setprop persist.sys.miui.gdpr 1" ;;
+            MILLET_ACTIVE|PARTNER_TOKEN|SNO_TRACKING|FB_PARTNER_ID)
+                echo -e "  ${CYAN}  $typ — no runtime fix available${RESET}" ;;
+        esac
+    done
+    echo -e "\n${GREEN}Done. Run scan again to verify.${RESET}"
+}
+
+
+slay_mikey_findings() {
+    local json="${HOME}/MiuiserPeruser/data/last_scan.json"
+    echo -e "\n${BOLD}${RED}=== Slaying MIKEY Findings ===${RESET}"
+    if [ ! -f "$json" ]; then
+        echo -e "${YELLOW}  No scan data.${RESET}"; return
+    fi
+
+    # Map finding types to actions
+    local types
+    types=$(python3 << 'PY'
+import json, os
+data = json.load(open(os.path.expanduser('~/MiuiserPeruser/data/last_scan.json')))
+for f in data:
+    if f.get('turtle') == 'MIKEY':
+        print(f.get('type',''))
+PY
+)
+
+    echo "$types" | while read -r typ; do
+        case "$typ" in
+            MIUI_ANALYTICS)
+                echo -e "  ${YELLOW}Restricting MIUI Analytics...${RESET}"
+                exec_priv "am force-stop com.miui.analytics"
+                exec_priv "appops set com.miui.analytics RUN_IN_BACKGROUND ignore"
+                ;;
+            MSA_ACTIVE)
+                echo -e "  ${YELLOW}Force-stopping MSA...${RESET}"
+                exec_priv "am force-stop com.miui.msa.global"
+                ;;
+            MIUI_DAEMON)
+                echo -e "  ${YELLOW}Force-stopping MiuiDaemon...${RESET}"
+                exec_priv "am force-stop com.miui.daemon"
+                ;;
+            GDPR_OPT_OUT)
+                echo -e "  ${YELLOW}Setting GDPR opt-out prop...${RESET}"
+                exec_priv "setprop persist.sys.miui.gdpr 1"
+                ;;
+            MILLET_ACTIVE|PARTNER_TOKEN|SNO_TRACKING|FB_PARTNER_ID)
+                echo -e "  ${CYAN}  $typ — informational only, no runtime fix available${RESET}"
+                ;;
+        esac
+    done
+    echo -e "\n${GREEN}Done. Run scan again to verify.${RESET}"
+}
+
 show_menu() {
     clear
     print_header
@@ -320,9 +457,11 @@ show_menu() {
     echo "  5) Stop background killer"
     echo "  6) Restore (stop killer + reset instructions)"
     echo "  7) Help"
-    echo "  8) Exit"
+    echo "  8) Mikey findings (display)"
+    echo "  9) Slay Mikey findings"
     echo ""
-    echo -n "Choose [1-8]: "
+    echo " 10) Exit  [or q]"
+    echo -n "Choose [1-10]: "
 }
 
 # --- Main ---
@@ -356,8 +495,11 @@ main() {
             5) stop_killer; pause ;;
             6) run_restore ;;
             7) show_help ;;
-            8) echo -e "\n${GREEN}Exiting.${RESET}"; exit 0 ;;
-            *) echo -e "\n${RED}Invalid option${RESET}"; sleep 1 ;;
+            8) show_mikey_findings; read -rp "Press enter..." _ ;;
+            9) slay_mikey_findings; read -rp "Press enter..." _ ;;
+           10) echo -e "\n${GREEN}Exiting.${RESET}"; exit 0 ;;
+            q|Q) echo -e "\n${GREEN}Exiting.${RESET}"; exit 0 ;;
+        *) echo -e "\n${RED}Invalid option${RESET}"; sleep 1 ;;
         esac
     done
 }
