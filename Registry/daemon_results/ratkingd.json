@@ -1,0 +1,35 @@
+{
+  "daemon": "ratkingd",
+  "version": "2.0",
+  "timestamp": "14:37:39",
+  "poll_interval_sec": 12,
+
+  "baseline": {
+    "established": false,
+    "polls_learned": 4,
+    "process_types_tracked": 3
+  },
+
+  "thermal": {
+    "zone_temp_c": -1,
+    "adjusted_hog_pct": 40
+  },
+
+  "processes": {
+    "total": 9,
+    "zombies": 0,
+    "orphans": 1,
+    "flash_processes": 0,
+    "hidden_gap": 29413
+  },
+
+  "top_cpu": [{"pid":26820,"name":"ratkingd","cpu_pct":100,"baseline_mean":125.0,"anomaly":false}],
+
+  "top_memory": [{"pid":29206,"name":"com.termux","rss_mb":127.2,"anomaly":false},{"pid":26818,"name":"timeout","rss_mb":5.1,"anomaly":false},{"pid":26819,"name":"tail","rss_mb":5.0,"anomaly":false},{"pid":25284,"name":"bash","rss_mb":3.8,"anomaly":false},{"pid":26820,"name":"ratkingd","rss_mb":2.9,"anomaly":false},{"pid":4908,"name":"bash","rss_mb":2.7,"anomaly":false}],
+
+  "anomalies": [],
+
+  "pressure": {"memory_low":false,"avail_mb":0,"attributed_to":""},
+
+  "network_correlation": []
+}

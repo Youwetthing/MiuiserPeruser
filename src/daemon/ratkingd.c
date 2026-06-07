@@ -1,23 +1,14 @@
 /*
- * ratkingd.c — Zombie Process & CPU/Memory Hog Hunter
- *
- * Every poll:
- *   - Walk /proc/[pid]/status to find zombie processes (State: Z)
- *   - Parse /proc/[pid]/stat to compute per-process CPU delta
- *   - Read /proc/[pid]/status VmRSS for top memory consumers
- *   - Report total process/thread count and system pressure
- *   - Emit APRIL events when zombies or runaway CPU hogs detected
- *
- * APRIL events emitted:
- *   zombie_detected  — one or more zombie processes present
- *   cpu_hog          — single process consuming > HOG_PCT of CPU
- *   mem_pressure     — available memory below MEM_LOW_MB
+ * ratkingd v2.0 — Zombie Process & Behavioral Anomaly Hunter
+ * CSI Mode: baseline learning, hidden process detection, thermal-aware thresholds,
+ *            network correlation, memory attribution, lifecycle tracking
  */
 
 #include "daemon_core.h"
-#include <stdbool.h>
 #include "ipc_globals.h"
-static volatile bool g_ratkingd_running = true;
+#include <stdbool.h>
+
+volatile bool g_running = true;
 #include "gaveld_emit.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,57 +18,165 @@ static volatile bool g_ratkingd_running = true;
 #include <dirent.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <math.h>
 
-#define DAEMON_NAME   "ratkingd"
-#define POLL_SEC      12
-#define TOP_N         6
-#define HOG_PCT       40    /* single-process CPU % = hog */
-#define MEM_LOW_MB    200   /* MemAvailable below this → pressure event */
+#define DAEMON_NAME     "ratkingd"
+#define VERSION         "2.0"
+#define POLL_SEC        12
+#define TOP_N           6
+#define HOG_PCT_COOL    40
+#define HOG_PCT_WARM    25
+#define HOG_PCT_HOT     15
+#define MEM_LOW_MB      200
+#define MAX_PROCS       512
+#define MAX_BASELINE    128
+#define LEARN_POLLS     20
+#define FLASH_LIFETIME  5
+#define ANOMALY_SIGMA   3.0
 
-/* ── Splinterd emit ───────────────────────────────────────────────────── */
+static volatile bool g_ratkingd_running = true;
 
-static void splinterd_emit(const char *type, const char *payload)
-{
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return;
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, SPLINTER_SOCKET, sizeof(addr.sun_path) - 1);
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-        char buf[512];
-        int n = snprintf(buf, sizeof(buf),
-                         "APRIL|" DAEMON_NAME "|%s|%s\n", type, payload);
-        if (n > 0) write(fd, buf, (size_t)n);
-    }
-    close(fd);
-}
-
-/* ── Process record ───────────────────────────────────────────────────── */
-
-#define MAX_PROCS 512
-
+/* ── Process record with lifecycle ───────────────────────────────────────── */
 typedef struct {
     int   pid;
     char  name[32];
-    char  state;         /* R S D Z T … */
+    char  state;
     int   uid;
+    int   ppid;
     long  vmrss_kb;
-    unsigned long long cpu_time;   /* utime + stime from /proc/pid/stat */
-    int   cpu_pct;       /* computed across successive polls */
+    unsigned long long cpu_time;
+    int   cpu_pct;
+    time_t first_seen;
+    time_t last_seen;
+    int   polls_alive;
+    int   fd_count;
+    long  tx_kb;
+    long  rx_kb;
 } proc_t;
 
 static proc_t g_procs[MAX_PROCS];
 static proc_t g_prev[MAX_PROCS];
 static int    g_nprocs = 0, g_nprev = 0;
-static int    g_first  = 1;
+static int    g_first = 1;
+static long long g_prev_total_jiff = 0;
 
-static long long g_prev_total_jiff = 0;   /* for CPU% normalisation */
+/* ── Behavioral baseline ──────────────────────────────────────────────────── */
+typedef struct {
+    char name[32];
+    double cpu_mean;
+    double cpu_stddev;
+    double rss_mean;
+    double rss_stddev;
+    int samples;
+    int max_cpu;
+    long max_rss;
+} baseline_t;
 
-/* ── /proc/[pid] readers ──────────────────────────────────────────────── */
+static baseline_t g_baselines[MAX_BASELINE];
+static int g_nbaseline = 0;
+static int g_learn_polls = 0;
+static int g_baseline_ready = 0;
 
-static int read_status(int pid, proc_t *out)
-{
+/* ── JSON output path ─────────────────────────────────────────────────────── */
+#define RESULTS_FILE "/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/ratkingd.json"
+
+/* ── rish helper ───────────────────────────────────────────────────────────── */
+static char *rish_read(const char *cmd, char *buf, size_t bufsize) {
+    char full[1024];
+    snprintf(full, sizeof(full),
+        "RISH_APPLICATION_ID=com.termux "
+        "/data/data/com.termux/files/home/Rish/rish -c '%s' 2>/dev/null", cmd);
+    FILE *fp = popen(full, "r");
+    if (!fp) { buf[0] = 0; return buf; }
+    size_t pos = 0;
+    char line[512];
+    while (fgets(line, sizeof(line), fp) && pos < bufsize - 1) {
+        size_t l = strlen(line);
+        if (pos + l < bufsize - 1) { memcpy(buf + pos, line, l); pos += l; }
+    }
+    buf[pos] = 0;
+    pclose(fp);
+    while (pos > 0 && (buf[pos-1] == '\n' || buf[pos-1] == '\r')) buf[--pos] = 0;
+    return buf;
+}
+
+static int contains(const char *s, const char *needle) {
+    return s && needle && strstr(s, needle) != NULL;
+}
+
+/* ── Thermal state ───────────────────────────────────────────────────────── */
+static int get_thermal_temp(void) {
+    FILE *f = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
+    if (!f) return -1;
+    int temp = -1;
+    fscanf(f, "%d", &temp);
+    fclose(f);
+    return temp / 1000;  /* millidegrees → degrees */
+}
+
+static int get_adjusted_hog_pct(int temp) {
+    if (temp < 0) return HOG_PCT_COOL;
+    if (temp > 60) return HOG_PCT_HOT;
+    if (temp > 45) return HOG_PCT_WARM;
+    return HOG_PCT_COOL;
+}
+
+/* ── Baseline management ──────────────────────────────────────────────────── */
+static baseline_t* find_baseline(const char *name) {
+    for (int i = 0; i < g_nbaseline; i++)
+        if (strcmp(g_baselines[i].name, name) == 0)
+            return &g_baselines[i];
+    return NULL;
+}
+
+static void update_baseline(const char *name, int cpu_pct, long rss_kb) {
+    baseline_t *b = find_baseline(name);
+    if (!b && g_nbaseline < MAX_BASELINE) {
+        b = &g_baselines[g_nbaseline++];
+        strcpy(b->name, name);
+        b->cpu_mean = cpu_pct;
+        b->cpu_stddev = 0;
+        b->rss_mean = rss_kb;
+        b->rss_stddev = 0;
+        b->samples = 1;
+        b->max_cpu = cpu_pct;
+        b->max_rss = rss_kb;
+        return;
+    }
+    if (!b) return;
+
+    /* Welford's online algorithm for mean/stddev */
+    b->samples++;
+    double delta_cpu = cpu_pct - b->cpu_mean;
+    b->cpu_mean += delta_cpu / b->samples;
+    b->cpu_stddev = sqrt((b->cpu_stddev * b->cpu_stddev * (b->samples - 1) +
+                          delta_cpu * (cpu_pct - b->cpu_mean)) / b->samples);
+
+    double delta_rss = rss_kb - b->rss_mean;
+    b->rss_mean += delta_rss / b->samples;
+    b->rss_stddev = sqrt((b->rss_stddev * b->rss_stddev * (b->samples - 1) +
+                          delta_rss * (rss_kb - b->rss_mean)) / b->samples);
+
+    if (cpu_pct > b->max_cpu) b->max_cpu = cpu_pct;
+    if (rss_kb > b->max_rss) b->max_rss = rss_kb;
+}
+
+static int is_anomaly_cpu(const char *name, int cpu_pct) {
+    baseline_t *b = find_baseline(name);
+    if (!b || b->samples < 5) return 0;
+    return cpu_pct > b->cpu_mean + ANOMALY_SIGMA * b->cpu_stddev;
+}
+
+static int is_anomaly_rss(const char *name, long rss_kb) {
+    baseline_t *b = find_baseline(name);
+    if (!b || b->samples < 5) return 0;
+    return rss_kb > b->rss_mean + ANOMALY_SIGMA * b->rss_stddev;
+}
+
+/* ── /proc readers with PPID and network ──────────────────────────────────── */
+static int read_status(int pid, proc_t *out) {
     char path[64];
     snprintf(path, sizeof(path), "/proc/%d/status", pid);
     FILE *f = fopen(path, "r");
@@ -87,18 +186,19 @@ static int read_status(int pid, proc_t *out)
     out->pid = pid;
     out->state = '?';
     out->uid = -1;
+    out->ppid = -1;
     out->vmrss_kb = 0;
     out->name[0] = '\0';
 
     while (fgets(line, sizeof(line), f)) {
         if (strncmp(line, "Name:", 5) == 0) {
-            char tmp[32] = {0};
-            sscanf(line + 5, " %31s", tmp);
-            strncpy(out->name, tmp, sizeof(out->name) - 1);
+            sscanf(line + 5, " %31s", out->name);
         } else if (strncmp(line, "State:", 6) == 0) {
             sscanf(line + 6, " %c", &out->state);
         } else if (strncmp(line, "Uid:", 4) == 0) {
             sscanf(line + 4, " %d", &out->uid);
+        } else if (strncmp(line, "PPid:", 5) == 0) {
+            sscanf(line + 5, " %d", &out->ppid);
         } else if (strncmp(line, "VmRSS:", 6) == 0) {
             sscanf(line + 6, " %ld", &out->vmrss_kb);
         }
@@ -107,15 +207,12 @@ static int read_status(int pid, proc_t *out)
     return 1;
 }
 
-static unsigned long long read_cputime(int pid)
-{
+static unsigned long long read_cputime(int pid) {
     char path[64];
     snprintf(path, sizeof(path), "/proc/%d/stat", pid);
     FILE *f = fopen(path, "r");
     if (!f) return 0;
-    /* (1)pid (2)comm (3)state (4)ppid ... (14)utime (15)stime */
-    unsigned long long utime = 0, stime = 0;
-    unsigned long long dummy;
+    unsigned long long utime = 0, stime = 0, dummy;
     char name[64]; char state;
     int ppid, pgrp, sess, tty, tpgid;
     unsigned flags;
@@ -126,29 +223,40 @@ static unsigned long long read_cputime(int pid)
     return utime + stime;
 }
 
-/* ── /proc/meminfo ────────────────────────────────────────────────────── */
+static int read_fd_count(int pid) {
+    char path[64];
+    snprintf(path, sizeof(path), "/proc/%d/fd/", pid);
+    DIR *d = opendir(path);
+    if (!d) return 0;
+    int count = 0;
+    while (readdir(d) != NULL) count++;
+    closedir(d);
+    return count - 2;  /* subtract . and .. */
+}
 
-static void read_meminfo(long *total_kb, long *avail_kb, long *cached_kb)
-{
-    *total_kb = *avail_kb = *cached_kb = 0;
-    FILE *f = fopen("/proc/meminfo", "r");
+static void read_network(int pid, long *tx, long *rx) {
+    *tx = 0; *rx = 0;
+    char path[128];
+    snprintf(path, sizeof(path), "/proc/%d/net/dev", pid);
+    FILE *f = fopen(path, "r");
     if (!f) return;
-    char line[128];
+    char line[256];
     while (fgets(line, sizeof(line), f)) {
-        if (strncmp(line, "MemTotal:", 9) == 0)
-            sscanf(line + 9, " %ld", total_kb);
-        else if (strncmp(line, "MemAvailable:", 13) == 0)
-            sscanf(line + 13, " %ld", avail_kb);
-        else if (strncmp(line, "Cached:", 7) == 0 && line[7] == ' ')
-            sscanf(line + 7, " %ld", cached_kb);
+        if (strchr(line, ':')) {
+            char iface[32];
+            long rbytes, tbytes;
+            sscanf(line, " %31[^:]: %ld %*d %*d %*d %*d %*d %*d %*d %ld",
+                   iface, &rbytes, &tbytes);
+            if (strcmp(iface, "lo") != 0) {
+                *rx += rbytes / 1024;
+                *tx += tbytes / 1024;
+            }
+        }
     }
     fclose(f);
 }
 
-/* ── Total jiffies from /proc/stat ───────────────────────────────────── */
-
-static long long total_jiffies(void)
-{
+static long long total_jiffies(void) {
     FILE *f = fopen("/proc/stat", "r");
     if (!f) return 0;
     char line[256];
@@ -160,19 +268,131 @@ static long long total_jiffies(void)
     return u+n+s+i+w+q+sq;
 }
 
-/* ── Poll ─────────────────────────────────────────────────────────────── */
-
-static int cmp_vmrss(const void *a, const void *b)
-{
-    return (int)(((proc_t*)b)->vmrss_kb - ((proc_t*)a)->vmrss_kb);
+static void read_meminfo(long *total_kb, long *avail_kb) {
+    *total_kb = *avail_kb = 0;
+    FILE *f = fopen("/proc/meminfo", "r");
+    if (!f) return;
+    char line[128];
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "MemTotal:", 9) == 0)
+            sscanf(line + 9, " %ld", total_kb);
+        else if (strncmp(line, "MemAvailable:", 13) == 0)
+            sscanf(line + 13, " %ld", avail_kb);
+    }
+    fclose(f);
 }
-static int cmp_cpu(const void *a, const void *b)
+
+/* ── Hidden process detection (PID gap analysis) ─────────────────────────── */
+static int detect_hidden_processes(void) {
+    int max_pid = 0;
+    DIR *d = opendir("/proc");
+    if (!d) return 0;
+    struct dirent *ent;
+    while ((ent = readdir(d)) != NULL) {
+        int is_pid = 1;
+        for (char *c = ent->d_name; *c; c++)
+            if (*c < '0' || *c > '9') { is_pid = 0; break; }
+        if (is_pid) {
+            int pid = atoi(ent->d_name);
+            if (pid > max_pid) max_pid = pid;
+        }
+    }
+    closedir(d);
+
+    /* Check for gaps in expected range — hidden processes remove /proc entries */
+    int expected_count = max_pid;
+    int actual_count = 0;
+    d = opendir("/proc");
+    if (d) {
+        while ((ent = readdir(d)) != NULL) {
+            int is_pid = 1;
+            for (char *c = ent->d_name; *c; c++)
+                if (*c < '0' || *c > '9') { is_pid = 0; break; }
+            if (is_pid) actual_count++;
+        }
+        closedir(d);
+    }
+
+    /* Significant gap suggests hidden processes */
+    int gap = expected_count - actual_count;
+    return gap > 5 ? gap : 0;  /* Allow normal PID reuse noise */
+}
+
+/* ── JSON helpers ─────────────────────────────────────────────────────────── */
+static void strip_trailing_comma(char *s) {
+    size_t len = strlen(s);
+    if (len > 0 && s[len - 1] == ',') s[len - 1] = 0;
+}
+
+static void write_json(
+    const char *ts, int temp, int hog_pct,
+    int total_procs, int zombies, int orphans, int flash, int hidden_gap,
+    const char *top_cpu_json, const char *top_mem_json,
+    const char *anomalies_json, const char *pressure_json,
+    const char *network_json)
 {
+    char tc[4096], tm[4096], an[4096], pr[4096], nw[4096];
+    strncpy(tc, top_cpu_json, sizeof(tc)-1); tc[sizeof(tc)-1] = 0;
+    strncpy(tm, top_mem_json, sizeof(tm)-1); tm[sizeof(tm)-1] = 0;
+    strncpy(an, anomalies_json, sizeof(an)-1); an[sizeof(an)-1] = 0;
+    strncpy(pr, pressure_json, sizeof(pr)-1); pr[sizeof(pr)-1] = 0;
+    strncpy(nw, network_json, sizeof(nw)-1); nw[sizeof(nw)-1] = 0;
+    strip_trailing_comma(tc);
+    strip_trailing_comma(tm);
+    strip_trailing_comma(an);
+    strip_trailing_comma(pr);
+    strip_trailing_comma(nw);
+
+    FILE *f = fopen(RESULTS_FILE, "w");
+    if (!f) return;
+
+    fprintf(f,
+        "{\n"
+        "  \"daemon\": \"ratkingd\",\n"
+        "  \"version\": \"%s\",\n"
+        "  \"timestamp\": \"%s\",\n"
+        "  \"poll_interval_sec\": %d,\n\n"
+        "  \"baseline\": {\n"
+        "    \"established\": %s,\n"
+        "    \"polls_learned\": %d,\n"
+        "    \"process_types_tracked\": %d\n"
+        "  },\n\n"
+        "  \"thermal\": {\n"
+        "    \"zone_temp_c\": %d,\n"
+        "    \"adjusted_hog_pct\": %d\n"
+        "  },\n\n"
+        "  \"processes\": {\n"
+        "    \"total\": %d,\n"
+        "    \"zombies\": %d,\n"
+        "    \"orphans\": %d,\n"
+        "    \"flash_processes\": %d,\n"
+        "    \"hidden_gap\": %d\n"
+        "  },\n\n"
+        "  \"top_cpu\": [%s],\n\n"
+        "  \"top_memory\": [%s],\n\n"
+        "  \"anomalies\": [%s],\n\n"
+        "  \"pressure\": %s,\n\n"
+        "  \"network_correlation\": [%s]\n"
+        "}\n",
+        VERSION, ts, POLL_SEC,
+        g_baseline_ready ? "true" : "false", g_learn_polls, g_nbaseline,
+        temp, hog_pct,
+        total_procs, zombies, orphans, flash, hidden_gap,
+        tc, tm, an, pr, nw);
+
+    fflush(f);
+    fclose(f);
+}
+
+/* ── Main poll ─────────────────────────────────────────────────────────────── */
+static int cmp_cpu(const void *a, const void *b) {
     return ((proc_t*)b)->cpu_pct - ((proc_t*)a)->cpu_pct;
 }
+static int cmp_mem(const void *a, const void *b) {
+    return (int)(((proc_t*)b)->vmrss_kb - ((proc_t*)a)->vmrss_kb);
+}
 
-static void poll_procs(void)
-{
+static void poll_procs(void) {
     DIR *d = opendir("/proc");
     if (!d) return;
 
@@ -183,10 +403,10 @@ static void poll_procs(void)
     struct dirent *ent;
     g_nprocs = 0;
     int zombie_count = 0;
-    int total_threads = 0;
+    int orphan_count = 0;
+    int flash_count = 0;
 
     while ((ent = readdir(d)) != NULL && g_nprocs < MAX_PROCS) {
-        /* Only numeric entries are PIDs */
         int is_pid = 1;
         for (char *c = ent->d_name; *c; c++)
             if (*c < '0' || *c > '9') { is_pid = 0; break; }
@@ -196,26 +416,59 @@ static void poll_procs(void)
         proc_t *p = &g_procs[g_nprocs];
         if (!read_status(pid, p)) continue;
         p->cpu_time = read_cputime(pid);
+        p->fd_count = read_fd_count(pid);
+        read_network(pid, &p->tx_kb, &p->rx_kb);
 
-        /* CPU% from delta vs previous snapshot */
+        /* CPU% from delta */
         p->cpu_pct = 0;
         if (!g_first) {
             for (int j = 0; j < g_nprev; j++) {
                 if (g_prev[j].pid == pid) {
-                    unsigned long long dt =
-                        (p->cpu_time > g_prev[j].cpu_time)
-                        ? p->cpu_time - g_prev[j].cpu_time : 0;
+                    unsigned long long dt = (p->cpu_time > g_prev[j].cpu_time)
+                                          ? p->cpu_time - g_prev[j].cpu_time : 0;
                     p->cpu_pct = (int)(dt * 100ULL / (unsigned long long)delta_j);
                     break;
                 }
             }
         }
 
+        /* Lifecycle tracking */
+        p->last_seen = time(NULL);
+        if (!g_first) {
+            int found_prev = 0;
+            for (int j = 0; j < g_nprev; j++) {
+                if (g_prev[j].pid == pid) {
+                    p->first_seen = g_prev[j].first_seen;
+                    p->polls_alive = g_prev[j].polls_alive + 1;
+                    found_prev = 1;
+                    break;
+                }
+            }
+            if (!found_prev) {
+                p->first_seen = p->last_seen;
+                p->polls_alive = 1;
+            }
+        } else {
+            p->first_seen = p->last_seen;
+            p->polls_alive = 1;
+        }
+
+        /* Flash process detection */
+        int lifetime = (int)(p->last_seen - p->first_seen);
+        if (lifetime > 0 && lifetime < FLASH_LIFETIME && p->cpu_pct > 10)
+            flash_count++;
+
+        /* Orphan detection (PPID=1 but not init/system service) */
+        if (p->ppid == 1 && p->pid > 100 && p->uid > 1000)
+            orphan_count++;
+
         if (p->state == 'Z') zombie_count++;
-        total_threads++;
         g_nprocs++;
     }
     closedir(d);
+
+    /* Hidden process detection */
+    int hidden_gap = detect_hidden_processes();
 
     /* Save for next round */
     memcpy(g_prev, g_procs, (size_t)g_nprocs * sizeof(proc_t));
@@ -224,99 +477,179 @@ static void poll_procs(void)
     g_first = 0;
 
     /* Memory */
-    long total_kb, avail_kb, cached_kb;
-    read_meminfo(&total_kb, &avail_kb, &cached_kb);
+    long total_kb, avail_kb;
+    read_meminfo(&total_kb, &avail_kb);
     long avail_mb = avail_kb / 1024;
-    long total_mb = total_kb / 1024;
-    int  mem_pct  = total_kb ? (int)((avail_kb * 100L) / total_kb) : 0;
 
-    /* Sort copies for display */
-    proc_t sorted_cpu[MAX_PROCS];
-    proc_t sorted_mem[MAX_PROCS];
+    /* Thermal */
+    int temp = get_thermal_temp();
+    int hog_pct = get_adjusted_hog_pct(temp);
+
+    /* Sort */
+    proc_t sorted_cpu[MAX_PROCS], sorted_mem[MAX_PROCS];
     memcpy(sorted_cpu, g_procs, (size_t)g_nprocs * sizeof(proc_t));
     memcpy(sorted_mem, g_procs, (size_t)g_nprocs * sizeof(proc_t));
     qsort(sorted_cpu, (size_t)g_nprocs, sizeof(proc_t), cmp_cpu);
-    qsort(sorted_mem, (size_t)g_nprocs, sizeof(proc_t), cmp_vmrss);
+    qsort(sorted_mem, (size_t)g_nprocs, sizeof(proc_t), cmp_mem);
 
+    /* Build JSON components */
+    char top_cpu_json[4096] = "", top_mem_json[4096] = "";
+    char anomalies_json[4096] = "";
+    char pressure_json[512] = "{\"memory_low\":false,\"avail_mb\":0,\"attributed_to\":\"\"}";
+    char network_json[4096] = "";
+
+    int shown = 0;
+    for (int i = 0; i < g_nprocs && shown < TOP_N; i++) {
+        if (sorted_cpu[i].cpu_pct <= 0 && shown > 0) break;
+
+        /* Update baseline */
+        if (g_learn_polls < LEARN_POLLS) {
+            update_baseline(sorted_cpu[i].name, sorted_cpu[i].cpu_pct, sorted_cpu[i].vmrss_kb);
+        }
+
+        /* Top CPU JSON */
+        int anomaly_cpu = is_anomaly_cpu(sorted_cpu[i].name, sorted_cpu[i].cpu_pct);
+        baseline_t *b = find_baseline(sorted_cpu[i].name);
+        char entry[512];
+        snprintf(entry, sizeof(entry),
+            "{\"pid\":%d,\"name\":\"%s\",\"cpu_pct\":%d,\"baseline_mean\":%.1f,\"anomaly\":%s},",
+            sorted_cpu[i].pid, sorted_cpu[i].name, sorted_cpu[i].cpu_pct,
+            b ? b->cpu_mean : 0.0,
+            anomaly_cpu ? "true" : "false");
+        strncat(top_cpu_json, entry, sizeof(top_cpu_json) - 1);
+
+        /* Anomaly detection */
+        if (anomaly_cpu || is_anomaly_rss(sorted_cpu[i].name, sorted_cpu[i].vmrss_kb)) {
+            snprintf(entry, sizeof(entry),
+                "{\"type\":\"%s\",\"pid\":%d,\"name\":\"%s\",\"cpu_pct\":%d,\"rss_mb\":%.1f,\"confidence\":%d,\"thermal\":\"%s\"},",
+                anomaly_cpu ? "cpu_spike" : "rss_spike",
+                sorted_cpu[i].pid, sorted_cpu[i].name,
+                sorted_cpu[i].cpu_pct, sorted_cpu[i].vmrss_kb / 1024.0,
+                90, temp > 60 ? "HOT" : temp > 45 ? "WARM" : "COOL");
+            strncat(anomalies_json, entry, sizeof(anomalies_json) - 1);
+        }
+
+        shown++;
+    }
+
+    /* Top memory JSON */
+    shown = 0;
+    for (int i = 0; i < g_nprocs && shown < TOP_N; i++) {
+        if (sorted_mem[i].vmrss_kb <= 0) break;
+        int anomaly_rss = is_anomaly_rss(sorted_mem[i].name, sorted_mem[i].vmrss_kb);
+        char entry[512];
+        snprintf(entry, sizeof(entry),
+            "{\"pid\":%d,\"name\":\"%s\",\"rss_mb\":%.1f,\"anomaly\":%s},",
+            sorted_mem[i].pid, sorted_mem[i].name,
+            sorted_mem[i].vmrss_kb / 1024.0,
+            anomaly_rss ? "true" : "false");
+        strncat(top_mem_json, entry, sizeof(top_mem_json) - 1);
+        shown++;
+    }
+
+    /* Network correlation */
+    for (int i = 0; i < g_nprocs; i++) {
+        if (g_procs[i].cpu_pct > 20 && (g_procs[i].tx_kb > 1024 || g_procs[i].rx_kb > 1024)) {
+            char entry[512];
+            snprintf(entry, sizeof(entry),
+                "{\"pid\":%d,\"name\":\"%s\",\"cpu_pct\":%d,\"tx_kb\":%ld,\"rx_kb\":%ld,\"correlation\":\"high\"},",
+                g_procs[i].pid, g_procs[i].name, g_procs[i].cpu_pct,
+                g_procs[i].tx_kb, g_procs[i].rx_kb);
+            strncat(network_json, entry, sizeof(network_json) - 1);
+        }
+    }
+
+    /* Memory pressure attribution */
+    if (avail_mb < MEM_LOW_MB && avail_mb > 0) {
+        /* Find largest RSS grower */
+        long max_delta = 0;
+        char *attributed = "unknown";
+        for (int i = 0; i < g_nprocs; i++) {
+            for (int j = 0; j < g_nprev; j++) {
+                if (g_prev[j].pid == g_procs[i].pid) {
+                    long delta = g_procs[i].vmrss_kb - g_prev[j].vmrss_kb;
+                    if (delta > max_delta) {
+                        max_delta = delta;
+                        attributed = g_procs[i].name;
+                    }
+                    break;
+                }
+            }
+        }
+        char pr[512];
+        snprintf(pr, sizeof(pr),
+            "{\"memory_low\":true,\"avail_mb\":%ld,\"attributed_to\":\"%s (+%.1fMB in last poll)\"}",
+            avail_mb, attributed, max_delta / 1024.0);
+        strncpy(pressure_json, pr, sizeof(pressure_json) - 1);
+        pressure_json[sizeof(pressure_json) - 1] = 0;
+
+        gaveld_emit(DAEMON_NAME, "MEM_PRESSURE", 0.0, pressure_json);
+    }
+
+    /* APRIL events */
+    if (zombie_count > 0) {
+        char ev[256];
+        snprintf(ev, sizeof(ev), "zombie_count=%d hidden_gap=%d", zombie_count, hidden_gap);
+        gaveld_emit(DAEMON_NAME, "ZOMBIE_DETECTED", 0.0, ev);
+    }
+    if (sorted_cpu[0].cpu_pct >= hog_pct) {
+        char ev[256];
+        snprintf(ev, sizeof(ev), "pid=%d name=%s cpu_pct=%d temp=%d",
+                 sorted_cpu[0].pid, sorted_cpu[0].name, sorted_cpu[0].cpu_pct, temp);
+        gaveld_emit(DAEMON_NAME, "CPU_HOG", 0.0, ev);
+    }
+    if (hidden_gap > 0) {
+        char ev[256];
+        snprintf(ev, sizeof(ev), "hidden_gap=%d", hidden_gap);
+        gaveld_emit(DAEMON_NAME, "HIDDEN_PROCESS", 0.0, ev);
+    }
+    if (flash_count > 0) {
+        char ev[256];
+        snprintf(ev, sizeof(ev), "flash_count=%d", flash_count);
+        gaveld_emit(DAEMON_NAME, "FLASH_PROCESS", 0.0, ev);
+    }
+
+    /* Console report */
     char ts[32];
     time_t t = time(NULL);
     strftime(ts, sizeof(ts), "%H:%M:%S", localtime(&t));
 
-    printf("\n[RATKING] ── Process Report  %s ─────────────────────────────\n", ts);
-    printf("[RATKING]  Processes: %-4d  Zombies: %-3d  "
-           "Memory: %ldMB free / %ldMB total (%d%%)\n",
-           g_nprocs, zombie_count, avail_mb, total_mb, mem_pct);
+    printf("\n[RATKING] ── %s ── temp=%d°C hog_pct=%d%% ──\n", ts, temp, hog_pct);
+    printf("[RATKING]  Procs: %d  Zombies: %d  Orphans: %d  Flash: %d  Hidden: %d\n",
+           g_nprocs, zombie_count, orphan_count, flash_count, hidden_gap);
+    printf("[RATKING]  Memory: %ldMB free  Baseline: %s (%d/%d polls)\n",
+           avail_mb, g_baseline_ready ? "ready" : "learning", g_learn_polls, LEARN_POLLS);
 
-    /* Top CPU consumers */
-    printf("[RATKING]\n[RATKING]  Top CPU consumers:\n");
-    printf("[RATKING]  %-6s  %-20s  %s\n", "PID", "Name", "CPU%");
-    int shown = 0;
-    for (int i = 0; i < g_nprocs && shown < TOP_N; i++) {
-        if (sorted_cpu[i].cpu_pct <= 0 && shown > 0) break;
-        printf("[RATKING]  %-6d  %-20s  %d%%\n",
-               sorted_cpu[i].pid, sorted_cpu[i].name, sorted_cpu[i].cpu_pct);
-        shown++;
-    }
+    if (strlen(anomalies_json) > 0)
+        printf("[RATKING]  ANOMALIES detected\n");
+    if (hidden_gap > 0)
+        printf("[RATKING]  *** HIDDEN GAP: %d processes may be hidden ***\n", hidden_gap);
+    if (flash_count > 0)
+        printf("[RATKING]  *** FLASH: %d short-lived high-CPU processes ***\n", flash_count);
 
-    /* Top memory consumers */
-    printf("[RATKING]\n[RATKING]  Top memory consumers:\n");
-    printf("[RATKING]  %-6s  %-20s  %s\n", "PID", "Name", "RSS (MB)");
-    shown = 0;
-    for (int i = 0; i < g_nprocs && shown < TOP_N; i++) {
-        if (sorted_mem[i].vmrss_kb <= 0) break;
-        printf("[RATKING]  %-6d  %-20s  %.1f MB\n",
-               sorted_mem[i].pid, sorted_mem[i].name,
-               sorted_mem[i].vmrss_kb / 1024.0);
-        shown++;
-    }
+    fflush(stdout);
 
-    /* Zombie detail */
-    if (zombie_count > 0) {
-        printf("[RATKING]\n[RATKING]  ZOMBIE processes (State=Z):\n");
-        for (int i = 0; i < g_nprocs; i++) {
-            if (g_procs[i].state == 'Z')
-                printf("[RATKING]  PID %-6d  %s\n",
-                       g_procs[i].pid, g_procs[i].name);
-        }
-        char ev[256];
-        snprintf(ev, sizeof(ev),
-                 "zombie_count=%d total_procs=%d", zombie_count, g_nprocs);
-        gaveld_emit(DAEMON_NAME, "ZOMBIE_DETECTED", 0.0, ev);
-        splinterd_emit("zombie_detected", ev);
-    }
+    /* Write JSON */
+    write_json(ts, temp, hog_pct, g_nprocs, zombie_count, orphan_count,
+               flash_count, hidden_gap, top_cpu_json, top_mem_json,
+               anomalies_json, pressure_json, network_json);
 
-    /* APRIL: CPU hog */
-    if (sorted_cpu[0].cpu_pct >= HOG_PCT) {
-        char ev[256];
-        snprintf(ev, sizeof(ev),
-                 "pid=%d name=%.24s cpu_pct=%d",
-                 sorted_cpu[0].pid, sorted_cpu[0].name, sorted_cpu[0].cpu_pct);
-        gaveld_emit(DAEMON_NAME, "CPU_HOG_PROCESS", 0.0, ev);
-        splinterd_emit("cpu_hog", ev);
-        printf("[RATKING]  *** HOG: %s (pid %d) consuming %d%% CPU\n",
-               sorted_cpu[0].name, sorted_cpu[0].pid, sorted_cpu[0].cpu_pct);
-    }
-
-    /* APRIL: memory pressure */
-    if (avail_mb < MEM_LOW_MB && avail_mb > 0) {
-        char ev[256];
-        snprintf(ev, sizeof(ev),
-                 "avail_mb=%ld total_mb=%ld pct=%d", avail_mb, total_mb, mem_pct);
-        gaveld_emit(DAEMON_NAME, "MEM_PRESSURE", 0.0, ev);
-        splinterd_emit("mem_pressure", ev);
-        printf("[RATKING]  *** LOW MEMORY: %ldMB available\n", avail_mb);
+    g_learn_polls++;
+    if (g_learn_polls >= LEARN_POLLS && !g_baseline_ready) {
+        g_baseline_ready = 1;
+        fprintf(stderr, "[RATKING] Baseline ready: %d process types tracked\n", g_nbaseline);
     }
 }
 
-/* ── Main ─────────────────────────────────────────────────────────────── */
-
-int main(void)
-{
+/* ── Main ─────────────────────────────────────────────────────────────────── */
+int main(void) {
     if (!daemon_core_init(DAEMON_NAME)) return 1;
+    printf("[RATKING] v%s Process & Behavioral Anomaly Hunter: ONLINE\n", VERSION);
+    printf("[RATKING] Learning baseline for %d polls...\n", LEARN_POLLS);
+    fflush(stdout);
 
     for (;;) {
         poll_procs();
-        printf("[RATKING]  Next scan in %ds\n", POLL_SEC);
         sleep(POLL_SEC);
     }
 
