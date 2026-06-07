@@ -185,46 +185,25 @@ void rz_probe_wifi(rz_wifi_t *w) {
     w->connected = w->link_speed_mbps = w->frequency_mhz = -1;
     w->confidence = RZ_CONF_ABSENT;
 
-    char *raw = ds("wifi");
-    if (raw) {
-        char tmp[128];
-        w->connected = (rz_has(raw,"state: CONNECTED") ||
-                       (rz_has(raw,"SSID:") && !rz_has(raw,"<unknown ssid>"))) ? 1 : 0;
-        if (rz_extract_field(raw,"SSID",tmp,sizeof(tmp))) {
-            char *s=tmp, *e=tmp+strlen(tmp)-1;
-            if (strlen(tmp)>=2 && *s=='"' && *e=='"') { s++; *e='\0'; }
-            strncpy(w->ssid, s, sizeof(w->ssid)-1);
-        }
-        if (rz_extract_field(raw,"BSSID",tmp,sizeof(tmp)))
-            strncpy(w->bssid, tmp, sizeof(w->bssid)-1);
-        if (rz_extract_field(raw,"RSSI",tmp,sizeof(tmp)))
-            w->rssi_dbm = atoi(tmp);
-        if (rz_extract_field(raw,"Link speed",tmp,sizeof(tmp)))
-            w->link_speed_mbps = atoi(tmp);
-        if (rz_extract_field(raw,"Frequency",tmp,sizeof(tmp)))
-            w->frequency_mhz = atoi(tmp);
-        if (rz_extract_field(raw,"IP address",tmp,sizeof(tmp)))
-            strncpy(w->ip4, tmp, sizeof(w->ip4)-1);
-        w->backend    = (g_backend <= RZ_BACKEND_DUMPSYS) ? g_backend : RZ_BACKEND_SYSFS;
-        w->confidence = RZ_CONF_INFERRED;
-        free(raw);
-    }
+    /* wifi_state getprop — fast */
+    char *ws = rz_run("RISH_APPLICATION_ID=com.termux "
+        "/data/data/com.termux/files/home/Rish/rish -c "
+        "'getprop debug.device.wifi_state 2>/dev/null'");
+    if (ws) { /* trim whitespace */ char *p=ws; while(*p==' '||*p=='\t'||*p=='\n'||*p=='\r') p++; w->connected = (*p=='1') ? 1 : 0; }
+    free(ws);
 
-    char *v;
-    if ((v = rz_sysfs("/sys/class/net/wlan0/statistics/tx_bytes")))   { w->tx_bytes = atol(v); free(v); }
-    if ((v = rz_sysfs("/sys/class/net/wlan0/statistics/rx_bytes")))   { w->rx_bytes = atol(v); free(v); }
-    if ((v = rz_sysfs("/sys/class/net/wlan0/statistics/tx_packets"))) { w->tx_pkts  = atoi(v); free(v); }
-    if ((v = rz_sysfs("/sys/class/net/wlan0/statistics/rx_packets"))) { w->rx_pkts  = atoi(v); free(v); }
+    /* TX/RX bytes */
+    char *txb = rz_run("RISH_APPLICATION_ID=com.termux "
+        "/data/data/com.termux/files/home/Rish/rish -c "
+        "'cat /sys/class/net/wlan0/statistics/tx_bytes 2>/dev/null'");
+    if (txb) { w->tx_bytes = atol(txb); free(txb); }
+    char *rxb = rz_run("RISH_APPLICATION_ID=com.termux "
+        "/data/data/com.termux/files/home/Rish/rish -c "
+        "'cat /sys/class/net/wlan0/statistics/rx_bytes 2>/dev/null'");
+    if (rxb) { w->rx_bytes = atol(rxb); free(rxb); }
 
-    if (w->connected == -1) {
-        char *op = rz_sysfs("/sys/class/net/wlan0/operstate");
-        if (op) {
-            w->connected  = rz_has(op,"up") ? 1 : 0;
-            w->backend    = RZ_BACKEND_SYSFS;
-            w->confidence = RZ_CONF_FALLBACK;
-            free(op);
-        }
-    }
+    w->backend    = RZ_BACKEND_SYSFS;
+    w->confidence = RZ_CONF_INFERRED;
 }
 
 /* ── Layer 2: Mobile ───────────────────────────────────────────── */
