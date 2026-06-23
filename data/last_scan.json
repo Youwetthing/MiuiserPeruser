@@ -1,0 +1,15 @@
+[
+  {"turtle":"RAPH_NET","priority":"HIGH","type":"SUSPECT_PORT","description":"Suspicious port 5555 (ADB TCP (should only be loopback)) — uid=2076283 pkg=uid=2076283"},
+  {"turtle":"RAPH_NET","priority":"MEDIUM","type":"ADB_TCP_ACTIVE","description":"ADB TCP port active: 5555 — remote shell access possible"},
+  {"turtle":"MIKEY","priority":"LOW","type":"SNO_TRACKING","description":"Device SNO tracking ID present: RVpTdzyqTTN0bw-aINfMtA== — persists across factory reset, used for cross-device ad attribution"},
+  {"turtle":"MIKEY","priority":"MEDIUM","type":"FB_PARTNER_ID","description":"Facebook Partner ID baked into device: xiaomi:d3120e97-318f-0810-4666-a1b0610476f4 — pre-authorises Facebook data collection at hardware level"},
+  {"turtle":"MIKEY","priority":"LOW","type":"PARTNER_TOKEN","description":"AppsFlyer preinstall tracker present: /data/miui/pai/pre_install.appsflyer — pre-installed tracking token"},
+  {"turtle":"MIKEY","priority":"LOW","type":"PARTNER_TOKEN","description":"Netflix channel tracking ID present: 004ee050-1a17-11e9-bb61-6f1da27fb55b — pre-installed tracking token"},
+  {"turtle":"MIKEY","priority":"MEDIUM","type":"MIUI_ANALYTICS","description":"MIUI Analytics running — screen touches and interaction logs sent to data.mistat.intl.xiaomi.com"},
+  {"turtle":"MIKEY","priority":"MEDIUM","type":"MIUI_DAEMON","description":"MiuiDaemon running — background device data collection service"},
+  {"turtle":"MIKEY","priority":"LOW","type":"GUARD_PROVIDER","description":"Guard Provider active — Xiaomi security scanning with cloud telemetry component"},
+  {"turtle":"MIKEY","priority":"MEDIUM","type":"MILLET_ACTIVE","description":"MILLET kernel scheduler active — Xiaomi process prioritisation with binder monitoring"},
+  {"turtle":"MIKEY","priority":"MEDIUM","type":"GDPR_OPT_OUT","description":"MIUI GDPR opt-out not confirmed — telemetry may be active under EEA law"},
+  {"turtle":"CASEY_HOOK","priority":"HIGH","type":"ANON_RWX_MEM","description":"Anonymous RWX pages found - possible injector artefact"},
+  {"turtle":"    ","priority":"HIGH","type":"EXEC_FROM_DATA","description":"Suspicious exec mapping from /data in PID 30174"}
+]
