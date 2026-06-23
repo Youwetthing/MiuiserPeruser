@@ -1,6 +1,7 @@
 #include "splinter_dojo.h"
 #include "backend_common.h"
 #include "leo_detection.h"
+extern void leo_write_detection(const char *turtle, const char *type, const char *description, const char *priority, int confidence);
 #include "../core/include/april_event.h"
 #include "../core/include/sensei_types.h"
 #include <stdio.h>
@@ -80,6 +81,8 @@ static void print_findings(const char *turtle, SENSEI_DETECTION_LIST *r) {
                 turtle, pri, d->detection_type, d->description);
             g_findings_count++;
         }
+        /* Persist to superhero.db with MITRE tags */
+        leo_write_detection(turtle, d->detection_type, d->description, pri, d->confidence);
         d = d->next;
     }
 }
