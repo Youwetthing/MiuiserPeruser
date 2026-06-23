@@ -22,8 +22,13 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <stdarg.h>
+#include <stdbool.h>
 
-#include "ipc_globals.h"
+#include "core_paths.h"
+
+#define MP_PIPES_DIR      TURTLE_HOME "/pipes"
+#define SPLINTER_SOCKET   MP_PIPES_DIR "/splinter.sock"
+#define MP_PIDS_DIR       TURTLE_HOME "/pipes/pids"
 
 #define LISTEN_BACKLOG       8
 #define RECV_BUF_SIZE        1284
@@ -70,14 +75,16 @@ static splinter_sub_t g_subscribers[] = {
         .enabled   = 1,
     },
     {
-        .name      = "turtlecom",
-        .sock_path = MP_PIPES_DIR "/turtlecom.sock",
+    },
+    {
+        .name      = "footclan",
+        .sock_path = MP_PIPES_DIR "/footclan.sock",
         .interests = { "*", NULL },
+        .enabled   = 1,
         .enabled   = 1,
     },
     { NULL, NULL, { NULL }, 0 }
 };
-
 /* ── Globals ──────────────────────────────────────────────────────────── */
 
 static int  g_debug   = 0;
