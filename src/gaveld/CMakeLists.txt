@@ -18,7 +18,8 @@ add_executable(gaveld
     log.c
     tier.c
     weights.c
-    sqlite3.c          # amalgamation — bundled, no -lsqlite3
+    mitre_map.c
+    ../core/sqlite/sqlite3.c
 )
 
 target_compile_options(gaveld PRIVATE

@@ -55,6 +55,8 @@ typedef struct {
     time_t epoch;
     int    consent_required;
     int    consent_granted;
+    char   mitre_id[16];
+    char   mitre_tactic[32];
 } db_verdict_t;
 
 int  db_verdict_insert(const db_verdict_t *v);

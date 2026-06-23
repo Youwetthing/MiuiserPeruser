@@ -18,7 +18,6 @@
 #include <openssl/sha.h>
 #include <stdbool.h>
 
-volatile bool g_running = true;
 
 #define DAEMON_NAME     "shredderd"
 #define VERSION         "2.1"

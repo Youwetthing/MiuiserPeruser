@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "verdict.h"
+#include "mitre_map.h"
 #include "config.h"
 #include "cases.h"
 #include "consent.h"
@@ -90,6 +91,12 @@ void verdict_emit(const char *case_id, const char *source,
     v.epoch            = now;
     v.consent_required = consent_required;
     v.consent_granted  = consent_granted;
+    /* ATT&CK Mobile enrichment */
+    const mitre_entry_t *m = mitre_lookup(v.source);
+    if (m) {
+        strncpy(v.mitre_id,     m->technique_id,   sizeof(v.mitre_id)-1);
+        strncpy(v.mitre_tactic, m->tactic,         sizeof(v.mitre_tactic)-1);
+    }
     db_verdict_insert(&v);
 
     /* Criminal record for serious verdicts */

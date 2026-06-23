@@ -8,7 +8,6 @@
 #include "ipc_globals.h"
 #include <stdbool.h>
 
-volatile bool g_running = true;
 #include "gaveld_emit.h"
 #include <stdio.h>
 #include <stdlib.h>
