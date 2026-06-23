@@ -34,7 +34,6 @@ volatile bool g_rahzerd_running = true;
 
 #include <stdbool.h>
 
-volatile bool g_running = true;
 
 #define RESULTS_FILE "/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/rahzerd.json"
 #define BASELINE_FILE "/data/data/com.termux/files/home/MiuiserPeruser/data/rahzerd_baseline.json"
