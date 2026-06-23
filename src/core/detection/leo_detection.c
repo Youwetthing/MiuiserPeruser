@@ -352,6 +352,19 @@ SENSEI_STATUS leo_init(void) {
         return SENSEI_STATUS_ERROR;
     }
     create_schema();
+
+    /* Restore cycle count from persisted scan history */
+    {
+        sqlite3_stmt *stmt;
+        const char *sql = "SELECT COUNT(*) FROM scan_history;";
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+            if (sqlite3_step(stmt) == SQLITE_ROW)
+                cycle = sqlite3_column_int(stmt, 0);
+            sqlite3_finalize(stmt);
+        }
+        if (cycle >= 12) cycle = 12; /* cap — baseline already established */
+    }
+
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     printf("%s Turtles Behaviour Anomaly Scanner initialized — deep rolling live feed with learning active\n", LOG_PREFIX);

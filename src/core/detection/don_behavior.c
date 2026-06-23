@@ -47,7 +47,7 @@ SENSEI_STATUS don_behavior_analyze(uint32_t pid, SENSEI_DETECTION_LIST *results)
 
     /* 1. Wakelock held too long */
     snprintf(cmd, sizeof(cmd),
-        "cat /proc/%u/wakelocks 2>/dev/null | awk '$3>300000' | head -1", pid);
+        "cat /proc/%u/wakelocks 2>/dev/null | head -1", pid);
     char *wl = rish_cmd(cmd);
     if (wl && strlen(wl) > 2) {
         snprintf(desc, sizeof(desc),

@@ -156,26 +156,29 @@ SENSEI_STATUS splinter_run_scan_cycle(uint32_t interval_ms) {
 
         /* Verbose per-PID scan */
         printf("\n[RAPH/DON] Per-process deep scan...\n");
-        char *pids = rish_cmd("ls /proc 2>/dev/null | grep -E '^[0-9]+$'");
+        /* Dump all PIDs via script — avoids rish quoting/truncation */
+        system("/data/data/com.termux/files/home/MiuiserPeruser/scripts/dump_pids.sh");
+        FILE *pid_fp = fopen("/data/data/com.termux/files/home/MiuiserPeruser/pipes/state/pid_names", "r");
+        char pid_buf[65536] = {0};
+        if (pid_fp) { fread(pid_buf, 1, sizeof(pid_buf)-1, pid_fp); fclose(pid_fp); }
+        char *pid_names = pid_buf;
+        char *pids = pid_names;
         if (pids) {
             char *tok = strtok(pids, "\n");
             while (tok) {
+                char *colon = strchr(tok, ':');
+                if (!colon) { tok = strtok(NULL, "\n"); continue; }
+                *colon = 0;
                 uint32_t pid = (uint32_t)atoi(tok);
+                char name[32] = "?";
+                strncpy(name, colon+1, sizeof(name)-1);
+                name[strcspn(name, "\n\r")] = 0;
                 if (pid > 1) {
-                    char cmd[128];
-                    snprintf(cmd, sizeof(cmd), "cat /proc/%u/comm 2>/dev/null", pid);
-                    char *comm = rish_cmd(cmd);
-                    char name[32] = "?";
-                    if (comm && strlen(comm) > 0) {
-                        strncpy(name, comm, sizeof(name)-1);
-                        name[strcspn(name, "\n")] = 0;
-                    }
-                    free(comm);
                     printf("  \u2192 [%5u] %-20s ", pid, name);
                     fflush(stdout);
 
                     raph_memory_scan(pid, &results);
-                    don_behavior_analyze(pid, &results);
+                    /* don_behavior_analyze(pid, &results); -- disabled: rish per-PID too slow */
 
                     if (results.count > 0) {
                         printf("\u26a0\ufe0f  %u finding(s)\n", results.count);
@@ -187,7 +190,6 @@ SENSEI_STATUS splinter_run_scan_cycle(uint32_t interval_ms) {
                 }
                 tok = strtok(NULL, "\n");
             }
-            free(pids);
         }
     }
 
