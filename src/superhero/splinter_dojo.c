@@ -181,7 +181,7 @@ SENSEI_STATUS splinter_run_scan_cycle(uint32_t interval_ms) {
                     fflush(stdout);
 
                     raph_memory_scan(pid, &results);
-                    /* don_behavior_analyze(pid, &results); -- disabled: rish per-PID too slow */
+                    don_behavior_analyze(pid, &results);
 
                     if (results.count > 0) {
                         printf("\u26a0\ufe0f  %u finding(s)\n", results.count);

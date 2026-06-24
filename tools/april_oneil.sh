@@ -139,6 +139,28 @@ parse_shredderd() {
     [ "$drift" = "true" ] && add_finding "URGENT" "shredderd"         "CONFIRMED KERNEL MODULE DRIFT"         "Module count changed since baseline — possible rootkit insertion."         "kernel_sanders.sh" "Module audit (option 4)"
 }
 
+parse_rahzerd() {
+    local f="$RESULTS/rahzerd.json"; [ ! -f "$f" ] && return
+    local wifi mobile dns tcp4 tcp6 rat roaming div
+
+    wifi=$(jq -r '.wifi.connected // -1' "$f" 2>/dev/null)
+    mobile=$(jq -r '.mobile.data_active // -1' "$f" 2>/dev/null)
+    dns=$(jq -r '.dns.resolves // -1' "$f" 2>/dev/null)
+    tcp4=$(jq -r '.ports.established_tcp4 // 0' "$f" 2>/dev/null)
+    tcp6=$(jq -r '.ports.established_tcp6 // 0' "$f" 2>/dev/null)
+    rat=$(jq -r '.mobile.rat // "UNKNOWN"' "$f" 2>/dev/null)
+    roaming=$(jq -r '.mobile.roaming // 0' "$f" 2>/dev/null)
+    div=$(jq -r '.xiaomi_divergence // 0' "$f" 2>/dev/null)
+
+    [ "$dns" = "0" ] && add_finding "URGENT" "rahzerd"         "DNS RESOLUTION FAILURE"         "Device cannot resolve DNS — possible network hijack or captive portal."         "april_oneil.sh" "Refresh Channel 6"
+
+    [ "$roaming" = "1" ] && add_finding "WARNING" "rahzerd"         "DEVICE ROAMING — ${rat}"         "Mobile data active on roaming network. Higher interception risk."         "april_oneil.sh" "Check connectivity"
+
+    [ "${tcp4:-0}" -gt 50 ] && add_finding "WARNING" "rahzerd"         "HIGH CONNECTION COUNT — ${tcp4} TCP4 + ${tcp6} TCP6"         "Unusually high number of active connections. Possible data exfiltration."         "april_oneil.sh" "Check ports"
+
+    [ "$div" = "1" ] && add_finding "URGENT" "rahzerd"         "XIAOMI CONNECTIVITY DIVERGENCE DETECTED"         "Xiaomi network behaviour deviated from baseline — possible telemetry spike."         "april_oneil.sh" "Refresh Channel 6"
+}
+
 parse_granitord() {
     local f="$RESULTS/granitord.json"; [ ! -f "$f" ] && return
     local score grade selinux vboot root drift_detected
@@ -401,7 +423,7 @@ menu() {
 
 run_parsers() {
     FINDINGS=()
-    parse_burned; parse_metalheadd; parse_shredderd; parse_granitord; parse_ratkingd
+    parse_burned; parse_metalheadd; parse_shredderd; parse_granitord; parse_ratkingd; parse_rahzerd
     parse_leatherheadd; parse_rocksteadyd; parse_bebopd; parse_fugitoidd
 }
 
