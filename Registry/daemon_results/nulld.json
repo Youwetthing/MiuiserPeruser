@@ -1,0 +1,20 @@
+{
+  "daemon": "nulld",
+  "version": "1.0",
+  "timestamp": "2026-06-24T23:54:14",
+  "screen": "on",
+  "idle_seconds": 0,
+  "connections": {
+    "tcp4": 26,
+    "tcp6": 22
+  },
+  "traffic": {
+    "rx_bytes": 46054511,
+    "tx_bytes": 8383845,
+    "idle_rx_delta": 0,
+    "idle_tx_delta": 0
+  },
+  "idle_spike_detected": false,
+  "total_spike_events": 4,
+  "suspicious_transmitters": ""
+}
