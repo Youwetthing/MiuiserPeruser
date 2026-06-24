@@ -1,7 +1,7 @@
 {
   "daemon": "granitord",
   "version": "2.0",
-  "timestamp": "14:20:24",
+  "timestamp": "17:13:15",
   "poll_interval_sec": 30,
 
   "posture": {
@@ -35,7 +35,7 @@
 
   "hardware_attestation": [{"type":"tee_present","path":"/dev/teei_client"}],
 
-  "filesystem_integrity": [],
+  "filesystem_integrity": [{"type":"verity_disabled","mounts":"/dev/block/dm-20 /mnt/vendor/mi_ext erofs ro,seclabel,relatime,user_xattr,acl,cache_strategy=readaro"}],
 
   "persistence_audit": [],
 

@@ -25,10 +25,13 @@
 #define DAEMON_NAME     "granitord"
 #define VERSION         "2.0"
 #define POLL_SEC        30
+#define POLL_SEC_ENV    "GRANITORD_POLL_SEC"
+#define POLL_SEC_ENV    "GRANITORD_POLL_SEC"
 #define SCORE_WARN      60
 #define SCORE_CRITICAL  40
 #define BUF_SIZE        1024
 #define MAX_BASELINE    256
+#define BASELINE_FILE   "/data/data/com.termux/files/home/MiuiserPeruser/data/granitord_baseline.json"
 #define KMSG_BUF        4096
 
 /* ── Baseline state ────────────────────────────────────────────────────────── */
@@ -52,14 +55,34 @@ static int confirmed_degradation = 0;
 
 /* ── rish read with dedicated buffer ─────────────────────────────────────────── */
 static char *rish_read(const char *cmd, char *buf, size_t bufsize) {
-    char full[1024];
-    snprintf(full, sizeof(full),
-        "RISH_APPLICATION_ID=com.termux "
-        "/data/data/com.termux/files/home/Rish/rish -c '%s' 2>/dev/null", cmd);
-    FILE *fp = popen(full, "r");
-    if (!fp) { buf[0] = 0; return buf; }
+    char full[2048];
     size_t pos = 0;
     char line[512];
+    FILE *fp;
+
+    /* Try adb_cli first */
+    snprintf(full, sizeof(full),
+        "/data/data/com.termux/files/home/.cargo/bin/adb_cli "
+        "tcp 127.0.0.1:5555 shell \"%s\" 2>/dev/null", cmd);
+    fp = popen(full, "r");
+    if (fp) {
+        pos = 0;
+        while (fgets(line, sizeof(line), fp) && pos < bufsize-1) {
+            size_t l = strlen(line);
+            if (pos+l < bufsize-1) { memcpy(buf+pos, line, l); pos += l; }
+        }
+        buf[pos] = 0; pclose(fp);
+        while (pos > 0 && (buf[pos-1]=='\n'||buf[pos-1]=='\r')) buf[--pos]=0;
+        if (pos > 0) return buf;
+    }
+
+    /* Fallback: rish with timeout */
+    snprintf(full, sizeof(full),
+        "RISH_APPLICATION_ID=com.termux timeout 5 "
+        "/data/data/com.termux/files/home/Rish/rish -c '%s' 2>/dev/null", cmd);
+    fp = popen(full, "r");
+    if (!fp) { buf[0] = 0; return buf; }
+    pos = 0;
     while (fgets(line, sizeof(line), fp) && pos < bufsize - 1) {
         size_t l = strlen(line);
         if (pos + l < bufsize - 1) { memcpy(buf + pos, line, l); pos += l; }
@@ -69,6 +92,7 @@ static char *rish_read(const char *cmd, char *buf, size_t bufsize) {
     while (pos > 0 && (buf[pos-1] == '\n' || buf[pos-1] == '\r')) buf[--pos] = 0;
     return buf;
 }
+
 
 static int contains(const char *s, const char *needle) {
     return s && needle && strstr(s, needle) != NULL;
@@ -93,6 +117,62 @@ static void sha256_file(const char *path, char *out) {
 }
 
 /* ── Baseline management ──────────────────────────────────────────────────── */
+static void save_baseline(void) {
+    FILE *f = fopen(BASELINE_FILE, "w");
+    if (!f) return;
+    fprintf(f, "{\"count\":%d,\"boot\":\"%s\",\"vbmeta\":\"%s\",\"params\":[",
+            baseline_count, baseline_boot_hash, baseline_vbmeta_hash);
+    for (int i = 0; i < baseline_count; i++) {
+        fprintf(f, "{\"p\":\"%s\",\"v\":%ld}%s",
+                baseline_params[i].param, baseline_params[i].value,
+                i < baseline_count-1 ? "," : "");
+    }
+    fprintf(f, "]}\n");
+    fclose(f);
+}
+
+static int load_baseline(void) {
+    FILE *f = fopen(BASELINE_FILE, "r");
+    if (!f) return 0;
+    char buf[8192]; size_t n = fread(buf, 1, sizeof(buf)-1, f);
+    fclose(f); buf[n] = 0;
+    if (n < 10) return 0;
+
+    /* Parse count */
+    char *p = strstr(buf, "\"count\":");
+    if (!p) return 0;
+    baseline_count = atoi(p + 8);
+
+    /* Parse boot hash */
+    p = strstr(buf, "\"boot\":\"");
+    if (p) { p += 8; int i = 0;
+        while (*p && *p != '"' && i < 64) baseline_boot_hash[i++] = *p++;
+        baseline_boot_hash[i] = 0; }
+
+    /* Parse vbmeta hash */
+    p = strstr(buf, "\"vbmeta\":\"");
+    if (p) { p += 10; int i = 0;
+        while (*p && *p != '"' && i < 64) baseline_vbmeta_hash[i++] = *p++;
+        baseline_vbmeta_hash[i] = 0; }
+
+    /* Parse params */
+    p = buf; int idx = 0;
+    while ((p = strstr(p, "\"p\":\"")) && idx < baseline_count) {
+        p += 6; int i = 0;
+        while (*p && *p != '"' && i < 255)
+            baseline_params[idx].param[i++] = *p++;
+        baseline_params[idx].param[i] = 0;
+        char *v = strstr(p, "\"v\":");
+        if (v) baseline_params[idx].value = atol(v + 5);
+        baseline_params[idx].first_seen = 0;
+        idx++; p++;
+    }
+    baseline_established = 1;
+    fprintf(stderr, "[GRANITOR] Baseline loaded: %d params\n", baseline_count);
+    return 1;
+}
+
+
 static void establish_baseline(void) {
     fprintf(stderr, "[GRANITOR] Establishing security baseline...\n");
     baseline_count = 0;
@@ -142,6 +222,7 @@ static void establish_baseline(void) {
     }
 
     baseline_established = 1;
+    save_baseline();
     fprintf(stderr, "[GRANITOR] Baseline: %d params, boot=%.12s..., vbmeta=%.12s...\n",
             baseline_count,
             baseline_boot_hash[0] ? baseline_boot_hash : "N/A",
@@ -613,12 +694,15 @@ int main(void) {
     printf("[GRANITOR] v%s Security Posture Deep Dive: ONLINE\n", VERSION);
     printf("[GRANITOR] Establishing baseline...\n");
     establish_baseline();
-    printf("[GRANITOR] Poll interval: %ds | CSI Mode: ACTIVE\n", POLL_SEC);
+    int poll_sec = POLL_SEC;
+    const char *_psec = getenv(POLL_SEC_ENV);
+    if (_psec && atoi(_psec) > 0) poll_sec = atoi(_psec);
+    printf("[GRANITOR] Poll interval: %ds | CSI Mode: ACTIVE\n", poll_sec);
     fflush(stdout);
 
     while (g_running) {
         poll_security();
-        sleep(POLL_SEC);
+        sleep(poll_sec);
     }
 
     printf("[GRANITOR] Shutdown.\n");

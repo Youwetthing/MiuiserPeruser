@@ -1,12 +1,20 @@
 {
   "daemon": "leatherheadd",
-  "timestamp": "2026-06-02T02:01:29",
-  "scan_number": 9,
-  "signals_fired": 1,
-  "thermal_score": 52,
-  "grade": "HOT",
-  "throttled_cores": 6,
+  "timestamp": "2026-06-24T17:14:10",
+  "scan_number": 3,
+  "signals_fired": 2,
+  "thermal_score": 70,
+  "grade": "WARM",
+  "throttled_cores": 0,
   "total_cores": 8,
   "temperatures": [
+    {"name":"CPU","type":0,"cached":42.2,"hal":60.9,"delta":18.7},
+    {"name":"GPU","type":1,"cached":42.2,"hal":60.9,"delta":18.7},
+    {"name":"NPU","type":9,"cached":42.2,"hal":61.6,"delta":19.4},
+    {"name":"SOC","type":13,"cached":42.2,"hal":61.6,"delta":19.4},
+    {"name":"TPU","type":10,"cached":42.2,"hal":61.6,"delta":19.4},
+    {"name":"SKIN","type":3,"cached":32.0,"hal":39.0,"delta":7.0},
+    {"name":"BATTERY","type":2,"cached":28.0,"hal":35.0,"delta":7.0},
+    {"name":"POWER_AMPLIFIER","type":5,"cached":32.0,"hal":36.0,"delta":4.0}
   ]
 }

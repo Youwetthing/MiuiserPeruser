@@ -195,6 +195,33 @@ parse_ratkingd() {
     [ "${orphans:-0}" -gt 3 ] && add_finding "WARNING" "ratkingd"         "${orphans} ORPHAN PROCESSES DETECTED"         "Processes with no parent — possible injection or crash remnants."         "ram_slammer_v2.sh" "Process investigation (option 2)"
 }
 
+parse_tigerclawd() {
+    local f="$RESULTS/tigerclawd.json"; [ ! -f "$f" ] && return
+    local score drift suspicious selinux codename ver
+
+    score=$(jq -r '.trust_score // 100' "$f" 2>/dev/null)
+    drift=$(jq -r '.binder.drift // 0' "$f" 2>/dev/null)
+    suspicious=$(jq -r '.binder.suspicious_services // 0' "$f" 2>/dev/null)
+    selinux=$(jq -r '.integrity.selinux_enforcing // true' "$f" 2>/dev/null)
+    codename=$(jq -r '.device.codename // "unknown"' "$f" 2>/dev/null)
+    ver=$(jq -r '.device.hyperos_version // "unknown"' "$f" 2>/dev/null)
+
+    [ "$selinux" = "false" ] && add_finding "URGENT" "tigerclawd" \
+        "SELINUX PERMISSIVE ON ${codename}" \
+        "SELinux enforcement disabled — root or tamper likely." \
+        "StalkerSlayer.sh" "Check root indicators"
+
+    [ "${suspicious:-0}" -gt 0 ] && add_finding "URGENT" "tigerclawd" \
+        "${suspicious} SUSPICIOUS BINDER SERVICE(S)" \
+        "Frida/Xposed/injection artifacts in binder registry." \
+        "StalkerSlayer.sh" "Full telemetry sweep"
+
+    [ "${score:-100}" -lt 70 ] && add_finding "WARNING" "tigerclawd" \
+        "DEVICE TRUST SCORE ${score}/100 — ${codename} ${ver}" \
+        "HyperOS integrity checks degraded." \
+        "april_oneil.sh" "Refresh Channel 6"
+}
+
 parse_leatherheadd() {
     local f="$RESULTS/leatherheadd.json"; [ ! -f "$f" ] && return
     local score grade throttled
@@ -240,9 +267,9 @@ parse_bebopd() {
 parse_fugitoidd() {
     local f="$RESULTS/fugitoidd.json"; [ ! -f "$f" ] && return
     local crashes anrs ooms
-    crashes=$(jq -r '.crash_count // 0' "$f" 2>/dev/null)
-    anrs=$(jq -r '.anr_count // 0' "$f" 2>/dev/null)
-    ooms=$(jq -r '.oom_count // 0' "$f" 2>/dev/null)
+    crashes=$(jq -r '.crashes // .crash_count // 0' "$f" 2>/dev/null)
+    anrs=$(jq -r '.anrs // .anr_count // 0' "$f" 2>/dev/null)
+    ooms=$(jq -r '.oom_events // .oom_count // 0' "$f" 2>/dev/null)
 
     [ "${ooms:-0}" -gt 0 ] && add_finding "URGENT" "fugitoidd" \
         "${ooms} OUT-OF-MEMORY KILL EVENTS" \
@@ -349,7 +376,7 @@ render_findings() {
 render_status() {
     block_head "$BGBLUE" "$WHITE" "BUREAU STATUS — DAEMON HEALTH"
     echo ""
-    local daemons="gaveld burned granitord leatherheadd rocksteadyd bebopd rahzerd ratkingd metalheadd shredderd fugitoidd krangd turtlecomd splinterd"
+    local daemons="gaveld burned granitord leatherheadd rocksteadyd bebopd rahzerd ratkingd metalheadd shredderd tigerclawd fugitoidd krangd turtlecomd splinterd"
     for d in $daemons; do
         local result="$RESULTS/${d}.json"
         local running ts
@@ -423,7 +450,7 @@ menu() {
 
 run_parsers() {
     FINDINGS=()
-    parse_burned; parse_metalheadd; parse_shredderd; parse_granitord; parse_ratkingd; parse_rahzerd
+    parse_burned; parse_metalheadd; parse_shredderd; parse_granitord; parse_ratkingd; parse_rahzerd; parse_tigerclawd
     parse_leatherheadd; parse_rocksteadyd; parse_bebopd; parse_fugitoidd
 }
 

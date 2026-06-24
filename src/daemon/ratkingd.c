@@ -494,7 +494,10 @@ static void poll_procs(void) {
     /* Build JSON components */
     char top_cpu_json[4096] = "", top_mem_json[4096] = "";
     char anomalies_json[4096] = "";
-    char pressure_json[512] = "{\"memory_low\":false,\"avail_mb\":0,\"attributed_to\":\"\"}";
+    char pressure_json[512];
+    snprintf(pressure_json, sizeof(pressure_json),
+        "{\"memory_low\":false,\"avail_mb\":%ld,\"attributed_to\":\"\"}",
+        avail_mb);
     char network_json[4096] = "";
 
     int shown = 0;
