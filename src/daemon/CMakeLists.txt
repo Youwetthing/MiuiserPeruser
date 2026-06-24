@@ -18,7 +18,7 @@ set(DAEMON_INCLUDES
     ${CMAKE_SOURCE_DIR}/syndicate/daemon
 )
 
-foreach(DAEMON bebopd burned fugitoidd granitord krangd leatherheadd metalheadd ratkingd rocksteadyd shredderd turtlecomd)
+foreach(DAEMON bebopd burned fugitoidd granitord krangd leatherheadd metalheadd ratkingd rocksteadyd shredderd tigerclawd turtlecomd)
     add_executable(${DAEMON} ${DAEMON}.c ${DAEMON_COMMON})
     target_include_directories(${DAEMON} PRIVATE ${DAEMON_INCLUDES})
     set_target_properties(${DAEMON} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)

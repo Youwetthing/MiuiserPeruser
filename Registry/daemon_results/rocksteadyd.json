@@ -1,9 +1,9 @@
 {
   "daemon": "rocksteadyd",
-  "timestamp": "2026-06-02T02:01:29",
-  "scan_number": 9,
-  "signals_fired": 0,
-  "cpu_score": 100,
+  "timestamp": "2026-06-24T17:14:04",
+  "scan_number": 3,
+  "signals_fired": 1,
+  "cpu_score": 85,
   "grade": "HEALTHY",
   "system_cpu_pct": 0,
   "total_cores": 8,

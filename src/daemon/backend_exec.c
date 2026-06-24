@@ -26,7 +26,7 @@ static int             g_init_done      = 0;
 static char            g_rish_path[256] = "";
 static int             g_rish_disabled  = 0;
 
-#define ADB_TRANSPORT  "adb -s 127.0.0.1:5555 shell"
+#define ADB_TRANSPORT  "/data/data/com.termux/files/home/.cargo/bin/adb_cli tcp 127.0.0.1:5555 shell"
 #define RISH_TIMEOUT   3
 #define TIMEOUT_BIN    "/data/data/com.termux/files/usr/bin/timeout"
 
@@ -76,6 +76,8 @@ static int try_run(const char *cmd, const char *expected_out)
 static int probe_rish(void)
 {
     if (g_rish_disabled) return 0;
+    if (getenv("BEXEC_NO_RISH")) { g_rish_disabled = 1; return 0; }
+    if (getenv("BEXEC_NO_RISH")) { g_rish_disabled = 1; return 0; }
 
     setenv("RISH_APPLICATION_ID", "com.termux", 1);
 
@@ -142,9 +144,6 @@ static int probe_rish(void)
 
 static int probe_adb(void)
 {
-    /* Pre-connect ADB in case it dropped */
-    system("adb connect 127.0.0.1:5555 >/dev/null 2>&1");
-    sleep(2);
     return try_run(ADB_TRANSPORT " echo adb_ok", "adb_ok");
 }
 
