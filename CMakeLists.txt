@@ -3,7 +3,7 @@ project(MiuiserPeruser C)
 
 add_subdirectory(src/syndicate)
 add_subdirectory(src/daemon)
-
 add_subdirectory(src/core)
 add_subdirectory(src/superhero)
 add_subdirectory(src/gaveld)
+add_subdirectory(src/daemon/rahzerd_build)
