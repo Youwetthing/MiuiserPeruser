@@ -1,1 +1,17 @@
-{"enabled_daemons":["burned","granitord","leatherheadd","metalheadd","rahzerd","ratkingd","rocksteadyd","shredderd","tigerclawd","bebopd","fugitoidd"]}
+{
+  "enabled_daemons": [
+    "burned",
+    "granitord",
+    "leatherheadd",
+    "metalheadd",
+    "rahzerd",
+    "ratkingd",
+    "rocksteadyd",
+    "shredderd",
+    "tigerclawd",
+    "bebopd",
+    "fugitoidd",
+    "nulld",
+    "overlordd"
+  ]
+}
