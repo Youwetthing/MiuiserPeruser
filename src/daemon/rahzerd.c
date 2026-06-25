@@ -694,6 +694,8 @@ void rz_probe_nfc(rz_nfc_t *n) {
 
 /* ── Layer 15: Xiaomi Interference ────────────────────────────── */
 
+
+
 void rz_probe_xiaomi(rz_xiaomi_t *x) {
     memset(x, 0, sizeof(*x));
     x->jx_policy_active = x->aml_conn_active = x->miui_wifi_active = -1;
