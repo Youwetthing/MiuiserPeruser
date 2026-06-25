@@ -161,6 +161,31 @@ parse_rahzerd() {
     [ "$div" = "1" ] && add_finding "URGENT" "rahzerd"         "XIAOMI CONNECTIVITY DIVERGENCE DETECTED"         "Xiaomi network behaviour deviated from baseline — possible telemetry spike."         "april_oneil.sh" "Refresh Channel 6"
 }
 
+parse_overlordd() {
+    local f="$RESULTS/overlordd.json"; [ ! -f "$f" ] && return
+    local threat patterns
+
+    threat=$(jq -r '.threat_level // "NOMINAL"' "$f" 2>/dev/null)
+    patterns=$(jq -r '.pattern_count // 0' "$f" 2>/dev/null)
+
+    [ "$threat" = "CRITICAL" ] && add_finding "URGENT" "overlordd"         "THREAT LEVEL CRITICAL — ${patterns} CORRELATED PATTERNS"         "$(jq -r '.patterns[0].detail // ""' "$f" 2>/dev/null | cut -c1-100)"         "april_oneil.sh" "Full briefing"
+
+    [ "$threat" = "HIGH" ] || [ "$threat" = "ELEVATED" ] && add_finding "WARNING" "overlordd"         "THREAT LEVEL ${threat} — ${patterns} CORRELATED PATTERNS"         "$(jq -r '.patterns[0].detail // ""' "$f" 2>/dev/null | cut -c1-100)"         "april_oneil.sh" "Full briefing"
+
+    # Individual pattern findings
+    jq -c '.patterns[]' "$f" 2>/dev/null | while IFS= read -r p; do
+        local name sev detail mitre conf
+        name=$(echo "$p" | jq -r '.name')
+        sev=$(echo "$p" | jq -r '.severity')
+        detail=$(echo "$p" | jq -r '.detail' | cut -c1-120)
+        mitre=$(echo "$p" | jq -r '.mitre')
+        conf=$(echo "$p" | jq -r '.confidence')
+
+        [ "$sev" = "CRITICAL" ] && add_finding "URGENT" "overlordd"             "${name} [${mitre}] conf=${conf}"             "$detail" "april_oneil.sh" "Investigate"
+        [ "$sev" = "WARNING" ] && add_finding "WARNING" "overlordd"             "${name} [${mitre}] conf=${conf}"             "$detail" "april_oneil.sh" "Investigate"
+    done
+}
+
 parse_granitord() {
     local f="$RESULTS/granitord.json"; [ ! -f "$f" ] && return
     local score grade selinux vboot root drift_detected
@@ -450,7 +475,7 @@ menu() {
 
 run_parsers() {
     FINDINGS=()
-    parse_burned; parse_metalheadd; parse_shredderd; parse_granitord; parse_ratkingd; parse_rahzerd; parse_tigerclawd
+    parse_burned; parse_metalheadd; parse_shredderd; parse_granitord; parse_ratkingd; parse_rahzerd; parse_tigerclawd; parse_overlordd
     parse_leatherheadd; parse_rocksteadyd; parse_bebopd; parse_fugitoidd
 }
 

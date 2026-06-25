@@ -15,7 +15,7 @@ RED='\033[41m\033[97m'; YEL='\033[43m\033[30m'; GRN='\033[32m'
 CYN='\033[36m'; WHT='\033[97m'; DIM='\033[2m'; BOLD='\033[1m'; RST='\033[0m'
 
 # ── Default daemon fleet ─────────────────────────────────────────────────────
-ALL_DAEMONS="burned granitord leatherheadd metalheadd rahzerd ratkingd rocksteadyd shredderd tigerclawd bebopd fugitoidd"
+ALL_DAEMONS="burned granitord leatherheadd metalheadd rahzerd ratkingd rocksteadyd shredderd tigerclawd bebopd fugitoidd overlordd"
 
 # ── Load enabled daemons from config ─────────────────────────────────────────
 load_config() {

@@ -1,0 +1,39 @@
+{
+  "daemon": "overlordd",
+  "version": "1.0",
+  "timestamp": "2026-06-25T04:12:05",
+  "poll_number": 1,
+  "threat_level": "ELEVATED",
+  "pattern_count": 4,
+  "patterns": [
+    {
+      "name": "IDLE_SURVEILLANCE_CYCLE",
+      "severity": "WARNING",
+      "mitre": "T1430",
+      "confidence": 0.82,
+      "detail": "4 connection spikes during 0s idle — background surveillance activity detected. Active connections: 76 TCP4 + 9 TCP6"
+    },
+    {
+      "name": "SENSOR_NETWORK_EXFILTRATION",
+      "severity": "WARNING",
+      "mitre": "T1430",
+      "confidence": 0.80,
+      "detail": "4 sensitive sensors active with 85 TCP connections — possible sensor data exfiltration. Score: 70/100. Drain: 0.0 mAh/hr"
+    },
+    {
+      "name": "COORDINATED_SECURITY_WEAKENING",
+      "severity": "WARNING",
+      "mitre": "T1462",
+      "confidence": 0.60,
+      "detail": "2 concurrent security anomalies: binder_drift; kernel_drift; (trust=85/100 granite=93/100)"
+    },
+    {
+      "name": "SYSTEMIC_PRIVACY_EROSION",
+      "severity": "CRITICAL",
+      "mitre": "T1429",
+      "confidence": 0.90,
+      "detail": "10 privacy signals in ROM + 4 idle transmission spikes + device trust 85/100 — systemic privacy erosion. Leith, Patras & Liu (TCD/Edinburgh 2021) confirmed on this device."
+    }
+  ],
+  "poll_duration_ms": 8
+}
