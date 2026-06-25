@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <fcntl.h>
+#include <sys/wait.h>
 #include <netdb.h>
 #include <dirent.h>
 
@@ -960,6 +961,32 @@ static void rz_establish_baseline(const rz_snapshot_t *snap) {
             g_baseline_bssid, g_baseline_dns_ms);
 }
 
+/* Non-blocking exec with FD isolation — replaces system() */
+static void rz_exec_dump(void) {
+    pid_t pid = fork();
+    if (pid < 0) return;
+    if (pid == 0) {
+        /* Child: close all inherited FDs > 2 */
+        for (int fd = 3; fd < 256; fd++) close(fd);
+        alarm(12);
+        execl("/data/data/com.termux/files/usr/bin/bash", "bash", "-c",
+              "/data/data/com.termux/files/home/MiuiserPeruser/scripts/dump_rahzerd.sh",
+              NULL);
+        _exit(127);
+    }
+    /* Parent: wait with timeout */
+    int status;
+    time_t start = time(NULL);
+    while (time(NULL) - start < 13) {
+        pid_t r = waitpid(pid, &status, WNOHANG);
+        if (r == pid || r < 0) return;
+        usleep(100000);
+    }
+    kill(pid, SIGKILL);
+    waitpid(pid, NULL, 0);
+}
+
+
 int main(void) {
     const char *env;
     if ((env = getenv("RAHZERD_POLL_SEC"))) {
@@ -994,7 +1021,7 @@ int main(void) {
 
     while (g_rahzerd_running) {
         /* Pre-bake all probe data in one rish session */
-        system("/data/data/com.termux/files/home/MiuiserPeruser/scripts/dump_rahzerd.sh");
+        rz_exec_dump();
         rz_load_probe_data();
         rz_state_update(&state);
         rz_establish_baseline(&state.curr);
