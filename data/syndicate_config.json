@@ -11,7 +11,15 @@
     "tigerclawd",
     "bebopd",
     "fugitoidd",
-    "nulld",
     "overlordd"
+  ],
+  "background_monitors": [
+    "nulld"
+  ],
+  "infrastructure": [
+    "gaveld",
+    "splinterd",
+    "krangd",
+    "turtlecomd"
   ]
 }

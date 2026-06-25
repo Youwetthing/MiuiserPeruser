@@ -401,7 +401,10 @@ render_findings() {
 render_status() {
     block_head "$BGBLUE" "$WHITE" "BUREAU STATUS — DAEMON HEALTH"
     echo ""
-    local daemons="gaveld burned granitord leatherheadd rocksteadyd bebopd rahzerd ratkingd metalheadd shredderd tigerclawd fugitoidd krangd turtlecomd splinterd"
+    local infra="gaveld splinterd krangd turtlecomd"
+    local monitors="nulld"
+    local daemons="burned granitord leatherheadd metalheadd rahzerd ratkingd rocksteadyd shredderd tigerclawd bebopd fugitoidd overlordd"
+    printf "\n  ${BOLD}${CYN}SYNDICATE FLEET${RST}\n"
     for d in $daemons; do
         local result="$RESULTS/${d}.json"
         local running ts
@@ -412,6 +415,35 @@ render_status() {
         else
             printf " %b${INK}%-16s${RESET} ${GREY}no results yet${RESET}\n" "$running" "$d"
         fi
+    done
+    echo ""
+    printf "  ${BOLD}${CYN}BACKGROUND MONITORS${RST}\n"
+    for d in $monitors; do
+        local pid_file="$BASE/pipes/pids/${d}.pid"
+        local status="stopped"
+        local extra=""
+        if [ -f "$pid_file" ]; then
+            local pid=$(cat "$pid_file" 2>/dev/null)
+            kill -0 "$pid" 2>/dev/null && status="running" || status="stopped"
+        fi
+        local f="$RESULTS/${d}.json"
+        if [ -f "$f" ]; then
+            local spikes=$(jq -r '.total_spike_events // 0' "$f" 2>/dev/null)
+            local screen=$(jq -r '.screen // "?"' "$f" 2>/dev/null)
+            extra="screen=${screen} spikes=${spikes}"
+        fi
+        printf " ${CYN}○ monitor ${WHT}%-12s${RST} ${DIM}%s %s${RST}\n" "$d" "$status" "$extra"
+    done
+    echo ""
+    printf "  ${BOLD}${CYN}INFRASTRUCTURE${RST}\n"
+    for d in $infra; do
+        local pid_file="$BASE/pipes/pids/${d}.pid"
+        local status="stopped"
+        if [ -f "$pid_file" ]; then
+            local pid=$(cat "$pid_file" 2>/dev/null)
+            kill -0 "$pid" 2>/dev/null && status="running (pid $pid)" || status="stopped"
+        fi
+        printf " ${CYN}○ infra  ${WHT}%-16s${RST} ${DIM}%s${RST}\n" "$d" "$status"
     done
     echo ""
 }
