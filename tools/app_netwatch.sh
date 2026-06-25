@@ -16,7 +16,7 @@ flag_ip() {
     local ip=$1
     case "$ip" in
         31.13.*|157.240.*|2a03:2880:*) echo "FACEBOOK" ;;
-        20.33.*|20.34.*|20.35.*|52.1*) echo "MICROSOFT" ;;
+        20.33.*|20.34.*|20.35.*|20.36.*|52.1*) echo "MICROSOFT-AZURE" ;;
         180.163.*|203.119.*|47.246.*)  echo "ALIBABA/XIAOMI" ;;
         120.92.*|123.56.*|39.96.*)     echo "XIAOMI-CN" ;;
         2001:4860:*|8.8.*|172.217.*)   echo "GOOGLE" ;;

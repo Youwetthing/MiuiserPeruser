@@ -1,7 +1,7 @@
 {
   "daemon": "rahzerd",
   "version": "2.0",
-  "timestamp": "2026-06-24T17:14:30",
+  "timestamp": "2026-06-25T04:55:50",
   "poll_interval_sec": 15,
   "wifi": {
     "connected": 1,
@@ -19,19 +19,19 @@
   },
   "dns": {
     "resolves": 1,
-    "latency_ms": 27,
+    "latency_ms": 3,
     "private_dns": -1
   },
   "ports": {
-    "established_tcp4": 76,
-    "established_tcp6": 9,
+    "established_tcp4": 4,
+    "established_tcp6": 23,
     "suspicious_listeners": 0
   },
   "baseline": {
     "established": true,
     "wifi_bssid": "",
-    "dns_latency_ms": 27
+    "dns_latency_ms": 3
   },
   "xiaomi_divergence": 0,
-  "poll_duration_ms": 37
+  "poll_duration_ms": 5
 }
