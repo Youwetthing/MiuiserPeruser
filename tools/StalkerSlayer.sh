@@ -461,8 +461,64 @@ show_menu() {
     echo "  9) Slay Mikey findings"
     echo ""
     echo " 10) Exit  [or q]"
+  echo " 11) DNS blocking (AdGuard)"
     echo -n "Choose [1-10]: "
 }
+
+# --- DNS Blocking ---
+ADB="/data/data/com.termux/files/home/.cargo/bin/adb_cli"
+
+dns_status() {
+    local mode=$($ADB tcp 127.0.0.1:5555 shell "settings get global private_dns_mode" 2>/dev/null | tr -d '\r')
+    local host=$($ADB tcp 127.0.0.1:5555 shell "settings get global private_dns_specifier" 2>/dev/null | tr -d '\r')
+    echo "  DNS mode: $mode"
+    echo "  DNS host: $host"
+    if echo "$host" | grep -q "adguard"; then
+        echo "  Status: BLOCKING ACTIVE (AdGuard DNS)"
+    else
+        echo "  Status: NOT BLOCKING"
+    fi
+}
+
+dns_block_enable() {
+    echo "  Enabling AdGuard DNS blocking..."
+    $ADB tcp 127.0.0.1:5555 shell "settings put global private_dns_mode hostname" 2>/dev/null
+    $ADB tcp 127.0.0.1:5555 shell "settings put global private_dns_specifier dns.adguard.com" 2>/dev/null
+    echo "  Blocking domains include:"
+    echo "    analytics.miui.com"
+    echo "    data.mistat.xiaomi.com"
+    echo "    sdkconfig.ad.xiaomi.com"
+    echo "    msg.global.xiaomi.net"
+    echo "    tracking.miui.com"
+    echo "  Done — AdGuard DNS active"
+}
+
+dns_block_disable() {
+    echo "  Disabling DNS blocking..."
+    $ADB tcp 127.0.0.1:5555 shell "settings put global private_dns_mode opportunistic" 2>/dev/null
+    $ADB tcp 127.0.0.1:5555 shell "settings delete global private_dns_specifier" 2>/dev/null
+    echo "  Done — DNS restored to automatic"
+}
+
+run_dns_menu() {
+    echo ""
+    echo "  DNS BLOCKING"
+    echo "  ────────────────────────────────"
+    dns_status
+    echo ""
+    echo "  [1] Enable AdGuard DNS blocking"
+    echo "  [2] Disable DNS blocking"
+    echo "  [b] Back"
+    echo ""
+    read -rp "  Choice: " c
+    case "$c" in
+        1) dns_block_enable ;;
+        2) dns_block_disable ;;
+        b|B) return ;;
+    esac
+    read -rp "  Press enter..." _
+}
+
 
 # --- Main ---
 main() {
@@ -498,6 +554,7 @@ main() {
             8) show_mikey_findings; read -rp "Press enter..." _ ;;
             9) slay_mikey_findings; read -rp "Press enter..." _ ;;
            10) echo -e "\n${GREEN}Exiting.${RESET}"; exit 0 ;;
+           11) run_dns_menu ;;
             q|Q) echo -e "\n${GREEN}Exiting.${RESET}"; exit 0 ;;
         *) echo -e "\n${RED}Invalid option${RESET}"; sleep 1 ;;
         esac

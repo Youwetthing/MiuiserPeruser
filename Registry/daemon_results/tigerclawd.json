@@ -1,7 +1,7 @@
 {
   "daemon": "tigerclawd",
   "version": "1.1",
-  "timestamp": "2026-06-24T17:14:23",
+  "timestamp": "2026-06-25T09:42:26",
   "poll_interval_sec": 30,
   "device": {
     "codename": "dew",
@@ -12,9 +12,9 @@
     "bootloader_locked": true
   },
   "binder": {
-    "service_count": 265,
-    "baseline_count": 233,
-    "drift": 32,
+    "service_count": 473,
+    "baseline_count": 473,
+    "drift": 0,
     "suspicious_services": 0
   },
   "integrity": {
@@ -29,30 +29,10 @@
   "trust_score": 85,
   "anomalies": [
     {
-      "type": "INFO",
-      "code": "XIAOMI_SERVICE_MISSING",
-      "detail": "Core Xiaomi service absent: MiuiInit"
-    },
-    {
-      "type": "INFO",
-      "code": "XIAOMI_SERVICE_MISSING",
-      "detail": "Core Xiaomi service absent: ProcessManager"
-    },
-    {
-      "type": "INFO",
-      "code": "XIAOMI_SERVICE_MISSING",
-      "detail": "Core Xiaomi service absent: anrrescue"
-    },
-    {
       "type": "WARNING",
       "code": "SECURITY_CENTER_DOWN",
       "detail": "MIUI Security Center installed but not running"
-    },
-    {
-      "type": "WARNING",
-      "code": "BINDER_TOPOLOGY_DRIFT",
-      "detail": "Binder drift: +32 services (baseline 233, now 265)"
     }
   ],
-  "poll_duration_ms": 26186
+  "poll_duration_ms": 102860
 }
