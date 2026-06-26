@@ -1,8 +1,8 @@
 {
   "daemon": "overlordd",
   "version": "1.0",
-  "timestamp": "2026-06-26T10:53:33",
-  "poll_number": 20,
+  "timestamp": "2026-06-26T11:14:59",
+  "poll_number": 27,
   "threat_level": "LOW",
   "pattern_count": 1,
   "patterns": [
@@ -14,5 +14,5 @@
       "detail": "4 sensitive sensors active with 351 TCP connections — possible sensor data exfiltration. Score: 70/100. Drain: 0.0 mAh/hr"
     }
   ],
-  "poll_duration_ms": 2
+  "poll_duration_ms": 20
 }
