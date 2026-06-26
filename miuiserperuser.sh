@@ -1,5 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # miuiserperuser.sh — Production Terminal v1.5
+# Complete integrated dashboard.
 
 # ── BASE PATHS ──────────────────────────────────────────────────────────────
 BASE="$HOME/MiuiserPeruser"
@@ -10,16 +11,13 @@ RESULTS="$BASE/Registry/daemon_results"
 LOGS="$BASE/logs"
 DATA="$BASE/data"
 
-# Ensure directories exist
 mkdir -p "$RESULTS" "$LOGS" "$DATA"
 
-# ── JSON FETCHER ──────────────────────────────────────────────────────────────
 jget() {
     local f="$1" q="$2" d="${3:-0}"
     [ -f "$f" ] && jq -r "$q // empty" "$f" 2>/dev/null || echo "$d"
 }
 
-# ── SYSTEM PROPS ──────────────────────────────────────────────────────────────
 get_device_name() {
     local name
     name=$(getprop ro.product.marketname 2>/dev/null)
@@ -31,51 +29,47 @@ get_device_name() {
 DEVICE_NAME=$(get_device_name)
 OS_VER=$(getprop ro.build.version.release 2>/dev/null || echo "Unknown")
 
-# ── DATA LOAD ──────────────────────────────────────────────────────────────────
-THREAT=$(jget "$RESULTS/overlordd.json" '.threat_level' "NOMINAL")
-PATTERNS=$(jget "$RESULTS/overlordd.json" '.pattern_count' "0")
-TRUST=$(jget "$RESULTS/tigerclawd.json" '.trust_score' "85")
-TCP=$(jget "$RESULTS/rahzerd.json" '.ports.established_tcp4' "4")
-PRIV=$(jget "$RESULTS/burned.json" '.privacy_signal_count' "10")
-THERMAL=$(jget "$RESULTS/leatherheadd.json" '.thermal_score' "70")
-DRAIN=$(jget "$RESULTS/bebopd.json" '.drain_mah_h' "0")
-DRAIN=${DRAIN%.*}; [ -z "$DRAIN" ] && DRAIN=0
-
-# ── DAEMON STATE MANAGER ──────────────────────────────────────────────────────
-is_daemon_active() {
-    local daemon_name="$1"
-    local pid_file="$BASE/run/${daemon_name}.pid"
-    [ -f "$pid_file" ] || return 1
-    local pid=$(cat "$pid_file" 2>/dev/null)
-    kill -0 "$pid" 2>/dev/null && return 0 || { rm -f "$pid_file"; return 1; }
+load_data() {
+    THREAT=$(jget "$RESULTS/overlordd.json" '.threat_level' "NOMINAL")
+    PATTERNS=$(jget "$RESULTS/overlordd.json" '.pattern_count' "0")
+    TRUST=$(jget "$RESULTS/tigerclawd.json" '.trust_score' "85")
+    TCP=$(jget "$RESULTS/rahzerd.json" '.ports.established_tcp4' "4")
+    PRIV=$(jget "$RESULTS/burned.json" '.privacy_signal_count' "10")
+    THERMAL=$(jget "$RESULTS/leatherheadd.json" '.thermal_score' "70")
+    DRAIN=$(jget "$RESULTS/bebopd.json" '.drain_mah_h' "0")
+    DRAIN=${DRAIN%.*}; [ -z "$DRAIN" ] && DRAIN=0
+    K_SCORE=$(jget "$RESULTS/shredderd.json" '.integrity.score' "92")
+    G_SCORE=$(jget "$RESULTS/granitord.json" '.posture.score' "93")
+    SELINUX=$(jget "$RESULTS/tigerclawd.json" '.device.selinux_enforcing' "Enforcing")
+    PATCH=$(jget "$RESULTS/tigerclawd.json" '.device.security_patch' "?")
+    DNS_MS=$(jget "$RESULTS/rahzerd.json" '.dns.latency_ms' "?")
+    WIFI=$(jget "$RESULTS/rahzerd.json" '.wifi.connected' "0")
+    SPIKES=$(jget "$RESULTS/nulld.json" '.total_spike_events' "0")
+    MEM=$(jget "$RESULTS/ratkingd.json" '.memory.available_mb' "?")
+    CRASHES=$(jget "$RESULTS/fugitoidd.json" '.crashes' "0")
+    CYCLES=$(sqlite3 "$DATA/superhero.db" "SELECT COUNT(*) FROM scan_history;" 2>/dev/null || echo "0")
+    BASELINE=$(sqlite3 "$DATA/superhero.db" "SELECT COUNT(*) FROM behavioural_baseline;" 2>/dev/null || echo "0")
 }
 
-toggle_daemon() {
-    local daemon_name="$1"
-    local pid_file="$BASE/run/${daemon_name}.pid"
-    
-    if is_daemon_active "$daemon_name"; then
-        local pid=$(cat "$pid_file" 2>/dev/null)
-        kill "$pid" 2>/dev/null
-        rm -f "$pid_file"
-        echo -e "\033[31m⛔ ${daemon_name} terminated.\033[0m"
-    else
-        if [ -f "$BIN/$daemon_name" ]; then
-            "$BIN/$daemon_name" &
-            echo $! > "$pid_file"
-            echo -e "\033[32m✅ ${daemon_name} activated (PID: $!).\033[0m"
-        else
-            echo -e "\033[31m❌ Error: $BIN/$daemon_name not found.\033[0m"
-        fi
-    fi
-    sleep 1
+bar() {
+    local val=$1 max=${2:-100} width=${3:-20}
+    local filled=$(( val * width / max ))
+    [ $filled -gt $width ] && filled=$width
+    [ $filled -lt 0 ] && filled=0
+    local empty=$(( width - filled ))
+    local i=0
+    printf "\033[32m"
+    while [ $i -lt $filled ]; do printf "█"; i=$((i+1)); done
+    printf "\033[2m"
+    i=0
+    while [ $i -lt $empty ]; do printf "░"; i=$((i+1)); done
+    printf "\033[0m"
 }
 
-# ── DRAW MAIN DASHBOARD ──────────────────────────────────────────────────────
 draw_dashboard() {
+    load_data
     clear
-    echo -e "\033[100m\033[30m\033[1m│ MIUISERPERUSER v1.5    $(date '+%H:%M %d %b') \033[0m"
-    
+
     if [[ "$THREAT" == "CRITICAL" ]] || [[ "$THREAT" == "HIGH" ]]; then
         TC="\033[41m\033[97m"
     elif [[ "$THREAT" == "ELEVATED" ]]; then
@@ -83,119 +77,126 @@ draw_dashboard() {
     else
         TC="\033[42m\033[30m"
     fi
-    
-    echo -e "\033[2m│ $DEVICE_NAME · Android $OS_VER        ${TC}\033[1m ${THREAT} \033[0m"
-    echo -e "\033[2m├──────────────────────────────────────────────┤\033[0m"
-    echo -e "\033[2m│ Patterns: \033[33m$PATTERNS\033[0m\033[2m active                           │\033[0m"
-    echo -e "\033[2m├──────────────────────────────────────────────┤\033[0m"
-    
-    echo -e "\033[36m\033[1m│ SECURITY\033[0m"
-    echo -e "\033[2m│ Trust:   \033[0m\033[32m███████████████████\033[2m░░░░░░\033[0m \033[33m${TRUST}/100\033[0m"
-    echo -e "\033[2m│ Kernel:  \033[0m\033[32m████████████████████\033[2m░░░░░\033[0m \033[33m92/100\033[0m"
-    echo -e "\033[2m│ Posture: \033[0m\033[32m████████████████████\033[2m░░░░░\033[0m \033[33m93/100\033[0m"
-    echo -e "\033[2m│ SELinux: \033[37mEnforcing\033[2m  Patch: \033[37m2024.06\033[0m"
-    echo -e "\033[2m├──────────────────────────────────────────────┤\033[0m"
 
-    echo -e "\033[36m\033[1m│ NETWORK\033[0m"
-    echo -e "\033[2m│ TCP:     \033[0m\033[32m████████████\033[2m░░░░░░░░░░░░░\033[0m \033[33m${TCP} EST\033[0m"
-    echo -e "\033[2m│ DNS:     \033[0m\033[32m███████\033[2m░░░░░░░░░░░░░░░░\033[0m \033[33m28 ms\033[0m"
-    echo -e "\033[2m│ WiFi: \033[37mConnected\033[2m  Mobile: \033[37m5G\033[0m"
-    echo -e "\033[2m├──────────────────────────────────────────────┤\033[0m"
+    local wifi_str; [ "$WIFI" = "1" ] && wifi_str="Connected" || wifi_str="Disconnected"
+    local baseline_str; [ "$BASELINE" -gt 0 ] && baseline_str="ACTIVE" || baseline_str="LEARNING ${CYCLES}/12"
 
-    echo -e "\033[36m\033[1m│ PRIVACY\033[0m"
-    echo -e "\033[2m│ Signals: \033[0m\033[32m███████\033[2m░░░░░░░░░░░░░░░░\033[0m \033[33m${PRIV}/20\033[0m"
-    echo -e "\033[2m│ Pattern: \033[0m\033[32m███████\033[2m░░░░░░░░░░░░░░░░\033[0m \033[33m4/11\033[0m"
-    echo -e "\033[2m│ State: \033[37mOn\033[2m  Spikes: \033[37m2\033[0m"
-    echo -e "\033[2m├──────────────────────────────────────────────┤\033[0m"
+    echo -e "\033[100m\033[30m\033[1m MIUISERPERUSER v1.5          $(date '+%H:%M  %d %b %Y') \033[0m"
+    echo -e "\033[2m $DEVICE_NAME · Android $OS_VER · Superhero: $baseline_str    ${TC}\033[1m ${THREAT} \033[0m"
+    echo -e "\033[2m Overlordd: \033[33m${PATTERNS}\033[2m active patterns\033[0m"
+    echo -e "\033[2m────────────────────────────────────────────────\033[0m"
 
-    echo -e "\033[36m\033[1m│ SYSTEM\033[0m"
-    echo -e "\033[2m│ Thermal: \033[0m\033[32m███████████████\033[2m░░░░░░░░░░\033[0m \033[33m${THERMAL}°C\033[0m"
-    echo -e "\033[2m│ Drain:   \033[0m\033[32m███████████\033[2m░░░░░░░░░░░░░░\033[0m \033[33m${DRAIN} mA\033[0m"
-    echo -e "\033[2m│ Mem: \033[37m$(free -m 2>/dev/null | awk '/^Mem:/ {print $3}' || echo 1200) MB\033[2m  Crashes: \033[37m0\033[0m"
-    echo -e "\033[2m├──────────────────────────────────────────────┤\033[0m"
+    echo -e "\033[96m\033[1m SECURITY\033[0m"
+    echo -e " Trust   $(bar $TRUST)  \033[33m${TRUST}/100\033[0m"
+    echo -e " Kernel  $(bar $K_SCORE)  \033[33m${K_SCORE}/100\033[0m"
+    echo -e " Posture $(bar $G_SCORE)  \033[33m${G_SCORE}/100\033[0m"
+    echo -e " \033[2mSELinux: \033[37m${SELINUX}\033[2m  Patch: \033[37m${PATCH}\033[0m"
+    echo -e "\033[2m────────────────────────────────────────────────\033[0m"
+
+    echo -e "\033[96m\033[1m NETWORK\033[0m"
+    echo -e " TCP     $(bar $TCP 100)  \033[33m${TCP} conn\033[0m"
+    echo -e " DNS     $(bar ${DNS_MS:-0} 200)  \033[33m${DNS_MS}ms\033[0m"
+    echo -e " \033[2mWiFi: \033[37m${wifi_str}\033[2m  Idle spikes: \033[37m${SPIKES}\033[0m"
+    echo -e "\033[2m────────────────────────────────────────────────\033[0m"
+
+    echo -e "\033[96m\033[1m PRIVACY\033[0m"
+    echo -e " Signals $(bar $PRIV 20)  \033[33m${PRIV}/20\033[0m"
+    echo -e " Pattern $(bar $PATTERNS 11)  \033[33m${PATTERNS}/11\033[0m"
+    echo -e "\033[2m────────────────────────────────────────────────\033[0m"
+
+    echo -e "\033[96m\033[1m SYSTEM\033[0m"
+    echo -e " Thermal $(bar $THERMAL)  \033[33m${THERMAL}/100\033[0m"
+    echo -e " Drain   $(bar $DRAIN 500)  \033[33m${DRAIN}mAh/hr\033[0m"
+    echo -e " \033[2mMemory: \033[37m${MEM}MB\033[2m  Crashes: \033[37m${CRASHES}\033[0m"
+    echo -e "\033[2m────────────────────────────────────────────────\033[0m"
 
     echo ""
     echo -e " \033[33m1\033[0m Superhero  \033[33m2\033[0m Syndicate  \033[33m3\033[0m Tools"
     echo -e " \033[33m4\033[0m Channel 6  \033[33m5\033[0m Live View  \033[33m6\033[0m Privacy"
-    echo -e " \033[33mq\033[0m Quit"
+    echo -e " \033[33mr\033[0m Refresh    \033[33mq\033[0m Quit"
     echo ""
-    echo -n -e " \033[36m> \033[0m"
+    echo -n -e " \033[96m❯ \033[0m"
 }
 
-# ── SUB MENU RENDERER ─────────────────────────────────────────────────────────
 sub_header() {
-    echo -e "\033[36m\033[1m┌──────────────────────────────────────────────┐\033[0m"
-    echo -e "\033[36m\033[1m│ $1\033[0m"
-    echo -e "\033[36m\033[1m└──────────────────────────────────────────────┘\033[0m"
+    clear
+    echo -e "\033[96m\033[1m────────────────────────────────────────────────\033[0m"
+    echo -e "\033[96m\033[1m $1\033[0m"
+    echo -e "\033[96m\033[1m────────────────────────────────────────────────\033[0m"
     echo ""
 }
 
-sub_footer() {
-    echo ""
-    echo -e "\033[2m[b] Back to main dashboard\033[0m"
-    echo -n -e " \033[36m> \033[0m"
-}
-
-# ── [1] SUPERHERO ─────────────────────────────────────────────────────────────
 section_superhero() {
     while true; do
-        clear
-        sub_header "SUPERHERO: Behavioral Deep Scan"
-        echo -e " \033[33m1\033[0m Run Full Superhero Scan"
-        echo -e " \033[33m2\033[0m View Detections (Last 20)"
-        echo -e " \033[33m3\033[0m Reset Baseline"
-        sub_footer
-        read -n1 input
+        sub_header "SUPERHERO — Behavioural Deep Scan"
+        local cycles=$(sqlite3 "$DATA/superhero.db" "SELECT COUNT(*) FROM scan_history;" 2>/dev/null || echo "0")
+        local baseline=$(sqlite3 "$DATA/superhero.db" "SELECT COUNT(*) FROM behavioural_baseline;" 2>/dev/null || echo "0")
+        if [ "$baseline" -gt 0 ]; then
+            echo -e " \033[32m✔ Baseline active — anomaly detection ON\033[0m"
+        else
+            echo -e " \033[33m⚑ Learning mode — $((12 - cycles)) more cycles needed\033[0m"
+        fi
+        echo ""
+        echo -e " \033[33m1\033[0m Run scan"
+        echo -e " \033[33m2\033[0m View last 20 detections"
+        echo -e " \033[33m3\033[0m Reset baseline"
+        echo -e " \033[33mb\033[0m Back"
+        echo ""
+        read -n1 -p $' \033[96m❯ \033[0m' input
         case "$input" in
-            1) echo -e "\n\033[2mRunning Superhero binary...\033[0m\n"; "$BIN/superhero"; echo -e "\n\033[2mScan complete.\033[0m"; read -n1 -p "Press any key..." ;;
-            2) echo -e "\n\033[2mDetection Log:\033[0m\n"; sqlite3 "$DATA/superhero.db" "SELECT datetime(timestamp,'unixepoch','localtime'), detection_type, description FROM detections ORDER BY timestamp DESC LIMIT 20;" 2>/dev/null || echo "No detections found."; echo ""; read -n1 -p "Press any key..." ;;
-            3) echo -e "\n\033[31mAre you sure? (y/N): \033[0m"; read -n1 confirm; [ "$confirm" = "y" ] && sqlite3 "$DATA/superhero.db" "DELETE FROM behavioural_baseline;" && echo -e "\n\033[31mBaseline reset.\033[0m"; sleep 1 ;;
+            1) echo -e "\n\n\033[2mRunning superhero scan...\033[0m\n"
+               RISH_APPLICATION_ID=com.termux "$BIN/superhero" 2>&1
+               echo ""; read -n1 -p "Press any key..." ;;
+            2) echo -e "\n"
+               sqlite3 "$DATA/superhero.db" \
+                   "SELECT datetime(timestamp,'unixepoch','localtime'), detection_type, description FROM detections ORDER BY timestamp DESC LIMIT 20;" \
+                   2>/dev/null || echo "No detections found."
+               echo ""; read -n1 -p "Press any key..." ;;
+            3) echo -e "\n\033[31mReset baseline? (y/N): \033[0m"
+               read -n1 confirm
+               [ "$confirm" = "y" ] && \
+                   sqlite3 "$DATA/superhero.db" "DELETE FROM behavioural_baseline;" && \
+                   echo -e "\n\033[31mBaseline reset.\033[0m"
+               sleep 1 ;;
             b|B) break ;;
         esac
     done
 }
 
-# ── [2] SYNDICATE ─────────────────────────────────────────────────────────────
 section_syndicate() {
     while true; do
-        clear
-        sub_header "SYNDICATE: Fleet & Daemon Control"
-        DAEMONS=("burned" "granitord" "leatherheadd" "metalheadd" "rahzerd" "ratkingd" "rocksteadyd" "shredderd" "tigerclawd" "bebopd" "fugitoidd")
-        local index=1
-        for d in "${DAEMONS[@]}"; do
-            is_daemon_active "$d" && echo -e " \033[33m${index}\033[0m ${CYN}${d}\033[0m \033[32m[ACTIVE]\033[0m" || echo -e " \033[33m${index}\033[0m ${CYN}${d}\033[0m \033[31m[OFFLINE]\033[0m"
-            ((index++))
-        done
-        echo -e "\n ${DIM}— System Critical —${RST}\n   ${WHT}nulld${DIM}      [PERMANENT]${RST}\n   ${WHT}overlordd${DIM}   [PERMANENT]${RST}"
-        echo -e "\n \033[33m1-${#DAEMONS[@]}\033[0m Toggle  \033[33mS\033[0m Fleet Scan  \033[33mD\033[0m Dashboard  \033[33mF\033[0m Start Fleet  \033[33mb\033[0m Back"
-        echo -n -e " \033[36m> \033[0m"
-        read -n1 input
+        sub_header "SYNDICATE — Fleet Control"
+        echo -e " \033[33m1\033[0m Run syndicate scan"
+        echo -e " \033[33m2\033[0m Daemon toggle dashboard"
+        echo -e " \033[33m3\033[0m Start background fleet"
+        echo -e " \033[33mb\033[0m Back"
+        echo ""
+        read -n1 -p $' \033[96m❯ \033[0m' input
         case "$input" in
-            [0-9]*) local target="${DAEMONS[$((input-1))]}"; [ -n "$target" ] && toggle_daemon "$target" ;;
-            s|S) echo -e "\n\033[2mRunning fleet scan...\033[0m\n"; "$SCRIPTS/syndicate_scan.sh"; read -n1 -p "Press any key..." ;;
-            d|D) echo -e "\n\033[2mLaunching daemon dashboard...\033[0m\n"; "$TOOLS/syndicate_dashboard.sh"; echo ""; read -n1 -p "Press any key..." ;;
-            f|F) echo -e "\n\033[2mStarting background fleet...\033[0m\n"; "$SCRIPTS/start_syndicate.sh"; sleep 1 ;;
+            1) echo -e "\n"; "$SCRIPTS/syndicate_scan.sh"; read -n1 -p "Press any key..." ;;
+            2) "$TOOLS/syndicate_dashboard.sh" ;;
+            3) echo -e "\n\033[2mStarting background fleet...\033[0m\n"
+               "$SCRIPTS/start_syndicate.sh"; sleep 1 ;;
             b|B) break ;;
         esac
     done
 }
 
-# ── [3] TOOLS ─────────────────────────────────────────────────────────────────
 section_tools() {
     while true; do
-        clear
-        sub_header "TOOLS: Security & Diagnostics"
-        echo -e " \033[33m1\033[0m hot_counter"
-        echo -e " \033[33m2\033[0m app_netwatch"
-        echo -e " \033[33m3\033[0m dialer_spy"
-        echo -e " \033[33m4\033[0m StalkerSlayer"
-        echo -e " \033[33m5\033[0m kernel_sanders"
-        echo -e " \033[33m6\033[0m bell_tower"
-        echo -e " \033[33m7\033[0m freq_like_me"
-        echo -e " \033[33m8\033[0m multi_sensory_room"
-        echo -e " \033[33m9\033[0m ram_slammer_v2"
-        sub_footer
-        read -n1 input
+        sub_header "TOOLS — Security & Diagnostics"
+        echo -e " \033[33m1\033[0m hot_counter        \033[2mThermal truth\033[0m"
+        echo -e " \033[33m2\033[0m app_netwatch       \033[2mPer-app network\033[0m"
+        echo -e " \033[33m3\033[0m dialer_spy         \033[2mCall monitor\033[0m"
+        echo -e " \033[33m4\033[0m StalkerSlayer      \033[2mTelemetry blocker\033[0m"
+        echo -e " \033[33m5\033[0m kernel_sanders     \033[2mKernel audit\033[0m"
+        echo -e " \033[33m6\033[0m bell_tower         \033[2mAlert monitor\033[0m"
+        echo -e " \033[33m7\033[0m freq_like_me       \033[2mCPU frequencies\033[0m"
+        echo -e " \033[33m8\033[0m multi_sensory_room \033[2mSensor registry\033[0m"
+        echo -e " \033[33m9\033[0m ram_slammer_v2     \033[2mMemory & process\033[0m"
+        echo -e " \033[33mb\033[0m Back"
+        echo ""
+        read -n1 -p $' \033[96m❯ \033[0m' input
         case "$input" in
             1) "$TOOLS/hot_counter.sh" ;;
             2) "$TOOLS/app_netwatch.sh" ;;
@@ -207,59 +208,101 @@ section_tools() {
             8) "$TOOLS/multi_sensory_room.sh" ;;
             9) "$TOOLS/ram_slammer_v2.sh" ;;
             b|B) break ;;
-            *) echo -e "\n\033[31mInvalid.\033[0m"; sleep 1 ;;
         esac
-        echo ""; read -n1 -p "Tool finished. Press any key..."
     done
 }
 
-# ── [4] CHANNEL 6 ─────────────────────────────────────────────────────────────
 section_channel6() {
-    clear
-    sub_header "CHANNEL 6: Intelligence Newsroom"
-    echo -e "\n\033[2mLaunching April O'Neil Intelligence Suite...\033[0m\n"
     "$TOOLS/april_oneil.sh"
-    echo -e "\n\033[2mReturned from Channel 6.\033[0m"
-    read -n1 -p "Press any key to return..."
 }
 
-# ── [5] LIVE VIEW ─────────────────────────────────────────────────────────────
 section_live() {
     while true; do
-        clear
-        sub_header "LIVE VIEW: Real-time Telemetry"
-        echo -e " \033[33m1\033[0m Superhero Continuous Scan"
-        echo -e " \033[33m2\033[0m Syndicate Live Stream (poll JSON)"
-        echo -e " \033[33m3\033[0m Combined View (Hero logs + Syndicate)"
-        sub_footer
-        read -n1 input
+        sub_header "LIVE VIEW — Real-time Feed"
+        echo -e " \033[33m1\033[0m Superhero continuous scan"
+        echo -e " \033[33m2\033[0m Syndicate live stream"
+        echo -e " \033[33m3\033[0m Combined view"
+        echo -e " \033[33mb\033[0m Back"
+        echo ""
+        read -n1 -p $' \033[96m❯ \033[0m' input
         case "$input" in
-            1) echo -e "\n\033[36mAttaching to Hero feed... (Ctrl+C to stop)\033[0m\n"; trap 'echo -e "\n\033[31mStopped.\033[0m"; return' INT; while true; do "$BIN/superhero"; sleep 2; done ;;
-            2) echo -e "\n\033[36mPolling syndicate results every 5s... (Ctrl+C to stop)\033[0m\n"; trap 'echo -e "\n\033[31mStopped.\033[0m"; return' INT; while true; do clear; echo -e "\033[36m$(date '+%H:%M:%S') - Syndicate Poll\033[0m"; for f in "$RESULTS"/*.json; do [ -f "$f" ] && echo -e "\033[2m$(basename $f):\033[0m $(jq -c '.' "$f" 2>/dev/null)"; done; sleep 5; done ;;
-            3) echo -e "\n\033[36mCombined live view... (Ctrl+C to stop)\033[0m\n"; trap 'echo -e "\n\033[31mStopped.\033[0m"; return' INT; while true; do clear; echo -e "\033[36m$(date '+%H:%M:%S') - Combined Feed\033[0m"; echo -e "\033[33m--- Superhero Log ---\033[0m"; tail -5 "$LOGS/superhero_live.log" 2>/dev/null || echo "No log yet."; echo -e "\033[33m--- Syndicate JSON ---\033[0m"; for f in "$RESULTS"/*.json; do [ -f "$f" ] && echo -e "\033[2m$(basename $f):\033[0m $(jq -c '.' "$f" 2>/dev/null)"; done; sleep 5; done ;;
+            1)
+                echo -e "\n\033[36mSuperhero live — Ctrl+C to stop\033[0m\n"
+                trap 'trap - INT; echo -e "\n\033[31mStopped.\033[0m"; return' INT
+                while true; do
+                    RISH_APPLICATION_ID=com.termux "$BIN/superhero" 2>&1 | \
+                        grep --line-buffered -E "LEO|DON|RAPH|MIKEY|CASEY|finding|WARN"
+                    echo -e "\033[2m── cycle complete · restarting ──\033[0m"
+                    sleep 3
+                done ;;
+            2)
+                echo -e "\n\033[36mSyndicate live — Ctrl+C to stop\033[0m\n"
+                trap 'trap - INT; echo -e "\n\033[31mStopped.\033[0m"; return' INT
+                while true; do
+                    clear
+                    echo -e "\033[96m$(date '+%H:%M:%S') — Syndicate Poll\033[0m"
+                    echo -e "\033[2m────────────────────────────────────────────────\033[0m"
+                    for d in burned granitord leatherheadd metalheadd rahzerd \
+                              ratkingd rocksteadyd shredderd tigerclawd bebopd \
+                              fugitoidd overlordd; do
+                        local f="$RESULTS/${d}.json"
+                        if [ -f "$f" ]; then
+                            local ts
+                            ts=$(jget "$f" '.timestamp' '?' | grep -oE '[0-9]{2}:[0-9]{2}' | head -1)
+                            echo -e " \033[32m●\033[0m \033[96m${d}\033[2m  ${ts}\033[0m"
+                        else
+                            echo -e " \033[2m○ ${d}  no data\033[0m"
+                        fi
+                    done
+                    sleep 5
+                done ;;
+            3)
+                echo -e "\n\033[36mCombined live — Ctrl+C to stop\033[0m\n"
+                trap 'trap - INT; kill $hero_pid 2>/dev/null; echo -e "\n\033[31mStopped.\033[0m"; return' INT
+                RISH_APPLICATION_ID=com.termux "$BIN/superhero" \
+                    >> "$LOGS/superhero_live.log" 2>&1 &
+                local hero_pid=$!
+                while true; do
+                    clear
+                    echo -e "\033[96m$(date '+%H:%M:%S') — Combined Feed\033[0m"
+                    echo -e "\033[33m── Superhero ──\033[0m"
+                    tail -4 "$LOGS/superhero_live.log" 2>/dev/null | \
+                        grep -E "LEO|DON|RAPH|MIKEY|finding" || echo -e "\033[2mno output yet\033[0m"
+                    echo -e "\033[33m── Syndicate ──\033[0m"
+                    for d in rahzerd tigerclawd nulld overlordd; do
+                        local f="$RESULTS/${d}.json"
+                        [ -f "$f" ] && echo -e " \033[32m●\033[0m \033[96m${d}\033[0m" || \
+                            echo -e " \033[2m○ ${d}\033[0m"
+                    done
+                    sleep 5
+                done ;;
             b|B) break ;;
         esac
     done
 }
 
-# ── [6] PRIVACY & DATA ───────────────────────────────────────────────────────
 section_privacy() {
     while true; do
-        clear
-        sub_header "PRIVACY & DATA: GDPR / SAR"
-        echo -e " \033[33m1\033[0m Run miuiser_sar.sh"
-        echo -e " \033[33m2\033[0m Run sar_engine binary"
-        sub_footer
-        read -n1 input
+        sub_header "PRIVACY & DATA — GDPR / SAR"
+        echo -e " \033[33m1\033[0m Data inventory"
+        echo -e " \033[33m2\033[0m Export my data (SAR)"
+        echo -e " \033[33m3\033[0m Purge data"
+        echo -e " \033[33m4\033[0m Consent records"
+        echo -e " \033[33m5\033[0m Revoke consent"
+        echo -e " \033[33mb\033[0m Back"
+        echo ""
+        read -n1 -p $' \033[96m❯ \033[0m' input
         case "$input" in
-            1) echo -e "\n\033[2mRunning SAR script...\033[0m\n"; "$TOOLS/miuiser_sar.sh"; read -n1 -p "Press any key..." ;;
-            2) echo -e "\n\033[2mRunning SAR Engine...\033[0m\n"; "$BIN/sar_engine"; read -n1 -p "Press any key..." ;;
+            1) echo ""; "$BIN/sar_engine" --inventory; echo ""; read -n1 -p "Press any key..." ;;
+            2) echo ""; "$BIN/sar_engine" --export; echo ""; read -n1 -p "Press any key..." ;;
+            3) echo ""; "$BIN/sar_engine" --purge; echo ""; read -n1 -p "Press any key..." ;;
+            4) echo ""; "$BIN/sar_engine" --consent --list; echo ""; read -n1 -p "Press any key..." ;;
+            5) echo ""; "$BIN/sar_engine" --consent --revoke all; echo ""; read -n1 -p "Press any key..." ;;
             b|B) break ;;
         esac
     done
 }
 
-# ── MAIN ROUTER ────────────────────────────────────────────────────────────────
 while true; do
     draw_dashboard
     read -n1 input
@@ -270,7 +313,7 @@ while true; do
         4) section_channel6 ;;
         5) section_live ;;
         6) section_privacy ;;
+        r|R) continue ;;
         q|Q) echo -e "\n\033[31mTerminating session...\033[0m"; exit 0 ;;
-        *) ;;
     esac
 done
