@@ -1,12 +1,12 @@
 {
   "daemon": "bebopd",
-  "timestamp": "2026-06-25T09:41:56",
-  "scan_number": 3,
-  "signals_fired": 2,
-  "power_score": 72,
-  "grade": "ACTIVE",
-  "battery_pct": 59,
-  "drain_mah_h": 2549.0,
-  "active_wakelocks": 0,
+  "timestamp": "2026-06-25T12:17:09",
+  "scan_number": 1,
+  "signals_fired": 1,
+  "power_score": 90,
+  "grade": "CLEAN",
+  "battery_pct": 94,
+  "drain_mah_h": 0.0,
+  "active_wakelocks": 1,
   "full_nonsystem_wakelocks": 0
 }
