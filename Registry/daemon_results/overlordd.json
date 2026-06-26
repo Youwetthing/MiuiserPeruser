@@ -1,39 +1,18 @@
 {
   "daemon": "overlordd",
   "version": "1.0",
-  "timestamp": "2026-06-25T09:41:43",
-  "poll_number": 2,
-  "threat_level": "HIGH",
-  "pattern_count": 4,
+  "timestamp": "2026-06-26T10:53:33",
+  "poll_number": 20,
+  "threat_level": "LOW",
+  "pattern_count": 1,
   "patterns": [
-    {
-      "name": "IDLE_SURVEILLANCE_CYCLE",
-      "severity": "WARNING",
-      "mitre": "T1430",
-      "confidence": 0.82,
-      "detail": "4 connection spikes during 0s idle — background surveillance activity detected. Active connections: 147 TCP4 + 7 TCP6"
-    },
     {
       "name": "SENSOR_NETWORK_EXFILTRATION",
       "severity": "WARNING",
       "mitre": "T1430",
-      "confidence": 0.95,
-      "detail": "4 sensitive sensors active with 154 TCP connections — possible sensor data exfiltration. Score: 70/100. Drain: 2549.0 mAh/hr"
-    },
-    {
-      "name": "SYSTEMIC_PRIVACY_EROSION",
-      "severity": "CRITICAL",
-      "mitre": "T1429",
-      "confidence": 0.90,
-      "detail": "10 privacy signals in ROM + 4 idle transmission spikes + device trust 100/100 — systemic privacy erosion. Leith, Patras & Liu (TCD/Edinburgh 2021) confirmed on this device."
-    },
-    {
-      "name": "THERMAL_DECEPTION_CYCLE",
-      "severity": "CRITICAL",
-      "mitre": "T1481",
-      "confidence": 0.85,
-      "detail": "Thermal score 70/100 but ZERO throttled cores — HyperOS underreporting temps to Android framework. Drain 2549.0 mAh/hr while system believes device is cool. Confirmed 18C HAL vs cached delta on this device."
+      "confidence": 0.80,
+      "detail": "4 sensitive sensors active with 351 TCP connections — possible sensor data exfiltration. Score: 70/100. Drain: 0.0 mAh/hr"
     }
   ],
-  "poll_duration_ms": 5
+  "poll_duration_ms": 2
 }

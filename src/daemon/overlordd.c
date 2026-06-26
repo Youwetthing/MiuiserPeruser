@@ -17,6 +17,12 @@
  *   9.  WAKE_LOCK_ABUSE_SYNDROME       (Kimi)
  *   10. PRIVILEGE_ESCALATION_CHAIN     (Kimi)
  *   11. MEMORY_PRESSURE_MANIPULATION   (Kimi)
+ *   12. DOZE_BYPASS_SYNDROME           (Kimi v2)
+ *   13. THERMAL_AMNESIA_SEQUENCE       (Kimi v2)
+ *   14. BINDER_PROXIMITY_EXPLOIT       (Kimi v2)
+ *   15. MEMORY_EXTENSION_TRAP          (Kimi v2)
+ *   16. RADIO_SILENCE_FLIP             (Kimi v2)
+ *   17. PRIVACY_SIGNAL_DECOY           (Kimi v2)
  *
  * Temporal sliding window tracks trajectory across polls.
  *
@@ -529,28 +535,161 @@ static void detect_memory_pressure_manip(void) {
     if (!ratking || !fugi) {
         free(ratking); free(fugi); free(rocky); free(bebopd); return;
     }
-    int zombies  = json_get_int(ratking, "zombies");
-    int orphans  = json_get_int(ratking, "orphans");
-    int ooms     = json_get_int(fugi,    "oom_events");
-    int crashes  = json_get_int(fugi,    "crashes");
-    int r_throttl = rocky  ? json_get_int(rocky,  "throttled_cores") : 0;
-    double drain  = bebopd ? json_get_double(bebopd,"drain_mah_h")   : 0;
 
-    if (zombies > 3 && ooms > 0 && (crashes > 0 || r_throttl > 2)) {
+}
+
+
+/* ── Pattern 12: Doze bypass syndrome (Kimi v2) ──────────────── */
+static void detect_doze_bypass(void) {
+    char *nulld  = read_daemon("nulld");
+    char *bebopd = read_daemon("bebopd");
+    char *fugi   = read_daemon("fugitoidd");
+    if (!nulld || !bebopd) { free(nulld); free(bebopd); free(fugi); return; }
+    int idle_sec = json_get_int(nulld, "idle_seconds");
+    int spikes   = json_get_int(nulld, "total_spike_events");
+    double drain = json_get_double(bebopd, "drain_mah_h");
+    int anrs     = fugi ? json_get_int(fugi, "anrs") : 0;
+    char screen[16] = {0};
+    json_get_str(nulld, "screen", screen, sizeof(screen));
+    if (strcmp(screen, "off") == 0 && idle_sec > 600 &&
+        spikes > 2 && drain > 80) {
         char detail[512];
         snprintf(detail, sizeof(detail),
-            "%d zombies + %d orphans + %d OOM kills + %d crashes "
-            "+ %d throttled cores + %.1f mAh/hr drain — "
-            "coordinated memory pressure cascade. "
-            "HyperOS Memory Extension may be creating artificial pressure "
-            "to force targeted app kills.",
-            zombies, orphans, ooms, crashes, r_throttl, drain);
-        double conf = 0.55 + (zombies * 0.05);
-        if (conf > 0.90) conf = 0.90;
-        add_pattern("MEMORY_PRESSURE_MANIPULATION", "WARNING",
-                    detail, "T1426", conf);
+            "Screen off %ds but %d spikes + %.1f mAh/hr drain + %d ANRs "
+            "-- Doze bypassed. PARTIAL_WAKE_LOCK held by system component. "
+            "Precursor to IDLE_EXFILTRATION_BEACON.",
+            idle_sec, spikes, drain, anrs);
+        double conf = 0.70 + (anrs > 0 ? 0.10 : 0.0) + (drain > 200 ? 0.10 : 0.0);
+        add_pattern("DOZE_BYPASS_SYNDROME", "WARNING", detail, "T1426", conf);
     }
-    free(ratking); free(fugi); free(rocky); free(bebopd);
+    free(nulld); free(bebopd); free(fugi);
+}
+
+/* ── Pattern 13: Thermal amnesia sequence (Kimi v2) ──────────── */
+static void detect_thermal_amnesia(void) {
+    char *leather = read_daemon("leatherheadd");
+    char *rocky   = read_daemon("rocksteadyd");
+    char *shred   = read_daemon("shredderd");
+    char *granite = read_daemon("granitord");
+    if (!leather) { free(rocky); free(shred); free(granite); return; }
+    int thermal    = json_get_int(leather, "thermal_score");
+    int throttled  = json_get_int(leather, "throttled_cores");
+    int r_throttl  = rocky  ? json_get_int(rocky,  "throttled_cores") : 0;
+    int kern_drift = shred  ? json_get_bool(shred,  "detected") : 0;
+    int selinux    = granite ? json_get_bool(granite, "selinux_enforcing") : 1;
+    if (thermal > 0 && thermal < 60 && (throttled > 2 || r_throttl > 2)
+        && kern_drift == 1 && selinux == 0) {
+        char detail[512];
+        snprintf(detail, sizeof(detail),
+            "Thermal %d/100 but %d cores throttled + kernel drift + "
+            "SELinux permissive -- thermal HAL interception. "
+            "Dynamic deception: history rewritten post-boot.",
+            thermal, throttled + r_throttl);
+        add_pattern("THERMAL_AMNESIA_SEQUENCE", "CRITICAL", detail, "T1481", 0.80);
+    }
+    free(leather); free(rocky); free(shred); free(granite);
+}
+
+/* ── Pattern 14: Binder proximity exploit (Kimi v2) ──────────── */
+static void detect_binder_proximity(void) {
+    char *tiger   = read_daemon("tigerclawd");
+    char *ratking = read_daemon("ratkingd");
+    char *rahzerd = read_daemon("rahzerd");
+    char *burned  = read_daemon("burned");
+    if (!tiger || !ratking) {
+        free(tiger); free(ratking); free(rahzerd); free(burned); return;
+    }
+    int trust   = json_get_int(tiger,   "trust_score");
+    int drift   = json_get_int(tiger,   "drift");
+    int orphans = json_get_int(ratking, "orphans");
+    int tcp     = rahzerd ? json_get_int(rahzerd, "established_tcp4") +
+                            json_get_int(rahzerd, "established_tcp6") : 0;
+    int priv    = burned ? json_get_int(burned, "privacy_signal_count") : 0;
+    if (drift >= 2 && drift <= 6 && trust > 85 &&
+        orphans > 2 && tcp < 5 && priv >= 5) {
+        char detail[512];
+        snprintf(detail, sizeof(detail),
+            "Binder drift %d but trust %d/100 + %d orphans + %d TCP "
+            "-- binder injection staging. Orphans (PPID=1) suggest "
+            "parent killed post-exploit. Low TCP = pre-exfil.",
+            drift, trust, orphans, tcp);
+        add_pattern("BINDER_PROXIMITY_EXPLOIT", "CRITICAL", detail, "T1437", 0.72);
+    }
+    free(tiger); free(ratking); free(rahzerd); free(burned);
+}
+
+/* ── Pattern 15: Memory extension trap (Kimi v2) ─────────────── */
+static void detect_memory_extension_trap(void) {
+    char *ratking = read_daemon("ratkingd");
+    char *fugi    = read_daemon("fugitoidd");
+    char *bebopd  = read_daemon("bebopd");
+    char *rocky   = read_daemon("rocksteadyd");
+    if (!ratking || !fugi) {
+        free(ratking); free(fugi); free(bebopd); free(rocky); return;
+    }
+    int mem_low   = json_get_bool(ratking, "memory_low");
+    int ooms      = json_get_int(fugi, "oom_events");
+    int crashes   = json_get_int(fugi, "crashes");
+    double drain  = bebopd ? json_get_double(bebopd, "drain_mah_h") : 0;
+    int throttled = rocky  ? json_get_int(rocky, "throttled_cores") : 0;
+    if (mem_low == 0 && ooms > 0 && crashes > 0 && drain > 150) {
+        char detail[512];
+        snprintf(detail, sizeof(detail),
+            "memory_low=false but %d OOMs + %d crashes + %.1f mAh/hr "
+            "+ %d throttled -- directed kills via HyperOS Memory Extension. "
+            "Targets likely privacy tools or VPN processes.",
+            ooms, crashes, drain, throttled);
+        double conf = 0.68 + (throttled > 2 ? 0.10 : 0.0);
+        add_pattern("MEMORY_EXTENSION_TRAP", "WARNING", detail, "T1426", conf);
+    }
+    free(ratking); free(fugi); free(bebopd); free(rocky);
+}
+
+/* ── Pattern 16: Radio silence flip (Kimi v2) ────────────────── */
+static void detect_radio_silence(void) {
+    char *rahzerd = read_daemon("rahzerd");
+    char *nulld   = read_daemon("nulld");
+    char *bebopd  = read_daemon("bebopd");
+    if (!rahzerd || !nulld) { free(rahzerd); free(nulld); free(bebopd); return; }
+    int tcp4     = json_get_int(rahzerd, "established_tcp4");
+    int tcp6     = json_get_int(rahzerd, "established_tcp6");
+    int spikes   = json_get_int(nulld,   "total_spike_events");
+    int idle_sec = json_get_int(nulld,   "idle_seconds");
+    double drain = bebopd ? json_get_double(bebopd, "drain_mah_h") : 0;
+    char screen[16] = {0};
+    json_get_str(nulld, "screen", screen, sizeof(screen));
+    if (strcmp(screen, "off") == 0 && idle_sec > 300 &&
+        (tcp4 + tcp6) < 3 && spikes > 2 && drain > 100) {
+        char detail[512];
+        snprintf(detail, sizeof(detail),
+            "Screen off %ds: only %d TCP + %d spikes + %.1f mAh/hr "
+            "-- possible QUIC/UDP fallback. Device may have detected "
+            "network monitor and switched to UDP to evade TCP inspection.",
+            idle_sec, tcp4 + tcp6, spikes, drain);
+        add_pattern("RADIO_SILENCE_FLIP", "WARNING", detail, "T1437", 0.65);
+    }
+    free(rahzerd); free(nulld); free(bebopd);
+}
+
+/* ── Pattern 17: Privacy signal decoy (Kimi v2) ──────────────── */
+static void detect_privacy_decoy(void) {
+    char *burned  = read_daemon("burned");
+    char *tiger   = read_daemon("tigerclawd");
+    char *granite = read_daemon("granitord");
+    if (!burned) { free(tiger); free(granite); return; }
+    int sigs    = json_get_int(burned, "privacy_signal_count");
+    int trust   = tiger   ? json_get_int(tiger,   "trust_score") : 100;
+    int g_score = granite ? json_get_int(granite, "score")       : 100;
+    if (sigs > 10 && trust > 90 && g_score > 90) {
+        char detail[512];
+        snprintf(detail, sizeof(detail),
+            "%d signals but trust %d/100 + posture %d/100 high "
+            "-- decoy flood. High-volume benign signals masking "
+            "critical insertion. Review signal list manually.",
+            sigs, trust, g_score);
+        add_pattern("PRIVACY_SIGNAL_DECOY", "WARNING", detail, "T1429", 0.60);
+    }
+    free(burned); free(tiger); free(granite);
 }
 
 /* ── Overall threat level ─────────────────────────────────────── */
@@ -640,6 +779,12 @@ int main(void) {
         detect_wakelock_abuse();
         detect_priv_escalation();
         detect_memory_pressure_manip();
+        detect_doze_bypass();
+        detect_thermal_amnesia();
+        detect_binder_proximity();
+        detect_memory_extension_trap();
+        detect_radio_silence();
+        detect_privacy_decoy();
 
         clock_gettime(CLOCK_MONOTONIC, &t1);
         int ms = (int)((t1.tv_sec-t0.tv_sec)*1000+
