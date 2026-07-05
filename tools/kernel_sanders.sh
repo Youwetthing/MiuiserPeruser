@@ -651,3 +651,98 @@ menu() {
 
 detect_variant
 menu
+
+# ── MILLET module audit ───────────────────────────────────────────────────────
+show_millet() {
+    printf "${BOLD}${HG}  [MILLET] Xiaomi Binder Monitoring Modules${RESET}\n"
+    divider
+    mods=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/modules 2>/dev/null | grep -E 'millet|binder_gki'")
+    if [ -z "$mods" ]; then
+        printf "${WA}  [i] No millet/binder_gki modules found (or read blocked)${RESET}\n\n"
+    else
+        echo "$mods" | while read -r line; do
+            printf "${BO}  ${line}${RESET}\n"
+        done
+        printf "\n"
+    fi
+
+    printf "${CR}  Parameter state (blocked from shell, root-ready check):${RESET}\n"
+    for p in millet_debug millet_binder_switch millet_freeze_switch \
+             frozen_uid_min binder_warn_ahead_space; do
+        val=$(rish_read "/sys/module/millet_core/parameters/$p")
+        if [ -z "$val" ] || [ "$val" = "DENIED" ]; then
+            printf "${WA}  [?] ${p}: DENIED (SELinux)${RESET}\n"
+        else
+            printf "${GR}  [OK] ${p}=${val}${RESET}\n"
+        fi
+    done
+    printf "\n"
+}
+
+# ── FBO service state ─────────────────────────────────────────────────────────
+show_fbo() {
+    printf "${BOLD}${HG}  [FBO] File-Based Optimization Service${RESET}\n"
+    divider
+    svc=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "service list 2>/dev/null | grep fbo")
+    [ -n "$svc" ] && printf "${GR}  [OK] ${svc}${RESET}\n" || printf "${WA}  [?] fbo service not found in service list${RESET}\n"
+
+    ulist=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "settings get secure FBO_UPLOAD_LIST 2>/dev/null")
+    utime=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "settings get secure FBO_UPLOAD_TIME 2>/dev/null")
+    printf "${WH}  FBO_UPLOAD_LIST: ${CR}${ulist:-null}${RESET}\n"
+    printf "${WH}  FBO_UPLOAD_TIME: ${CR}${utime:-null}${RESET}\n"
+    printf "${WA}  [i] Unverified whether list membership blocks kills — test pending${RESET}\n\n"
+}
+
+# ── ProcessManager kill counters ──────────────────────────────────────────────
+show_processmanager() {
+    printf "${BOLD}${HG}  [PROCESSMANAGER] Kill Strategy & Counters${RESET}\n"
+    divider
+    dump=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "dumpsys activity service ProcessManager 2>/dev/null")
+    if [ -z "$dump" ]; then
+        printf "${WA}  [?] No ProcessManager dump available${RESET}\n\n"
+        return
+    fi
+    for flag in KILL_STRATEGY BG_INTERCEPT DISABLE; do
+        val=$(echo "$dump" | grep -o "${flag}: *[a-z]*" | head -1)
+        printf "${WH}  ${val:-$flag: unknown}${RESET}\n"
+    done
+    printf "\n${CR}  PKG_HIT_MSG (per-package kill counters):${RESET}\n"
+    echo "$dump" | grep -o "PKG_HIT_MSG.*" | head -5 | while read -r line; do
+        printf "${BO}  ${line}${RESET}\n"
+    done
+    printf "\n"
+}
+
+# ── LMKD netlink clients ──────────────────────────────────────────────────────
+show_lmkd() {
+    printf "${BOLD}${HG}  [LMKD] Low Memory Killer Daemon${RESET}\n"
+    divider
+    pid=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "pgrep -x lmkd" 2>/dev/null | tr -d '\n')
+    if [ -z "$pid" ]; then
+        printf "${WA}  [?] lmkd not found${RESET}\n\n"
+        return
+    fi
+    printf "${WH}  PID: ${CR}${pid}${RESET}\n"
+    caps=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/$pid/status 2>/dev/null | grep CapEff")
+    printf "${WH}  ${caps}${RESET}\n"
+    printf "${WA}  [i] CAP_KILL present — netlink proto 15 spoofability unverified${RESET}\n\n"
+}
+
+# ── PowerKeeper soft-target recon ─────────────────────────────────────────────
+show_powerkeeper() {
+    printf "${BOLD}${HG}  [POWERKEEPER] Soft Target Recon${RESET}\n"
+    divider
+    pid=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "pgrep -x powerkeeper" 2>/dev/null | tr -d '\n')
+    if [ -z "$pid" ]; then
+        printf "${WA}  [?] powerkeeper not found${RESET}\n\n"
+        return
+    fi
+    threads=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/$pid/status 2>/dev/null | grep Threads")
+    caps=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/$pid/status 2>/dev/null | grep -E '^Cap'")
+    oom=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/$pid/oom_score_adj 2>/dev/null")
+    printf "${WH}  PID: ${CR}${pid}${RESET}\n"
+    printf "${WH}  ${threads}${RESET}\n"
+    printf "${WH}  OOM score adj: ${CR}${oom}${RESET}\n"
+    printf "${GR}  ${caps:-Cap*: none effective}${RESET}\n"
+    printf "${BO}  [NOTE] No caps, not MIMD-protected — softest target mapped this session${RESET}\n\n"
+}
