@@ -1,17 +1,17 @@
 {
   "daemon": "granitord",
   "version": "2.0",
-  "timestamp": "14:20:24",
+  "timestamp": "17:50:38",
   "poll_interval_sec": 30,
 
   "posture": {
-    "score": 93,
-    "grade": "SECURE",
+    "score": 83,
+    "grade": "CAUTION",
     "selinux": "Enforcing",
     "verified_boot_state": "green",
-    "verified_boot_mode": "enforcing",
+    "verified_boot_mode": "unknown",
     "ro_secure": "1",
-    "ro_debuggable": "0",
+    "ro_debuggable": "(unset)",
     "encryption": "encrypted",
     "root_present": false,
     "su_found": false,
@@ -39,5 +39,7 @@
 
   "persistence_audit": [],
 
-  "threat_indicators": [{"type":"correlated","confidence":80,"score":93,"description":"Hardware attestation failure without root = possible hardware attack","degradation_confirmed":false}]
+  "mimd_cgroup": [{"type":"mimd_cage","caged":true,"cgroup":"4:memory:/mimd/critical2"}],
+
+  "threat_indicators": [{"type":"correlated","confidence":80,"score":83,"description":"Hardware attestation failure without root = possible hardware attack","degradation_confirmed":false}]
 }
