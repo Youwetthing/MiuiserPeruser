@@ -91,7 +91,9 @@ int db_init_schema(void) {
         "  score            REAL    DEFAULT 0,"
         "  epoch            INTEGER NOT NULL,"
         "  consent_required INTEGER DEFAULT 0,"
-        "  consent_granted  INTEGER DEFAULT 0"
+        "  consent_granted  INTEGER DEFAULT 0,"
+        "  mitre_id         TEXT    DEFAULT ''  ,"
+        "  mitre_tactic     TEXT    DEFAULT ''"
         ");"
         "CREATE INDEX IF NOT EXISTS idx_verd_source "
         "  ON verdicts(source, epoch);"
@@ -359,8 +361,8 @@ int db_case_update_status(const char *case_id, const char *status) {
 int db_verdict_insert(const db_verdict_t *v) {
     const char *sql =
         "INSERT INTO verdicts"
-        "(case_id,source,verdict,score,epoch,consent_required,consent_granted)"
-        " VALUES(?,?,?,?,?,?,?);";
+        "(case_id,source,verdict,score,epoch,consent_required,consent_granted,mitre_id,mitre_tactic)"
+        " VALUES(?,?,?,?,?,?,?,?,?);";
     sqlite3_stmt *stmt;
     int rc;
 
@@ -374,6 +376,8 @@ int db_verdict_insert(const db_verdict_t *v) {
         sqlite3_bind_int64(stmt, 5, (sqlite3_int64)v->epoch);
         sqlite3_bind_int(stmt, 6, v->consent_required);
         sqlite3_bind_int(stmt, 7, v->consent_granted);
+        sqlite3_bind_text(stmt, 8, v->mitre_id,     -1, SQLITE_TRANSIENT);
+        sqlite3_bind_text(stmt, 9, v->mitre_tactic, -1, SQLITE_TRANSIENT);
         rc = sqlite3_step(stmt);
         sqlite3_finalize(stmt);
     }

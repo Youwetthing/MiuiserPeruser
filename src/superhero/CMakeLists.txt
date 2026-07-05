@@ -15,6 +15,7 @@ target_include_directories(superhero PRIVATE
     ${CMAKE_SOURCE_DIR}/src/core/sqlite
     ${CMAKE_SOURCE_DIR}/src/core/detection
     ${CMAKE_SOURCE_DIR}/src/core/platform
+    ${CMAKE_SOURCE_DIR}/src/gaveld
     ${CMAKE_SOURCE_DIR}/src/core/event
     ${CMAKE_SOURCE_DIR}/src/core/log
     ${CMAKE_SOURCE_DIR}/include

@@ -124,8 +124,85 @@ static const char *get_saved_depth(void) {
     return depth;
 }
 
+
+static void print_scan_summary(const char *depth) {
+    FILE *f, *d, *c;
+    printf("\n================================================\n");
+    printf("  SUPERHERO SCAN COMPLETE  [%s]\n", depth);
+    printf("================================================\n");
+    f = popen(
+        "sqlite3 /data/data/com.termux/files/home/MiuiserPeruser/data/superhero.db "
+        "\"SELECT finding_count, new_findings FROM scan_history ORDER BY id DESC LIMIT 1;\"",
+        "r");
+    if (f) {
+        int findings = 0, new_f = 0;
+        if (fscanf(f, "%d|%d", &findings, &new_f) == 2) {
+            printf("  Findings      : %d\n", findings);
+            if (new_f > 0)
+                printf("  New anomalies : %d not seen in baseline\n", new_f);
+            else
+                printf("  New anomalies : 0 -- matches baseline\n");
+        }
+        pclose(f);
+    }
+    d = popen(
+        "sqlite3 /data/data/com.termux/files/home/MiuiserPeruser/data/superhero.db "
+        "\"SELECT detection_type, description FROM detections ORDER BY id DESC LIMIT 5;\"",
+        "r");
+    if (d) {
+        char line[256];
+        int count = 0;
+        printf("\n  Recent detections:\n");
+        while (fgets(line, sizeof(line), d)) {
+            line[strcspn(line, "\n")] = 0;
+            printf("  * %s\n", line);
+            count++;
+        }
+        if (count == 0) printf("  No detections\n");
+        pclose(d);
+    }
+    c = popen(
+        "sqlite3 /data/data/com.termux/files/home/MiuiserPeruser/data/superhero.db "
+        "\"SELECT COUNT(*) FROM scan_history;\"",
+        "r");
+    if (c) {
+        int cycles = 0;
+        fscanf(c, "%d", &cycles);
+        pclose(c);
+        printf("\n  Cycles: %d/12", cycles);
+        if (cycles < 12)
+            printf(" -- %d more needed for baseline\n", 12 - cycles);
+        else
+            printf(" -- baseline active\n");
+    }
+    printf("================================================\n\n");
+}
 int main(int argc, char **argv) {
     /* Handle --verbose */
+    int loop_mode = 0, bg_mode = 0, loop_interval = 300;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--loop") == 0) {
+            loop_mode = 1;
+            if (i+1 < argc && argv[i+1][0] != '-') loop_interval = atoi(argv[++i]);
+        }
+        if (strcmp(argv[i], "--bg") == 0) bg_mode = 1;
+    }
+    if (bg_mode) {
+        pid_t pid = fork();
+        if (pid < 0) { perror("fork"); return 1; }
+        if (pid > 0) {
+            FILE *pf = fopen(
+                "/data/data/com.termux/files/home/MiuiserPeruser/pipes/pids/superhero.pid", "w");
+            if (pf) { fprintf(pf, "%d\n", pid); fclose(pf); }
+            printf("  Superhero running in background (pid %d)\n", pid);
+            return 0;
+        }
+        int fd = open(
+            "/data/data/com.termux/files/home/MiuiserPeruser/logs/superhero.log",
+            O_WRONLY|O_CREAT|O_APPEND, 0640);
+        if (fd >= 0) { dup2(fd, STDOUT_FILENO); dup2(fd, STDERR_FILENO); close(fd); }
+        loop_mode = 1;
+    }
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--verbose") == 0) leo_set_verbose(1);
     }
@@ -193,13 +270,10 @@ int main(int argc, char **argv) {
     april_log("INFO", "Action: battery=%d", metrics.battery);
     april_log("INFO", "Action: cpu_freq=%d", metrics.cpu_freq);
 
-    printf("+------------------+---------+\n");
-    printf("| Metric         | Value   |\n");
-    printf("+------------------+---------+\n");
-    printf("| Thermal (mC)   | %-7d |\n", metrics.thermal);
-    printf("| Battery (%%)    | %-7d |\n", metrics.battery);
-    printf("| CPU freq (kHz) | %-7d |\n", metrics.cpu_freq);
-    printf("+------------------+---------+\n");
+    if (loop_mode)
+        superhero_run_loop((uint32_t)loop_interval);
+
+    if (!bg_mode) print_scan_summary(scan_depth);
 
     splinter_shutdown();
     return 0;

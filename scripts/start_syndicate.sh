@@ -10,6 +10,14 @@ mkdir -p "$PIDS"
 # Ensure rish is executable
 chmod +x "$HOME/rish" 2>/dev/null
 
+# Start nulld — idle transmission monitor (continuous background)
+if ! pgrep -x nulld > /dev/null; then
+    RISH_APPLICATION_ID=com.termux "$BIN/nulld" >> "$BASE/logs/nulld.log" 2>&1 &
+    echo "[syndicate] nulld started (pid $!) — watching idle transmissions"
+else
+    echo "[syndicate] nulld already running"
+fi
+
 # Start gaveld first
 if ! pgrep -x gaveld > /dev/null; then
     "$BIN/gaveld" &
@@ -47,7 +55,7 @@ echo "[syndicate] fleet launched"
 (
 while true; do
     sleep 30
-    for daemon in splinterd burned granitord leatherheadd rocksteadyd bebopd rahzerd ratkingd metalheadd shredderd fugitoidd krangd turtlecomd; do
+    for daemon in splinterd burned granitord leatherheadd rocksteadyd bebopd rahzerd ratkingd metalheadd shredderd fugitoidd krangd turtlecomd tigerclawd; do
         if ! pgrep -x "$daemon" > /dev/null; then
             "$BIN/$daemon" >> "$BASE/logs/${daemon}.log" 2>&1 &
             echo "[watchdog] restarted $daemon (pid $!)"

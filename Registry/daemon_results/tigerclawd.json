@@ -1,0 +1,38 @@
+{
+  "daemon": "tigerclawd",
+  "version": "1.1",
+  "timestamp": "2026-06-25T09:42:26",
+  "poll_interval_sec": 30,
+  "device": {
+    "codename": "dew",
+    "board": "dew",
+    "hardware": "mt6768",
+    "hyperos_version": "V816",
+    "security_patch": "2026-04-01",
+    "bootloader_locked": true
+  },
+  "binder": {
+    "service_count": 473,
+    "baseline_count": 473,
+    "drift": 0,
+    "suspicious_services": 0
+  },
+  "integrity": {
+    "selinux_enforcing": true,
+    "debug_props_clean": true,
+    "security_center_running": false,
+    "developer_options": false,
+    "adb_enabled": true,
+    "adb_over_network": false,
+    "prop_hash_drift": false
+  },
+  "trust_score": 85,
+  "anomalies": [
+    {
+      "type": "WARNING",
+      "code": "SECURITY_CENTER_DOWN",
+      "detail": "MIUI Security Center installed but not running"
+    }
+  ],
+  "poll_duration_ms": 102860
+}

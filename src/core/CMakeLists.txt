@@ -23,6 +23,7 @@ add_library(sensei_core STATIC
     platform/capabilities.c
     platform/rish_pipe.c
     platform/shell_bridge.c
+    ${CMAKE_SOURCE_DIR}/src/gaveld/mitre_map.c
 )
 
 target_include_directories(sensei_core PUBLIC
@@ -36,4 +37,5 @@ target_include_directories(sensei_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/platform
     ${CMAKE_SOURCE_DIR}/src/superhero
     ${CMAKE_SOURCE_DIR}/include/backends
+    ${CMAKE_SOURCE_DIR}/src/gaveld
 )

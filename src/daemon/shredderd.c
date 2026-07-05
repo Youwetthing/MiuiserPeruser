@@ -18,7 +18,6 @@
 #include <openssl/sha.h>
 #include <stdbool.h>
 
-volatile bool g_running = true;
 
 #define DAEMON_NAME     "shredderd"
 #define VERSION         "2.1"
@@ -49,23 +48,43 @@ static int confirmed_drift = 0;
 
 /* ── Consistent rish read — no static buffer ───────────────────────────────── */
 static char *rish_read(const char *cmd, char *buf, size_t bufsize) {
-    char full[1024];
-    snprintf(full, sizeof(full),
-        "RISH_APPLICATION_ID=com.termux "
-        "/data/data/com.termux/files/home/Rish/rish -c '%s' 2>/dev/null", cmd);
-    FILE *fp = popen(full, "r");
-    if (!fp) { buf[0] = 0; return buf; }
+    char full[2048];
     size_t pos = 0;
     char line[512];
-    while (fgets(line, sizeof(line), fp) && pos < bufsize - 1) {
-        size_t l = strlen(line);
-        if (pos + l < bufsize - 1) { memcpy(buf + pos, line, l); pos += l; }
+    FILE *fp;
+
+    /* Try adb_cli first */
+    snprintf(full, sizeof(full),
+        "/data/data/com.termux/files/home/.cargo/bin/adb_cli "
+        "tcp 127.0.0.1:5555 shell \"%s\" 2>/dev/null", cmd);
+    fp = popen(full, "r");
+    if (fp) {
+        pos = 0;
+        while (fgets(line, sizeof(line), fp) && pos < bufsize-1) {
+            size_t l = strlen(line);
+            if (pos+l < bufsize-1) { memcpy(buf+pos, line, l); pos += l; }
+        }
+        buf[pos] = 0; pclose(fp);
+        while (pos > 0 && (buf[pos-1]=='\n'||buf[pos-1]=='\r')) buf[--pos]=0;
+        if (pos > 0) return buf;
     }
-    buf[pos] = 0;
-    pclose(fp);
-    while (pos > 0 && (buf[pos-1] == '\n' || buf[pos-1] == '\r')) buf[--pos] = 0;
+
+    /* Fallback: rish with timeout */
+    snprintf(full, sizeof(full),
+        "RISH_APPLICATION_ID=com.termux timeout 5 "
+        "/data/data/com.termux/files/home/Rish/rish -c '%s' 2>/dev/null", cmd);
+    fp = popen(full, "r");
+    if (!fp) { buf[0] = 0; return buf; }
+    pos = 0;
+    while (fgets(line, sizeof(line), fp) && pos < bufsize-1) {
+        size_t l = strlen(line);
+        if (pos+l < bufsize-1) { memcpy(buf+pos, line, l); pos += l; }
+    }
+    buf[pos] = 0; pclose(fp);
+    while (pos > 0 && (buf[pos-1]=='\n'||buf[pos-1]=='\r')) buf[--pos]=0;
     return buf;
 }
+
 
 static int contains(const char *s, const char *needle) {
     return s && needle && strstr(s, needle) != NULL;
@@ -219,7 +238,9 @@ static int detect_drift(int current_nmod, char *new_json, size_t new_size,
             snprintf(entry, sizeof(entry),
                 "{\"name\":\"%s\",\"detected_at\":\"%ld\"},",
                 current_names[i], (long)time(NULL));
-            strncat(new_json, entry, new_size - 1);
+            size_t _nlen = strlen(new_json);
+            if (_nlen + strlen(entry) < new_size - 1)
+                strncat(new_json, entry, new_size - _nlen - 1);
         }
     }
 
@@ -233,7 +254,9 @@ static int detect_drift(int current_nmod, char *new_json, size_t new_size,
             snprintf(entry, sizeof(entry),
                 "{\"name\":\"%s\",\"removed_at\":\"%ld\"},",
                 baseline_mods[i].name, (long)time(NULL));
-            strncat(removed_json, entry, rem_size - 1);
+            size_t _rlen = strlen(removed_json);
+            if (_rlen + strlen(entry) < rem_size - 1)
+                strncat(removed_json, entry, rem_size - _rlen - 1);
         }
     }
 

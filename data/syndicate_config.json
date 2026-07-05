@@ -1,0 +1,25 @@
+{
+  "enabled_daemons": [
+    "burned",
+    "granitord",
+    "leatherheadd",
+    "metalheadd",
+    "rahzerd",
+    "ratkingd",
+    "rocksteadyd",
+    "shredderd",
+    "tigerclawd",
+    "bebopd",
+    "fugitoidd",
+    "overlordd"
+  ],
+  "background_monitors": [
+    "nulld"
+  ],
+  "infrastructure": [
+    "gaveld",
+    "splinterd",
+    "krangd",
+    "turtlecomd"
+  ]
+}

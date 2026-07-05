@@ -1,13 +1,13 @@
 {
   "daemon": "ratkingd",
   "version": "2.0",
-  "timestamp": "14:37:39",
+  "timestamp": "12:17:11",
   "poll_interval_sec": 12,
 
   "baseline": {
     "established": false,
-    "polls_learned": 4,
-    "process_types_tracked": 3
+    "polls_learned": 1,
+    "process_types_tracked": 5
   },
 
   "thermal": {
@@ -16,20 +16,20 @@
   },
 
   "processes": {
-    "total": 9,
+    "total": 77,
     "zombies": 0,
-    "orphans": 1,
+    "orphans": 13,
     "flash_processes": 0,
-    "hidden_gap": 29413
+    "hidden_gap": 31554
   },
 
-  "top_cpu": [{"pid":26820,"name":"ratkingd","cpu_pct":100,"baseline_mean":125.0,"anomaly":false}],
+  "top_cpu": [{"pid":31547,"name":"com.termux","cpu_pct":18800,"baseline_mean":18800.0,"anomaly":false},{"pid":3694,"name":"adb","cpu_pct":2600,"baseline_mean":2600.0,"anomaly":false},{"pid":18035,"name":"burned","cpu_pct":200,"baseline_mean":200.0,"anomaly":false},{"pid":22030,"name":"ratkingd","cpu_pct":200,"baseline_mean":200.0,"anomaly":false},{"pid":21981,"name":"burned","cpu_pct":200,"baseline_mean":200.0,"anomaly":false},{"pid":19562,"name":"burned","cpu_pct":200,"baseline_mean":200.0,"anomaly":false}],
 
-  "top_memory": [{"pid":29206,"name":"com.termux","rss_mb":127.2,"anomaly":false},{"pid":26818,"name":"timeout","rss_mb":5.1,"anomaly":false},{"pid":26819,"name":"tail","rss_mb":5.0,"anomaly":false},{"pid":25284,"name":"bash","rss_mb":3.8,"anomaly":false},{"pid":26820,"name":"ratkingd","rss_mb":2.9,"anomaly":false},{"pid":4908,"name":"bash","rss_mb":2.7,"anomaly":false}],
+  "top_memory": [{"pid":23028,"name":"main","rss_mb":132.9,"anomaly":false},{"pid":23322,"name":"main","rss_mb":132.7,"anomaly":false},{"pid":23232,"name":"main","rss_mb":132.1,"anomaly":false},{"pid":23241,"name":"main","rss_mb":132.1,"anomaly":false},{"pid":23401,"name":"main","rss_mb":132.1,"anomaly":false},{"pid":22992,"name":"main","rss_mb":132.1,"anomaly":false}],
 
   "anomalies": [],
 
-  "pressure": {"memory_low":false,"avail_mb":0,"attributed_to":""},
+  "pressure": {"memory_low":false,"avail_mb":876,"attributed_to":""},
 
   "network_correlation": []
 }
