@@ -42,7 +42,6 @@ typedef struct {
 static param_baseline_t baseline_params[MAX_BASELINE];
 static int baseline_count = 0;
 static int baseline_established = 0;
-
 static char baseline_boot_hash[65] = {0};
 static char baseline_vbmeta_hash[65] = {0};
 
@@ -135,8 +134,7 @@ static void establish_baseline(void) {
 
     /* vbmeta hash */
     char vbmeta_path[256];
-    snprintf(vbmeta_path, sizeof(vbmeta_path),
-        "find /dev/block -name 'vbmeta*' 2>/dev/null | head -1");
+    snprintf(vbmeta_path, sizeof(vbmeta_path), "find /dev/block -name 'vbmeta*' 2>/dev/null | head -1");
     char *vbmeta_dev = rish_read(vbmeta_path, buf, sizeof(buf));
     if (vbmeta_dev && strlen(vbmeta_dev) > 0 && strncmp(vbmeta_dev, "/dev/block", 10) == 0) {
         sha256_file(vbmeta_dev, baseline_vbmeta_hash);
@@ -195,8 +193,7 @@ static void check_hardware_attestation(char *attest_json, size_t attest_size) {
     /* Check verified boot hash consistency */
     char vb_hash[65];
     char vbmeta_path[256];
-    snprintf(vbmeta_path, sizeof(vbmeta_path),
-        "find /dev/block -name 'vbmeta*' 2>/dev/null | head -1");
+    snprintf(vbmeta_path, sizeof(vbmeta_path), "find /dev/block -name 'vbmeta*' 2>/dev/null | head -1");
     char *vbmeta_dev = rish_read(vbmeta_path, buf, sizeof(buf));
     if (vbmeta_dev && strlen(vbmeta_dev) > 0 && baseline_vbmeta_hash[0]) {
         sha256_file(vbmeta_dev, vb_hash);
@@ -214,8 +211,7 @@ static void check_hardware_attestation(char *attest_json, size_t attest_size) {
     char *tee = rish_read("ls /dev/tee* 2>/dev/null | head -1", buf, sizeof(buf));
     if (tee && strlen(tee) > 0) {
         char entry[256];
-        snprintf(entry, sizeof(entry),
-            "{\"type\":\"tee_present\",\"path\":\"%s\"},", tee);
+        snprintf(entry, sizeof(entry), "{\"type\":\"tee_present\",\"path\":\"%s\"},", tee);
         strncat(attest_json, entry, attest_size - 1);
     }
 }
@@ -227,13 +223,12 @@ static void check_filesystem_integrity(char *fs_json, size_t fs_size) {
     /* dm-verity status from dmesg */
     char buf[4096];
     char *verity = rish_read("dmesg 2>/dev/null | grep -i 'dm-verity.*corruption' | tail -3",
-                             buf, sizeof(buf));
+                              buf, sizeof(buf));
     if (verity && strlen(verity) > 0) {
         char *line = strtok(verity, "\n");
         while (line) {
             char entry[512];
-            snprintf(entry, sizeof(entry),
-                "{\"type\":\"verity_corruption\",\"msg\":\"%.200s\"},", line);
+            snprintf(entry, sizeof(entry), "{\"type\":\"verity_corruption\",\"msg\":\"%.200s\"},", line);
             strncat(fs_json, entry, fs_size - 1);
             line = strtok(NULL, "\n");
         }
@@ -241,13 +236,12 @@ static void check_filesystem_integrity(char *fs_json, size_t fs_size) {
 
     /* f2fs errors */
     char *f2fs = rish_read("dmesg 2>/dev/null | grep -iE 'f2fs.*error|f2fs.*corruption' | tail -3",
-                           buf, sizeof(buf));
+                            buf, sizeof(buf));
     if (f2fs && strlen(f2fs) > 0) {
         char *line = strtok(f2fs, "\n");
         while (line) {
             char entry[512];
-            snprintf(entry, sizeof(entry),
-                "{\"type\":\"f2fs_error\",\"msg\":\"%.200s\"},", line);
+            snprintf(entry, sizeof(entry), "{\"type\":\"f2fs_error\",\"msg\":\"%.200s\"},", line);
             strncat(fs_json, entry, fs_size - 1);
             line = strtok(NULL, "\n");
         }
@@ -255,11 +249,10 @@ static void check_filesystem_integrity(char *fs_json, size_t fs_size) {
 
     /* Check if verity is disabled on any partition */
     char *mounts = rish_read("cat /proc/mounts 2>/dev/null | grep -E 'system|vendor' | grep -v 'dm-verity'",
-                               buf, sizeof(buf));
+                              buf, sizeof(buf));
     if (mounts && strlen(mounts) > 0) {
         char entry[256];
-        snprintf(entry, sizeof(entry),
-            "{\"type\":\"verity_disabled\",\"mounts\":\"%.100s\"},", mounts);
+        snprintf(entry, sizeof(entry), "{\"type\":\"verity_disabled\",\"mounts\":\"%.100s\"},", mounts);
         strncat(fs_json, entry, fs_size - 1);
     }
 }
@@ -271,29 +264,25 @@ static void audit_persistence(char *persist_json, size_t persist_size) {
     /* Check for unauthorized init.rc modifications */
     char buf[512];
     char *init_rc = rish_read("find /system/etc/init /vendor/etc/init -name '*.rc' -newer /system/build.prop 2>/dev/null",
-                              buf, sizeof(buf));
+                               buf, sizeof(buf));
     if (init_rc && strlen(init_rc) > 0) {
         char entry[256];
-        snprintf(entry, sizeof(entry),
-            "{\"type\":\"init_rc_modified\",\"files\":\"%.100s\"},", init_rc);
+        snprintf(entry, sizeof(entry), "{\"type\":\"init_rc_modified\",\"files\":\"%.100s\"},", init_rc);
         strncat(persist_json, entry, persist_size - 1);
     }
 
     /* Check for post-fs-data hooks */
-    char *postfs = rish_read("ls /data/adb/post-fs-data.d/ 2>/dev/null",
-                              buf, sizeof(buf));
+    char *postfs = rish_read("ls /data/adb/post-fs-data.d/ 2>/dev/null", buf, sizeof(buf));
     if (postfs && strlen(postfs) > 0) {
         char entry[256];
-        snprintf(entry, sizeof(entry),
-            "{\"type\":\"postfs_hooks\",\"files\":\"%.100s\"},", postfs);
+        snprintf(entry, sizeof(entry), "{\"type\":\"postfs_hooks\",\"files\":\"%.100s\"},", postfs);
         strncat(persist_json, entry, persist_size - 1);
     }
 
     /* Check for boot image modification */
     if (baseline_boot_hash[0]) {
         char boot_path[256];
-        snprintf(boot_path, sizeof(boot_path),
-            "find /dev/block -name 'boot*' 2>/dev/null | head -1");
+        snprintf(boot_path, sizeof(boot_path), "find /dev/block -name 'boot*' 2>/dev/null | head -1");
         char *boot_dev = rish_read(boot_path, buf, sizeof(buf));
         if (boot_dev && strlen(boot_dev) > 0) {
             char current_hash[65];
@@ -306,6 +295,29 @@ static void audit_persistence(char *persist_json, size_t persist_size) {
                 strncat(persist_json, entry, persist_size - 1);
             }
         }
+    }
+}
+
+/* ── MIMD cgroup escape detection ────────────────────────────────────────── */
+static void check_mimd_cage(char *mimd_json, size_t mimd_size) {
+    mimd_json[0] = 0;
+    char buf[512];
+    char *cgroup = rish_read("grep memory /proc/self/cgroup 2>/dev/null", buf, sizeof(buf));
+
+    int caged = (cgroup && contains(cgroup, "mimd"));
+    char entry[512];
+    snprintf(entry, sizeof(entry),
+        "{\"type\":\"mimd_cage\",\"caged\":%s,\"cgroup\":\"%.200s\"},",
+        caged ? "true" : "false", cgroup ? cgroup : "unknown");
+    strncat(mimd_json, entry, mimd_size - 1);
+
+    /* Check for frozen/unfrozen cgroups under root — visible even without write access */
+    char *frozen = rish_read("ls /sys/fs/cgroup/*frozen* /sys/fs/cgroup/*unfrozen* 2>/dev/null", buf, sizeof(buf));
+    if (frozen && strlen(frozen) > 0) {
+        char entry2[512];
+        snprintf(entry2, sizeof(entry2),
+            "{\"type\":\"mimd_freeze_cgroups_present\",\"paths\":\"%.200s\"},", frozen);
+        strncat(mimd_json, entry2, mimd_size - 1);
     }
 }
 
@@ -373,18 +385,20 @@ static void write_json(
     int has_su, int has_magisk, int rooted,
     long kptr, long dmesg, long perf, long aslr, long hardlinks, long symlinks,
     const char *drift, const char *attest,
-    const char *fs_events, const char *persist,
+    const char *fs_events, const char *persist, const char *mimd,
     const char *threat_indicator)
 {
-    char d[4096], a[4096], f[4096], p[4096];
+    char d[4096], a[4096], f[4096], p[4096], m[4096];
     strncpy(d, drift, sizeof(d) - 1); d[sizeof(d) - 1] = 0;
     strncpy(a, attest, sizeof(a) - 1); a[sizeof(a) - 1] = 0;
     strncpy(f, fs_events, sizeof(f) - 1); f[sizeof(f) - 1] = 0;
     strncpy(p, persist, sizeof(p) - 1); p[sizeof(p) - 1] = 0;
+    strncpy(m, mimd, sizeof(m) - 1); m[sizeof(m) - 1] = 0;
     strip_trailing_comma(d);
     strip_trailing_comma(a);
     strip_trailing_comma(f);
     strip_trailing_comma(p);
+    strip_trailing_comma(m);
 
     FILE *out = fopen("/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/granitord.json", "w");
     if (!out) {
@@ -427,6 +441,7 @@ static void write_json(
         "  \"hardware_attestation\": [%s],\n\n"
         "  \"filesystem_integrity\": [%s],\n\n"
         "  \"persistence_audit\": [%s],\n\n"
+        "  \"mimd_cgroup\": [%s],\n\n"
         "  \"threat_indicators\": [%s]\n"
         "}\n",
         VERSION, ts, POLL_SEC,
@@ -438,7 +453,7 @@ static void write_json(
         kptr, dmesg, perf, aslr, hardlinks, symlinks,
         strlen(d) > 0 ? "true" : "false",
         confirmed_degradation ? "true" : "false",
-        d, a, f, p, threat_indicator);
+        d, a, f, p, m, threat_indicator);
 
     fflush(out);
     fclose(out);
@@ -483,7 +498,6 @@ static void poll_security(void) {
     char *fl = rish_read("getprop ro.boot.flash.locked", buf, sizeof(buf));
     strncpy(flash_lock, fl && strlen(fl) > 0 ? fl : "unknown", sizeof(flash_lock) - 1);
     flash_lock[sizeof(flash_lock) - 1] = 0;
-
     int vb_ok = (strcmp(vb_state, "green") == 0);
     int fl_ok = (strcmp(flash_lock, "1") == 0);
     if (!vb_ok) score -= 15;
@@ -502,7 +516,6 @@ static void poll_security(void) {
     char *re = rish_read("getprop ro.crypto.state", buf, sizeof(buf));
     strncpy(ro_encrypt, re && strlen(re) > 0 ? re : "(unset)", sizeof(ro_encrypt) - 1);
     ro_encrypt[sizeof(ro_encrypt) - 1] = 0;
-
     int secure_ok = (strcmp(ro_secure, "1") == 0);
     int debug_bad = (strcmp(ro_debug, "1") == 0);
     if (!secure_ok) score -= 10;
@@ -517,7 +530,7 @@ static void poll_security(void) {
                  access("/sbin/su", F_OK) == 0 ||
                  access("/su/bin/su", F_OK) == 0;
     int has_magisk = access("/data/adb/magisk", F_OK) == 0 ||
-                     access("/data/adb/modules", F_OK) == 0;
+                      access("/data/adb/modules", F_OK) == 0;
     int rooted = has_su || has_magisk;
     if (rooted) score -= 20;
     printf("[GRANITOR]  Root: su=%s magisk=%s %s\n",
@@ -567,12 +580,16 @@ static void poll_security(void) {
     char persist_json[4096] = "";
     audit_persistence(persist_json, sizeof(persist_json));
 
+    /* ── Deep dive: MIMD cgroup escape ─────────────────────────────────── */
+    char mimd_json[1024] = "";
+    check_mimd_cage(mimd_json, sizeof(mimd_json));
+
     /* ── Threat correlation ──────────────────────────────────────────── */
     char threat_json[512] = "";
     int confidence = correlate_threats(score, enforcing, rooted,
-                                       drift_json, attest_json,
-                                       fs_json, persist_json,
-                                       threat_json, sizeof(threat_json));
+                                        drift_json, attest_json,
+                                        fs_json, persist_json,
+                                        threat_json, sizeof(threat_json));
 
     if (score < 0) score = 0;
     const char *grade = score >= 90 ? "SECURE"
@@ -591,6 +608,8 @@ static void poll_security(void) {
         printf("[GRANITOR]  FS: %s\n", fs_json);
     if (strlen(persist_json) > 0)
         printf("[GRANITOR]  PERSIST: %s\n", persist_json);
+    if (strlen(mimd_json) > 0)
+        printf("[GRANITOR]  MIMD: %s\n", mimd_json);
     fflush(stdout);
 
     /* Emit to gaveld on critical findings */
@@ -604,7 +623,7 @@ static void poll_security(void) {
                ro_secure, ro_debug, ro_encrypt,
                has_su, has_magisk, rooted,
                kptr, dmesg, perf, aslr, hardlinks, symlinks,
-               drift_json, attest_json, fs_json, persist_json, threat_json);
+               drift_json, attest_json, fs_json, persist_json, mimd_json, threat_json);
 }
 
 /* ── Main ───────────────────────────────────────────────────────────────── */

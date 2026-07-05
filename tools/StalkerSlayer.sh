@@ -505,3 +505,50 @@ main() {
 }
 
 main "$@"
+
+# --- PowerKeeper soft-target recon ---
+# No caps, not MIMD-protected — softest kill-decision target mapped this session
+run_powerkeeper_recon() {
+    clear
+    print_header
+    echo -e "${BOLD}${CYAN}=== PowerKeeper Recon ===${RESET}\n"
+
+    local shell_type=$(check_shell)
+    if [[ "$shell_type" == "none" ]]; then
+        print_error "No rish or adb available"
+        pause
+        return
+    fi
+
+    local pid=$(exec_priv "pgrep -x powerkeeper" | tr -d '\n')
+    if [[ -z "$pid" ]]; then
+        print_warning "powerkeeper process not found"
+        pause
+        return
+    fi
+
+    print_success "powerkeeper PID: $pid"
+
+    local threads=$(exec_priv "cat /proc/$pid/status" | grep Threads)
+    local oom=$(exec_priv "cat /proc/$pid/oom_score_adj")
+    local caps=$(exec_priv "cat /proc/$pid/status" | grep -E '^Cap')
+    local cgroup=$(exec_priv "cat /proc/$pid/cgroup" | tr '\n' ' ')
+
+    echo "  $threads"
+    echo "  OOM score adj: $oom"
+    echo "  Cgroup: $cgroup"
+    echo "$caps" | while read -r line; do echo "  $line"; done
+
+    echo ""
+    print_info "IPowerMillet binder service (miui.powerkeeper.PowerMillet):"
+    local dump=$(exec_priv "dumpsys activity service PowerKeeper" 2>/dev/null | head -20)
+    if [[ -n "$dump" ]]; then
+        echo "$dump" | sed 's/^/  /'
+    else
+        print_warning "No dumpsys output"
+    fi
+
+    echo ""
+    print_warning "No caps, not MIMD-protected — fuzz/exhaustion still unverified"
+    pause
+}

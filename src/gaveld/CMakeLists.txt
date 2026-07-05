@@ -18,7 +18,7 @@ add_executable(gaveld
     log.c
     tier.c
     weights.c
-    sqlite3.c          # amalgamation — bundled, no -lsqlite3
+    ${CMAKE_CURRENT_SOURCE_DIR}/../core/sqlite/sqlite3.c
 )
 
 target_compile_options(gaveld PRIVATE
