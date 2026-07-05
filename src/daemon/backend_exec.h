@@ -13,9 +13,10 @@
 #include <stddef.h>
 
 typedef enum {
-    BACKEND_RISH   = 0,
-    BACKEND_ADB    = 1,
-    BACKEND_DIRECT = 2,
+    BACKEND_RISH    = 0,
+    BACKEND_ADB     = 1,
+    BACKEND_DIRECT  = 2,
+    BACKEND_ADB_CLI = 3,
 } BACKEND_TYPE;
 
 void          bexec_init(void);
