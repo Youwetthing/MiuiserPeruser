@@ -1,7 +1,7 @@
 {
   "daemon": "granitord",
   "version": "2.0",
-  "timestamp": "12:16:36",
+  "timestamp": "22:54:20",
   "poll_interval_sec": 30,
 
   "posture": {
@@ -33,11 +33,13 @@
     "param_changes": []
   },
 
-  "hardware_attestation": [{"type":"tee_present","path":"/dev/teei_client"}],
+  "hardware_attestation": [{"type":"tee_present","path":"/dev/teei_client  /dev/teei_config  /dev/teei_fp"}],
 
   "filesystem_integrity": [{"type":"verity_disabled","mounts":"/dev/block/dm-20 /mnt/vendor/mi_ext erofs ro,seclabel,relatime,user_xattr,acl,cache_strategy=readaro"}],
 
-  "persistence_audit": [],
+  "persistence_audit": [{"type":"init_rc_modified","files":"find: bad arg 'init.recovery.hardware.rc'"},{"type":"postfs_hooks","files":"ls: /data/adb/post-fs-data.d/: Permission denied"}],
+
+  "mimd_cgroup": [{"type":"mimd_cage","caged":true,"cgroup":"4:memory:/mimd/critical2"},{"type":"mimd_freeze_cgroups_present","paths":"/sys/fs/cgroup/frozen  /sys/fs/cgroup/unfrozen  /sys/fs/cgroup/unfrozen"}],
 
   "threat_indicators": [{"type":"correlated","confidence":80,"score":93,"description":"Hardware attestation failure without root = possible hardware attack","degradation_confirmed":false}]
 }

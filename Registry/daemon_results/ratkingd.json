@@ -1,12 +1,12 @@
 {
   "daemon": "ratkingd",
   "version": "2.0",
-  "timestamp": "12:17:11",
+  "timestamp": "22:36:57",
   "poll_interval_sec": 12,
 
   "baseline": {
-    "established": false,
-    "polls_learned": 1,
+    "established": true,
+    "polls_learned": 24,
     "process_types_tracked": 5
   },
 
@@ -16,20 +16,20 @@
   },
 
   "processes": {
-    "total": 77,
+    "total": 11,
     "zombies": 0,
-    "orphans": 13,
+    "orphans": 1,
     "flash_processes": 0,
-    "hidden_gap": 31554
+    "hidden_gap": 26842
   },
 
-  "top_cpu": [{"pid":31547,"name":"com.termux","cpu_pct":18800,"baseline_mean":18800.0,"anomaly":false},{"pid":3694,"name":"adb","cpu_pct":2600,"baseline_mean":2600.0,"anomaly":false},{"pid":18035,"name":"burned","cpu_pct":200,"baseline_mean":200.0,"anomaly":false},{"pid":22030,"name":"ratkingd","cpu_pct":200,"baseline_mean":200.0,"anomaly":false},{"pid":21981,"name":"burned","cpu_pct":200,"baseline_mean":200.0,"anomaly":false},{"pid":19562,"name":"burned","cpu_pct":200,"baseline_mean":200.0,"anomaly":false}],
+  "top_cpu": [{"pid":17019,"name":"com.termux","cpu_pct":13200,"baseline_mean":868.4,"anomaly":true},{"pid":19206,"name":"ratkingd","cpu_pct":100,"baseline_mean":315.8,"anomaly":false}],
 
-  "top_memory": [{"pid":23028,"name":"main","rss_mb":132.9,"anomaly":false},{"pid":23322,"name":"main","rss_mb":132.7,"anomaly":false},{"pid":23232,"name":"main","rss_mb":132.1,"anomaly":false},{"pid":23241,"name":"main","rss_mb":132.1,"anomaly":false},{"pid":23401,"name":"main","rss_mb":132.1,"anomaly":false},{"pid":22992,"name":"main","rss_mb":132.1,"anomaly":false}],
+  "top_memory": [{"pid":17019,"name":"com.termux","rss_mb":130.8,"anomaly":false},{"pid":25752,"name":"main","rss_mb":58.3,"anomaly":false},{"pid":21167,"name":"bash","rss_mb":4.2,"anomaly":false},{"pid":9915,"name":"bash","rss_mb":3.1,"anomaly":false},{"pid":19206,"name":"ratkingd","rss_mb":2.7,"anomaly":false},{"pid":26853,"name":"granitord","rss_mb":2.5,"anomaly":false}],
 
-  "anomalies": [],
+  "anomalies": [{"type":"cpu_spike","pid":17019,"name":"com.termux","cpu_pct":13200,"rss_mb":130.8,"confidence":90,"thermal":"COOL"}],
 
-  "pressure": {"memory_low":false,"avail_mb":876,"attributed_to":""},
+  "pressure": {"memory_low":false,"avail_mb":917,"attributed_to":""},
 
   "network_correlation": []
 }

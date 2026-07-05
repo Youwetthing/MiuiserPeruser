@@ -9,6 +9,7 @@
 #include <stdbool.h>
 
 #include "gaveld_emit.h"
+#include "backend_exec.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -83,20 +84,14 @@ static int g_baseline_ready = 0;
 
 /* ── rish helper ───────────────────────────────────────────────────────────── */
 static char *rish_read(const char *cmd, char *buf, size_t bufsize) {
-    char full[1024];
-    snprintf(full, sizeof(full),
-        "RISH_APPLICATION_ID=com.termux "
-        "/data/data/com.termux/files/home/Rish/rish -c '%s' 2>/dev/null", cmd);
-    FILE *fp = popen(full, "r");
-    if (!fp) { buf[0] = 0; return buf; }
-    size_t pos = 0;
-    char line[512];
-    while (fgets(line, sizeof(line), fp) && pos < bufsize - 1) {
-        size_t l = strlen(line);
-        if (pos + l < bufsize - 1) { memcpy(buf + pos, line, l); pos += l; }
-    }
-    buf[pos] = 0;
-    pclose(fp);
+    char *result = bexec(cmd);
+    if (!result) { buf[0] = 0; return buf; }
+
+    strncpy(buf, result, bufsize - 1);
+    buf[bufsize - 1] = 0;
+    free(result);
+
+    size_t pos = strlen(buf);
     while (pos > 0 && (buf[pos-1] == '\n' || buf[pos-1] == '\r')) buf[--pos] = 0;
     return buf;
 }
@@ -115,10 +110,11 @@ static int get_thermal_temp(void) {
     return temp / 1000;  /* millidegrees → degrees */
 }
 
+/* Thermal-based threshold adjustment removed — confirmed not a kill predictor
+ * on this device (FPSGO frequency oscillation, not thermal, drives behavior).
+ * Temp is still read and logged for context, but no longer adjusts hog_pct. */
 static int get_adjusted_hog_pct(int temp) {
-    if (temp < 0) return HOG_PCT_COOL;
-    if (temp > 60) return HOG_PCT_HOT;
-    if (temp > 45) return HOG_PCT_WARM;
+    (void)temp;
     return HOG_PCT_COOL;
 }
 
@@ -317,6 +313,93 @@ static int detect_hidden_processes(void) {
     return gap > 5 ? gap : 0;  /* Allow normal PID reuse noise */
 }
 
+/* ── ProcessManager kill correlation ─────────────────────────────────────── */
+static int g_pm_kill_count_prev = -1;
+static time_t g_pm_last_kill_time = 0;
+
+static int check_pm_kill_storm(char *out_json, size_t out_size) {
+    char *dump = bexec("dumpsys activity service ProcessManager");
+    out_json[0] = 0;
+    if (!dump) return 0;
+
+    int count = 0;
+    char *p = dump;
+    while ((p = strstr(p, "mKillingPackageMaps")) != NULL) { count++; p += 20; }
+
+    int storm = 0;
+    if (g_pm_kill_count_prev >= 0 && count > g_pm_kill_count_prev + 10) {
+        storm = 1;
+        g_pm_last_kill_time = time(NULL);
+    }
+    g_pm_kill_count_prev = count;
+
+    int recent = (time(NULL) - g_pm_last_kill_time) < 300;
+
+    snprintf(out_json, out_size,
+        "{\"type\":\"pm_kill_storm\",\"count\":%d,\"storm_active\":%s,\"recent\":%s}",
+        count, storm ? "true" : "false", recent ? "true" : "false");
+
+    free(dump);
+    return storm;
+}
+
+/* ── PeriodicCleaner rearm detection ──────────────────────────────────────── */
+static int g_periodic_enabled_prev = -1;
+
+static int check_periodic_rearm(char *out_json, size_t out_size) {
+    char *dump = bexec("cmd periodic dump");
+    out_json[0] = 0;
+    if (!dump) return 0;
+
+    int enabled = contains(dump, "Enable=true") ? 1 : 0;
+    int rearmed = (g_periodic_enabled_prev == 0 && enabled == 1);
+    g_periodic_enabled_prev = enabled;
+
+    snprintf(out_json, out_size,
+        "{\"type\":\"periodic_rearm\",\"enabled\":%s,\"rearmed\":%s}",
+        enabled ? "true" : "false", rearmed ? "true" : "false");
+
+    free(dump);
+    return rearmed;
+}
+
+/* ── MILLET module health ─────────────────────────────────────────────────── */
+static int check_millet_health(char *out_json, size_t out_size) {
+    char *mods = bexec("cat /proc/modules 2>/dev/null | grep -c '^millet_'");
+    out_json[0] = 0;
+    if (!mods) return 0;
+
+    int count = atoi(mods);
+    int degraded = count < 5;
+
+    snprintf(out_json, out_size,
+        "{\"type\":\"millet_health\",\"module_count\":%d,\"degraded\":%s}",
+        count, degraded ? "true" : "false");
+
+    free(mods);
+    return degraded;
+}
+
+/* ── Self-protection status ───────────────────────────────────────────────── */
+static int check_self_protection(char *out_json, size_t out_size) {
+    FILE *f = fopen("/proc/self/oom_score_adj", "r");
+    int oom_adj = 0;
+    if (f) { fscanf(f, "%d", &oom_adj); fclose(f); }
+
+    char cgroup[256] = "";
+    f = fopen("/proc/self/cgroup", "r");
+    if (f) { fgets(cgroup, sizeof(cgroup), f); fclose(f); }
+
+    int unprotected = (oom_adj > -900);
+
+    out_json[0] = 0;
+    snprintf(out_json, out_size,
+        "{\"type\":\"self_protection\",\"oom_score_adj\":%d,\"cgroup\":\"%.100s\",\"unprotected\":%s}",
+        oom_adj, cgroup, unprotected ? "true" : "false");
+
+    return unprotected;
+}
+
 /* ── JSON helpers ─────────────────────────────────────────────────────────── */
 static void strip_trailing_comma(char *s) {
     size_t len = strlen(s);
@@ -468,6 +551,17 @@ static void poll_procs(void) {
 
     /* Hidden process detection */
     int hidden_gap = detect_hidden_processes();
+
+    char pm_json[512], periodic_json[512], millet_json[512], selfprot_json[512];
+    int pm_storm = check_pm_kill_storm(pm_json, sizeof(pm_json));
+    int periodic_rearmed = check_periodic_rearm(periodic_json, sizeof(periodic_json));
+    int millet_degraded = check_millet_health(millet_json, sizeof(millet_json));
+    int self_unprotected = check_self_protection(selfprot_json, sizeof(selfprot_json));
+
+    if (pm_storm) gaveld_emit(DAEMON_NAME, "PM_KILL_STORM", 0.85, pm_json);
+    if (periodic_rearmed) gaveld_emit(DAEMON_NAME, "PERIODIC_REARM_NEEDED", 0.7, periodic_json);
+    if (millet_degraded) gaveld_emit(DAEMON_NAME, "MILLET_DEGRADED", 0.75, millet_json);
+    if (self_unprotected) gaveld_emit(DAEMON_NAME, "SELF_UNPROTECTED", 0.8, selfprot_json);
 
     /* Save for next round */
     memcpy(g_prev, g_procs, (size_t)g_nprocs * sizeof(proc_t));

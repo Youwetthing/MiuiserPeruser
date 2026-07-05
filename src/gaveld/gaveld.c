@@ -221,6 +221,20 @@ int main(int argc, char *argv[]) {
     enforce_init();
     write_pid();
 
+    /* Self-protection: prevent MIUI's kill engine from targeting gaveld.
+     * Every daemon depends on gaveld being alive to receive emits — if it
+     * dies silently, all downstream threat signals go nowhere unnoticed. */
+    {
+        FILE *oom_f = fopen("/proc/self/oom_score_adj", "w");
+        if (oom_f) {
+            fprintf(oom_f, "-1000");
+            fclose(oom_f);
+            glog("INFO", "self-protection: oom_score_adj set to -1000");
+        } else {
+            glog("WARN", "self-protection: could not set oom_score_adj");
+        }
+    }
+
     /* Start threads */
     if (decay_start()   != 0) { glog("ERROR", "decay_start failed");   return 1; }
     if (audit_start()   != 0) { glog("ERROR", "audit_start failed");   return 1; }

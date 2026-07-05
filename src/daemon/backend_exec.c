@@ -140,6 +140,17 @@ static int probe_rish(void)
     return 0;
 }
 
+/* ── adb_cli probe ────────────────────────────────────────────────────────── */
+
+#define ADB_CLI_PATH "/data/data/com.termux/files/home/.cargo/bin/adb_cli"
+#define ADB_CLI_TRANSPORT "timeout 5 " ADB_CLI_PATH " tcp 127.0.0.1:5555 shell"
+
+static int probe_adb_cli(void)
+{
+    if (access(ADB_CLI_PATH, X_OK) != 0) return 0;
+    return try_run(ADB_CLI_TRANSPORT " echo adb_cli_ok", "adb_cli_ok");
+}
+
 /* ── ADB probe ────────────────────────────────────────────────────────────── */
 
 static int probe_adb(void)
@@ -155,6 +166,12 @@ void bexec_init(void)
     g_init_done = 1;
 
     setenv("RISH_APPLICATION_ID", "com.termux", 1);
+
+    if (probe_adb_cli()) {
+        g_backend = BACKEND_ADB_CLI;
+        printf("[BEXEC] privileged shell backend: adb_cli  (" ADB_CLI_TRANSPORT ")\n");
+        return;
+    }
 
     if (probe_rish()) {
         g_backend = BACKEND_RISH;
@@ -246,6 +263,13 @@ char *bexec_n(const char *cmd, size_t max_bytes)
                  g_rish_path, escaped);
         free(escaped);
 
+    } else if (g_backend == BACKEND_ADB_CLI) {
+        fullsz = strlen(ADB_CLI_TRANSPORT) + strlen(cmd) + 32;
+        full   = malloc(fullsz);
+        if (!full) { free(out); return NULL; }
+        snprintf(full, fullsz,
+                 ADB_CLI_TRANSPORT " %s 2>/dev/null", cmd);
+
     } else if (g_backend == BACKEND_ADB) {
         char *escaped = escape_for_adb(cmd);
         if (!escaped) { free(out); return NULL; }
@@ -305,8 +329,9 @@ BACKEND_TYPE backend_get(void) { return g_backend; }
 const char *backend_name(BACKEND_TYPE b)
 {
     switch (b) {
-        case BACKEND_RISH:   return "rish";
-        case BACKEND_ADB:    return "adb";
+        case BACKEND_RISH:    return "rish";
+        case BACKEND_ADB:     return "adb";
+        case BACKEND_ADB_CLI: return "adb_cli";
         case BACKEND_DIRECT: return "direct";
         default:             return "unknown";
     }
