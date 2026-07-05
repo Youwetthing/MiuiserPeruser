@@ -18,6 +18,7 @@ add_executable(gaveld
     log.c
     tier.c
     weights.c
+    mitre_map.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../core/sqlite/sqlite3.c
 )
 
@@ -27,15 +28,14 @@ target_compile_options(gaveld PRIVATE
     -Wno-unused-parameter
     -std=c11
     -O2
-    # SQLite compile-time options
-    -DSQLITE_THREADSAFE=2           # serialised — we handle locking in db.c
+    -DSQLITE_THREADSAFE=2
     -DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1
-    -DSQLITE_OMIT_LOAD_EXTENSION    # no dlopen
+    -DSQLITE_OMIT_LOAD_EXTENSION
 )
 
 target_include_directories(gaveld PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon    # backend_exec.h if needed
+    ${CMAKE_CURRENT_SOURCE_DIR}/../daemon
     ${CMAKE_CURRENT_SOURCE_DIR}/../core
 )
 

@@ -44,18 +44,23 @@ static char g_prev_app[128] = {0};
 
 static int config_get_int(const char *key, int def)
 {
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd),
-             "jq -r '.%s.%s // %d' %s 2>/dev/null",
-             DAEMON_NAME, key, def, STATE_FILE);
-    FILE *f = popen(cmd, "r");
+    FILE *f = fopen(STATE_FILE, "r");
     if (!f) return def;
-    char buf[32] = {0};
-    int val = def;
-    if (fgets(buf, sizeof(buf), f) && buf[0] != 'n')
-        val = atoi(buf);
-    pclose(f);
-    return val;
+    char buf[4096] = {0};
+    fread(buf, 1, sizeof(buf)-1, f);
+    fclose(f);
+    /* Find "DAEMON_NAME": { ... "key": VALUE */
+    char section[64];
+    snprintf(section, sizeof(section), "\"%s\"", DAEMON_NAME);
+    char *s = strstr(buf, section);
+    if (!s) return def;
+    char field[64];
+    snprintf(field, sizeof(field), "\"%s\":", key);
+    char *p = strstr(s, field);
+    if (!p) return def;
+    p += strlen(field);
+    while (*p == ' ' || *p == '\t') p++;
+    return atoi(p);
 }
 
 static int is_enabled(void)    { return config_get_int("enabled",    1); }
@@ -196,10 +201,13 @@ static void poll(int scan_num)
         /* ── Logcat analysis ──────────────────────────────────────────── */
         const char *log = log_sec ? log_sec : "";
 
-        int crashes = count_substr(log, "FATAL EXCEPTION");
-        int anrs    = count_substr(log, "ANR in");
-        int ooms    = count_substr(log, "lowmemorykiller") +
-                      count_substr(log, "OOM killer");
+        int crashes = count_substr(log, "FATAL EXCEPTION")
+                    + count_substr(log, "crashed service");
+        int anrs    = count_substr(log, "ANR in")
+                    + count_substr(log, "ANR Warning");
+        int ooms    = count_substr(log, "lowmemorykiller")
+                    + count_substr(log, "OOM killer")
+                    + count_substr(log, "mem-pressure-event");
         int wdogs   = count_substr(log, "watchdog");
 
         printf("[FUGITOID]  Logcat     : crashes=%-3d  ANR=%-3d  "
@@ -274,6 +282,7 @@ static void poll(int scan_num)
 
 int main(void)
 {
+    setenv("BEXEC_NO_RISH", "1", 1);
     bexec_init();
 
     if (!is_enabled()) {
@@ -282,7 +291,6 @@ int main(void)
     }
 
     printf("[FUGITOID] Foreground Activity & System Event Monitor: ONLINE\n");
-
     int interval  = get_interval();
     int max_scans = get_max_scans();
     int scan_num  = 0;
@@ -297,8 +305,8 @@ int main(void)
         max_scans = get_max_scans();
         scan_num++;
 
-        poll(scan_num);
-
+            poll(scan_num);
+    
         if (max_scans > 0 && scan_num >= max_scans) {
             printf("[FUGITOID] reached scan_count=%d — exiting\n", max_scans);
             break;

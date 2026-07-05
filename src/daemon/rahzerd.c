@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <fcntl.h>
+#include <sys/wait.h>
 #include <netdb.h>
 #include <dirent.h>
 
@@ -34,7 +35,6 @@ volatile bool g_rahzerd_running = true;
 
 #include <stdbool.h>
 
-volatile bool g_running = true;
 
 #define RESULTS_FILE "/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/rahzerd.json"
 #define BASELINE_FILE "/data/data/com.termux/files/home/MiuiserPeruser/data/rahzerd_baseline.json"
@@ -72,7 +72,7 @@ static void handle_sig(int s) { (void)s; g_rahzerd_running = 0; }
 char *rz_run(const char *cmd) {
     /* Wrap command with timeout to prevent hanging */
     char safe_cmd[2048];
-    snprintf(safe_cmd, sizeof(safe_cmd), "timeout 15 %s", cmd);
+    snprintf(safe_cmd, sizeof(safe_cmd), "timeout 3 %s", cmd);
     FILE *f = popen(safe_cmd, "r");
     if (!f) return NULL;
     char *buf = malloc(MAX_CMD_OUT);
@@ -121,34 +121,95 @@ static void rz_trim_nl(char *s) {
     while (l > 0 && (s[l-1]=='\n'||s[l-1]=='\r'||s[l-1]==' ')) s[--l]='\0';
 }
 
+/* Pre-baked probe data — loaded once per poll */
+static char g_probe_data[131072] = {0};
+static int  g_probe_loaded = 0;
+
+static void rz_load_probe_data(void) {
+    FILE *f = fopen("/data/data/com.termux/files/home/MiuiserPeruser/pipes/state/rahzerd_all", "r");
+    if (!f) { g_probe_loaded = 0; return; }
+    memset(g_probe_data, 0, sizeof(g_probe_data));
+    fread(g_probe_data, 1, sizeof(g_probe_data)-1, f);
+    fclose(f);
+    g_probe_loaded = 1;
+}
+
 static char *ds(const char *svc) {
-    char *r = NULL;
-    if (g_backend == RZ_BACKEND_RISH) {
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd), "RISH_APPLICATION_ID=com.termux /data/data/com.termux/files/home/Rish/rish -c 'dumpsys %s' 2>/dev/null", svc);
-        r = rz_run(cmd);
-        if (r) return r;
+    /* Return section from pre-baked data matching the service */
+    if (!g_probe_loaded) return NULL;
+    char section[32];
+    snprintf(section, sizeof(section), "===%s===", svc);
+    /* Uppercase the section name to match */
+    for (int i = 0; section[i]; i++)
+        if (section[i] >= 'a' && section[i] <= 'z') section[i] -= 32;
+    char *start = strstr(g_probe_data, section);
+    if (!start) return NULL;
+    start = strchr(start, '\n');
+    if (!start) return NULL;
+    start++;
+    /* Find next section */
+    char *end = strstr(start, "\n===");
+    size_t len = end ? (size_t)(end - start) : strlen(start);
+    char *out = malloc(len + 1);
+    if (!out) return NULL;
+    memcpy(out, start, len);
+    out[len] = 0;
+    return out;
+}
+
+
+static char *rz_prebaked_get(const char *key) {
+    if (!g_probe_loaded || !key) return NULL;
+    size_t klen = strlen(key);
+    char *p = g_probe_data;
+    while (*p) {
+        while (*p == '\n' || *p == '\r') p++;
+        if (!*p) break;
+        if (strncmp(p, key, klen) == 0 && p[klen] == '=') {
+            const char *val = p + klen + 1;
+            size_t len = 0;
+            while (val[len] && val[len] != '\n' && val[len] != '\r') len++;
+            if (!len) { p += klen + 1; continue; }
+            char *out = malloc(len + 1);
+            if (!out) return NULL;
+            memcpy(out, val, len);
+            out[len] = 0;
+            return out;
+        }
+        while (*p && *p != '\n' && *p != '\r') p++;
     }
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "dumpsys %s 2>/dev/null", svc);
-    return rz_run(cmd);
+    return NULL;
 }
 
 static char *rz_getprop(const char *prop) {
-    char cmd[192];
-    snprintf(cmd, sizeof(cmd), "getprop %s 2>/dev/null", prop);
+    /* Check pre-baked data first */
+    char *v = rz_prebaked_get(prop);
+    if (v) { rz_trim_nl(v); return v; }
+    /* Fallback: live via adb */
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd),
+        "/data/data/com.termux/files/home/.cargo/bin/adb_cli "
+        "tcp 127.0.0.1:5555 shell getprop %s 2>/dev/null", prop);
     char *r = rz_run(cmd);
     if (r) rz_trim_nl(r);
     return r;
 }
 
 static char *rz_sysfs(const char *path) {
+    /* Check pre-baked data first */
+    char *v = rz_prebaked_get(path);
+    if (v) { rz_trim_nl(v); return v; }
+    /* Fallback: read via adb */
     char cmd[512];
-    snprintf(cmd, sizeof(cmd), "cat '%s' 2>/dev/null", path);
+    snprintf(cmd, sizeof(cmd),
+        "/data/data/com.termux/files/home/.cargo/bin/adb_cli "
+        "tcp 127.0.0.1:5555 shell cat '%s' 2>/dev/null", path);
     char *r = rz_run(cmd);
     if (r) rz_trim_nl(r);
     return r;
 }
+
+
 
 static int sysfs_exists(const char *path) {
     return access(path, F_OK) == 0;
@@ -171,7 +232,7 @@ rz_backend_t rz_detect_backend(void) {
     if (d && strlen(d) > 32) { free(d);
         rzlog("INFO", "backend=dumpsys"); return RZ_BACKEND_DUMPSYS; }
     free(d);
-    char *s = rz_sysfs("/proc/net/wireless");
+    char *s = rz_prebaked_get("/proc/net/wireless");
     if (s) { free(s);
         rzlog("INFO", "backend=sysfs"); return RZ_BACKEND_SYSFS; }
     rzlog("WARN", "backend=none");
@@ -185,28 +246,23 @@ void rz_probe_wifi(rz_wifi_t *w) {
     w->connected = w->link_speed_mbps = w->frequency_mhz = -1;
     w->confidence = RZ_CONF_ABSENT;
 
-    /* wifi_state getprop — fast */
-    char *ws = rz_run("RISH_APPLICATION_ID=com.termux "
-        "/data/data/com.termux/files/home/Rish/rish -c "
-        "'getprop debug.device.wifi_state 2>/dev/null'");
-    if (ws) { /* trim whitespace */ char *p=ws; while(*p==' '||*p=='\t'||*p=='\n'||*p=='\r') p++; w->connected = (*p=='1') ? 1 : 0; }
-    free(ws);
+    /* Read from pre-baked state file */
+    FILE *f = fopen("/data/data/com.termux/files/home/MiuiserPeruser/pipes/state/rahzerd_wifi", "r");
+    if (f) {
+        char buf[8] = {0};
+        fgets(buf, sizeof(buf), f);
+        fclose(f);
+        buf[strcspn(buf, "\n\r")] = 0;
+        w->connected = (buf[0] == '1') ? 1 : 0;
+        w->backend    = RZ_BACKEND_SYSFS;
+        w->confidence = RZ_CONF_MEASURED;
+    }
 
-    /* TX/RX bytes */
-    char *txb = rz_run("RISH_APPLICATION_ID=com.termux "
-        "/data/data/com.termux/files/home/Rish/rish -c "
-        "'cat /sys/class/net/wlan0/statistics/tx_bytes 2>/dev/null'");
-    if (txb) { w->tx_bytes = atol(txb); free(txb); }
-    char *rxb = rz_run("RISH_APPLICATION_ID=com.termux "
-        "/data/data/com.termux/files/home/Rish/rish -c "
-        "'cat /sys/class/net/wlan0/statistics/rx_bytes 2>/dev/null'");
-    if (rxb) { w->rx_bytes = atol(rxb); free(rxb); }
-
-    w->backend    = RZ_BACKEND_SYSFS;
-    w->confidence = RZ_CONF_INFERRED;
+    /* TX/RX from sysfs via ip */
+    char *v;
+    if ((v = rz_prebaked_get("/sys/class/net/wlan0/statistics/tx_bytes"))) { w->tx_bytes = atol(v); free(v); }
+    if ((v = rz_prebaked_get("/sys/class/net/wlan0/statistics/rx_bytes"))) { w->rx_bytes = atol(v); free(v); }
 }
-
-/* ── Layer 2: Mobile ───────────────────────────────────────────── */
 
 void rz_probe_mobile(rz_mobile_t *m) {
     memset(m, 0, sizeof(*m));
@@ -216,47 +272,41 @@ void rz_probe_mobile(rz_mobile_t *m) {
     strncpy(m->rat_type,      "UNKNOWN", sizeof(m->rat_type)-1);
     strncpy(m->data_activity, "UNKNOWN", sizeof(m->data_activity)-1);
 
-    char *raw = ds("telephony.registry");
-    if (raw) {
-        char tmp[128];
-        m->sim_present = (rz_has(raw,"SIM_STATE_READY")||rz_has(raw,"mSimState=READY")) ? 1 : 0;
-        m->data_active = (rz_has(raw,"mDataConnectionState=2")||rz_has(raw,"DATA_CONNECTED")) ? 1 : 0;
-        m->roaming     = (rz_has(raw,"isRoaming=true")||rz_has(raw,"mRoaming=true")) ? 1 : 0;
-        m->dual_sim    = (rz_has(raw,"slot=1")||rz_has(raw,"SIM2")||rz_has(raw,"phoneId=1")) ? 1 : 0;
-        if (rz_extract_field(raw,"operatorAlpha",tmp,sizeof(tmp)))
-            strncpy(m->operator_name, tmp, sizeof(m->operator_name)-1);
-        if      (rz_has(raw,"NR"))   strncpy(m->rat_type,"NR",    sizeof(m->rat_type)-1);
-        else if (rz_has(raw,"LTE"))  strncpy(m->rat_type,"LTE",   sizeof(m->rat_type)-1);
-        else if (rz_has(raw,"HSPA")) strncpy(m->rat_type,"HSPA+", sizeof(m->rat_type)-1);
-        else if (rz_has(raw,"UMTS")) strncpy(m->rat_type,"UMTS",  sizeof(m->rat_type)-1);
-        else if (rz_has(raw,"EDGE")) strncpy(m->rat_type,"EDGE",  sizeof(m->rat_type)-1);
-        if      (rz_has(raw,"DATA_ACTIVITY_INOUT")) strncpy(m->data_activity,"INOUT",sizeof(m->data_activity)-1);
-        else if (rz_has(raw,"DATA_ACTIVITY_IN"))    strncpy(m->data_activity,"IN",   sizeof(m->data_activity)-1);
-        else if (rz_has(raw,"DATA_ACTIVITY_OUT"))   strncpy(m->data_activity,"OUT",  sizeof(m->data_activity)-1);
-        else                                         strncpy(m->data_activity,"NONE", sizeof(m->data_activity)-1);
-        m->backend    = g_backend;
-        m->confidence = RZ_CONF_INFERRED;
-        free(raw);
-    }
+    FILE *f = fopen("/data/data/com.termux/files/home/MiuiserPeruser/pipes/state/rahzerd_mobile", "r");
+    if (!f) return;
+    char raw[8192] = {0};
+    fread(raw, 1, sizeof(raw)-1, f);
+    fclose(f);
 
-    char *ph = ds("phone");
-    if (ph) {
-        char tmp[64];
-        if (rz_extract_field(ph,"dbm",tmp,sizeof(tmp)))
-            m->signal_dbm = atoi(tmp);
-        free(ph);
-    }
+    /* SIM state from last line */
+    m->sim_present = rz_has(raw, "LOADED") ? 1 : 0;
+    m->dual_sim    = rz_has(raw, "ABSENT,LOADED") || rz_has(raw, "LOADED,LOADED") ? 1 : 0;
 
-    if (m->data_active == -1) {
-        char *op = rz_sysfs("/sys/class/net/rmnet_data0/operstate");
-        if (op) {
-            m->data_active = rz_has(op,"up") ? 1 : 0;
-            m->sim_present = 1;
-            m->backend     = RZ_BACKEND_SYSFS;
-            m->confidence  = RZ_CONF_FALLBACK;
-            free(op);
+    /* Data active — look for IN_SERVICE on WWAN PS domain */
+    m->data_active = rz_has(raw, "domain=PS transportType=WWAN registrationState=HOME") ? 1 : 0;
+
+    /* RAT type */
+    if      (rz_has(raw, "getRilDataRadioTechnology=14")) strncpy(m->rat_type, "LTE",  sizeof(m->rat_type)-1);
+    else if (rz_has(raw, "getRilDataRadioTechnology=20")) strncpy(m->rat_type, "NR",   sizeof(m->rat_type)-1);
+    else if (rz_has(raw, "getRilDataRadioTechnology=11")) strncpy(m->rat_type, "HSPA+",sizeof(m->rat_type)-1);
+
+    /* Operator */
+    const char *op = strstr(raw, "mOperatorAlphaLongRaw=");
+    if (op) {
+        op += 22;
+        if (strncmp(op, "null", 4) != 0) {
+            int i = 0;
+            while (op[i] && op[i] != ',' && op[i] != '}' && op[i] != '\n' &&
+                   i < (int)sizeof(m->operator_name)-1)
+                m->operator_name[i] = op[i++];
         }
     }
+
+    /* Roaming */
+    m->roaming = rz_has(raw, "roamingType=ROAMING") ? 1 : 0;
+
+    m->backend    = RZ_BACKEND_RISH;
+    m->confidence = RZ_CONF_INFERRED;
 }
 
 /* ── Layer 3: DNS ──────────────────────────────────────────────── */
@@ -272,19 +322,19 @@ void rz_probe_dns(rz_dns_t *d) {
     strncpy(d->test_host, g_dns_host, sizeof(d->test_host)-1);
 
     char *v;
-    if ((v = rz_getprop("net.dns1"))) {
+    if ((v = rz_prebaked_get("net.dns1"))) {
         if (strlen(v)) strncpy(d->nameserver_primary,   v, sizeof(d->nameserver_primary)-1);
         free(v);
     }
-    if ((v = rz_getprop("net.dns2"))) {
+    if ((v = rz_prebaked_get("net.dns2"))) {
         if (strlen(v)) strncpy(d->nameserver_secondary, v, sizeof(d->nameserver_secondary)-1);
         free(v);
     }
-    if ((v = rz_getprop("persist.private_dns_mode"))) {
+    if ((v = rz_prebaked_get("persist.private_dns_mode"))) {
         d->private_dns_active = (strcmp(v,"opportunistic")==0||strcmp(v,"hostname")==0) ? 1 : 0;
         free(v);
     }
-    if ((v = rz_getprop("persist.dns.mode.hostname"))) {
+    if ((v = rz_prebaked_get("persist.dns.mode.hostname"))) {
         if (strlen(v)) strncpy(d->private_dns_host, v, sizeof(d->private_dns_host)-1);
         free(v);
     }
@@ -368,7 +418,7 @@ void rz_probe_sms(rz_sms_t *s) {
     s->confidence = RZ_CONF_ABSENT;
     strncpy(s->service_state, "UNKNOWN", sizeof(s->service_state)-1);
 
-    char *sim = rz_getprop("gsm.sim.state");
+    char *sim = rz_prebaked_get("gsm.sim.state");
     if (sim) {
         s->service_available = rz_has(sim,"READY") ? 1 : 0;
         s->sms_capable       = s->service_available;
@@ -455,10 +505,25 @@ static void probe_tcp_file(const char *path, rz_ports_t *p, int is_v6) {
 void rz_probe_ports(rz_ports_t *p) {
     memset(p, 0, sizeof(*p));
     p->confidence = RZ_CONF_ABSENT;
+
+    /* Read from pre-baked PORTS section — two lines: tcp4_count tcp6_count */
+    char *ports_raw = ds("PORTS");
+    if (ports_raw) {
+        int tcp4 = 0, tcp6 = 0;
+        char *nl = strchr(ports_raw, '\n');
+        tcp4 = atoi(ports_raw);
+        if (nl) tcp6 = atoi(nl + 1);
+        p->established_tcp4 = tcp4 > 1 ? tcp4 - 1 : 0;
+        p->established_tcp6 = tcp6 > 1 ? tcp6 - 1 : 0;
+        p->listen_count     = p->established_tcp4 + p->established_tcp6;
+        p->confidence = RZ_CONF_MEASURED;
+        free(ports_raw);
+    }
+
+    /* Also try direct read */
     probe_tcp_file("/proc/net/tcp",  p, 0);
     probe_tcp_file("/proc/net/tcp6", p, 1);
-    p->backend    = RZ_BACKEND_SYSFS;
-    p->confidence = RZ_CONF_MEASURED;
+    p->backend = RZ_BACKEND_SYSFS;
 }
 
 /* ── Layer 8: Ethernet ─────────────────────────────────────────── */
@@ -469,13 +534,13 @@ void rz_probe_ethernet(rz_ethernet_t *e) {
     e->confidence = RZ_CONF_ABSENT;
     if (!sysfs_exists("/sys/class/net/eth0")) { e->present = 0; return; }
     e->present = 1;
-    char *op = rz_sysfs("/sys/class/net/eth0/operstate");
+    char *op = rz_prebaked_get("/sys/class/net/eth0/operstate");
     if (op) { e->connected = rz_has(op,"up") ? 1 : 0; free(op); }
     char *v;
-    if ((v = rz_sysfs("/sys/class/net/eth0/address")))             { strncpy(e->mac, v, sizeof(e->mac)-1); free(v); }
-    if ((v = rz_sysfs("/sys/class/net/eth0/statistics/tx_bytes"))) { e->tx_bytes   = atol(v); free(v); }
-    if ((v = rz_sysfs("/sys/class/net/eth0/statistics/rx_bytes"))) { e->rx_bytes   = atol(v); free(v); }
-    if ((v = rz_sysfs("/sys/class/net/eth0/speed")))               { e->speed_mbps = atoi(v); free(v); }
+    if ((v = rz_prebaked_get("/sys/class/net/eth0/address")))             { strncpy(e->mac, v, sizeof(e->mac)-1); free(v); }
+    if ((v = rz_prebaked_get("/sys/class/net/eth0/statistics/tx_bytes"))) { e->tx_bytes   = atol(v); free(v); }
+    if ((v = rz_prebaked_get("/sys/class/net/eth0/statistics/rx_bytes"))) { e->rx_bytes   = atol(v); free(v); }
+    if ((v = rz_prebaked_get("/sys/class/net/eth0/speed")))               { e->speed_mbps = atoi(v); free(v); }
     e->backend    = RZ_BACKEND_SYSFS;
     e->confidence = RZ_CONF_MEASURED;
 }
@@ -507,7 +572,7 @@ void rz_probe_fm(rz_fm_t *f) {
     f->supported = f->enabled = -1;
     f->confidence = RZ_CONF_ABSENT;
     strncpy(f->state, "UNKNOWN", sizeof(f->state)-1);
-    char *v = rz_getprop("ro.fm.type");
+    char *v = rz_prebaked_get("ro.fm.type");
     if (v) { f->supported = (strlen(v)>0 && strcmp(v,"0")!=0) ? 1 : 0; free(v); }
     else     f->supported = 0;
     char *raw = ds("radio.fm");
@@ -546,7 +611,7 @@ void rz_probe_usb(rz_usb_t *u) {
         free(raw);
     }
     if (u->connected == -1) {
-        char *st = rz_sysfs("/sys/class/android_usb/android0/state");
+        char *st = rz_prebaked_get("/sys/class/android_usb/android0/state");
         if (st) {
             u->connected  = rz_has(st,"CONFIGURED") ? 1 : 0;
             u->backend    = RZ_BACKEND_SYSFS;
@@ -601,7 +666,7 @@ void rz_probe_bluetooth(rz_bluetooth_t *b) {
         free(raw);
     }
     if (b->enabled == -1) {
-        char *st = rz_sysfs("/sys/class/bluetooth/hci0/type");
+        char *st = rz_prebaked_get("/sys/class/bluetooth/hci0/type");
         if (st) { b->enabled = 1; b->backend = RZ_BACKEND_SYSFS; b->confidence = RZ_CONF_FALLBACK; free(st); }
         else      b->enabled = 0;
     }
@@ -630,6 +695,8 @@ void rz_probe_nfc(rz_nfc_t *n) {
 
 /* ── Layer 15: Xiaomi Interference ────────────────────────────── */
 
+
+
 void rz_probe_xiaomi(rz_xiaomi_t *x) {
     memset(x, 0, sizeof(*x));
     x->jx_policy_active = x->aml_conn_active = x->miui_wifi_active = -1;
@@ -647,13 +714,13 @@ void rz_probe_xiaomi(rz_xiaomi_t *x) {
         free(svc);
     }
     char *v;
-    if ((v = rz_getprop("persist.sys.powerkeeper")))      { x->powerkeeper_throttling = strcmp(v,"1")==0 ? 1:0; free(v); }
-    if ((v = rz_getprop("persist.sys.miui.turbosched")))  { x->turbosched_active      = strcmp(v,"1")==0 ? 1:0; free(v); }
-    if ((v = rz_getprop("persist.sys.perfshielder")))     { x->perfshielder_active    = strcmp(v,"1")==0 ? 1:0; free(v); }
-    if ((v = rz_getprop("miui.whetstone.power")))         { x->whetstone_power_active = strlen(v)>0      ? 1:0; free(v); }
-    if ((v = rz_getprop("persist.sys.smartpower")))       { x->smartpower_active      = strcmp(v,"1")==0 ? 1:0; free(v); }
+    if ((v = rz_prebaked_get("persist.sys.powerkeeper")))      { x->powerkeeper_throttling = strcmp(v,"1")==0 ? 1:0; free(v); }
+    if ((v = rz_prebaked_get("persist.sys.miui.turbosched")))  { x->turbosched_active      = strcmp(v,"1")==0 ? 1:0; free(v); }
+    if ((v = rz_prebaked_get("persist.sys.perfshielder")))     { x->perfshielder_active    = strcmp(v,"1")==0 ? 1:0; free(v); }
+    if ((v = rz_prebaked_get("miui.whetstone.power")))         { x->whetstone_power_active = strlen(v)>0      ? 1:0; free(v); }
+    if ((v = rz_prebaked_get("persist.sys.smartpower")))       { x->smartpower_active      = strcmp(v,"1")==0 ? 1:0; free(v); }
 
-    char *route = rz_sysfs("/proc/net/route");
+    char *route = rz_prebaked_get("/proc/net/route");
     if (route) {
         x->kernel_reports_connected = rz_has(route,"00000000") ? 1 : 0;
         char tmp[32];
@@ -661,7 +728,7 @@ void rz_probe_xiaomi(rz_xiaomi_t *x) {
             strncpy(x->active_interface, tmp, sizeof(x->active_interface)-1);
         free(route);
     }
-    char *conn = rz_getprop("net.connectivity.status");
+    char *conn = rz_prebaked_get("net.connectivity.status");
     x->aosp_reports_connected   = (conn && strcmp(conn,"1")==0) ? 1 : 0;
     if (conn) free(conn);
     x->xiaomi_reports_connected = (x->miui_wifi_active==1||x->aml_conn_active==1) ? 1 : 0;
@@ -894,6 +961,32 @@ static void rz_establish_baseline(const rz_snapshot_t *snap) {
             g_baseline_bssid, g_baseline_dns_ms);
 }
 
+/* Non-blocking exec with FD isolation — replaces system() */
+static void rz_exec_dump(void) {
+    pid_t pid = fork();
+    if (pid < 0) return;
+    if (pid == 0) {
+        /* Child: close all inherited FDs > 2 */
+        for (int fd = 3; fd < 256; fd++) close(fd);
+        alarm(12);
+        execl("/data/data/com.termux/files/usr/bin/bash", "bash", "-c",
+              "/data/data/com.termux/files/home/MiuiserPeruser/scripts/dump_rahzerd.sh",
+              NULL);
+        _exit(127);
+    }
+    /* Parent: wait with timeout */
+    int status;
+    time_t start = time(NULL);
+    while (time(NULL) - start < 13) {
+        pid_t r = waitpid(pid, &status, WNOHANG);
+        if (r == pid || r < 0) return;
+        usleep(100000);
+    }
+    kill(pid, SIGKILL);
+    waitpid(pid, NULL, 0);
+}
+
+
 int main(void) {
     const char *env;
     if ((env = getenv("RAHZERD_POLL_SEC"))) {
@@ -927,17 +1020,22 @@ int main(void) {
     state.first_poll = 1;
 
     while (g_rahzerd_running) {
+        /* Pre-bake all probe data in one rish session */
+        rz_exec_dump();
+        rz_load_probe_data();
         rz_state_update(&state);
+        rz_establish_baseline(&state.curr);
+        rz_write_json(&state.curr);
         if (!state.first_poll)
             rz_emit_netstate(&state.curr);
         rzlog("INFO",
-              "poll#%d wifi=%d mobile=%d dns=%d(%dms) bt=%d ports=%d div=%d dur=%dms",
+              "poll#%d wifi=%s mobile=%s dns=%s(%dms) bt=%s ports=%d div=%d dur=%dms",
               state.curr.poll_cycle,
-              state.curr.wifi.connected,
-              state.curr.mobile.data_active,
-              state.curr.dns.resolves,
+              state.curr.wifi.connected == 1 ? "connected" : "disconnected",
+              state.curr.mobile.data_active == 1 ? "active" : "inactive",
+              state.curr.dns.resolves == 1 ? "ok" : "fail",
               state.curr.dns.latency_ms,
-              state.curr.bluetooth.enabled,
+              state.curr.bluetooth.enabled == 1 ? "on" : "off",
               state.curr.ports.listen_count,
               state.curr.xiaomi.divergence_detected,
               state.curr.poll_duration_ms);

@@ -1,4 +1,5 @@
 #include "compat/sensei_compat.h"
+#include "mitre_map.h"
 #include "leo_detection.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -60,6 +61,8 @@ static void create_schema(void) {
         "description TEXT,"
         "priority TEXT,"
         "confidence INTEGER,"
+        "mitre_id TEXT DEFAULT '',"
+        "mitre_tactic TEXT DEFAULT '',"
         "is_baseline INTEGER DEFAULT 0"
         ");"
     );
@@ -115,17 +118,25 @@ void leo_write_detection(const char *turtle, const char *type,
                          const char *description, const char *priority,
                          int confidence) {
     if (!db) return;
+
+    /* ATT&CK Mobile enrichment */
+    const mitre_entry_t *m = mitre_lookup(type);
+    const char *mitre_id     = m ? m->technique_id   : "";
+    const char *mitre_tactic = m ? m->tactic         : "";
+
     const char *sql =
-        "INSERT INTO detections (scan_id, turtle, type, description, priority, confidence) "
-        "VALUES (?, ?, ?, ?, ?, ?);";
+        "INSERT INTO detections (scan_id, turtle, type, description, priority, confidence, mitre_id, mitre_tactic) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
     sqlite3_stmt *stmt;
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
         sqlite3_bind_int (stmt, 1, current_scan_id);
-        sqlite3_bind_text(stmt, 2, turtle,      -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 3, type,        -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 4, description, -1, SQLITE_STATIC);
-        sqlite3_bind_text(stmt, 5, priority,    -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 2, turtle,       -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 3, type,         -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 4, description,  -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 5, priority,     -1, SQLITE_STATIC);
         sqlite3_bind_int (stmt, 6, confidence);
+        sqlite3_bind_text(stmt, 7, mitre_id,     -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 8, mitre_tactic, -1, SQLITE_STATIC);
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
     }
@@ -352,6 +363,19 @@ SENSEI_STATUS leo_init(void) {
         return SENSEI_STATUS_ERROR;
     }
     create_schema();
+
+    /* Restore cycle count from persisted scan history */
+    {
+        sqlite3_stmt *stmt;
+        const char *sql = "SELECT COUNT(*) FROM scan_history;";
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+            if (sqlite3_step(stmt) == SQLITE_ROW)
+                cycle = sqlite3_column_int(stmt, 0);
+            sqlite3_finalize(stmt);
+        }
+        if (cycle >= 12) cycle = 12; /* cap — baseline already established */
+    }
+
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     printf("%s Turtles Behaviour Anomaly Scanner initialized — deep rolling live feed with learning active\n", LOG_PREFIX);

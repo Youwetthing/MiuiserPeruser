@@ -1,0 +1,11 @@
+{
+  "daemon": "metalheadd",
+  "timestamp": "2026-06-25T12:17:08",
+  "scan_number": 1,
+  "signals_fired": 3,
+  "sensor_score": 70,
+  "grade": "ACTIVE",
+  "total_sensors": 25,
+  "sensitive_active": 4,
+  "flood_sensors": 0
+}

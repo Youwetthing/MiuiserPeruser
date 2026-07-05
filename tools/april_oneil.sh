@@ -139,6 +139,53 @@ parse_shredderd() {
     [ "$drift" = "true" ] && add_finding "URGENT" "shredderd"         "CONFIRMED KERNEL MODULE DRIFT"         "Module count changed since baseline — possible rootkit insertion."         "kernel_sanders.sh" "Module audit (option 4)"
 }
 
+parse_rahzerd() {
+    local f="$RESULTS/rahzerd.json"; [ ! -f "$f" ] && return
+    local wifi mobile dns tcp4 tcp6 rat roaming div
+
+    wifi=$(jq -r '.wifi.connected // -1' "$f" 2>/dev/null)
+    mobile=$(jq -r '.mobile.data_active // -1' "$f" 2>/dev/null)
+    dns=$(jq -r '.dns.resolves // -1' "$f" 2>/dev/null)
+    tcp4=$(jq -r '.ports.established_tcp4 // 0' "$f" 2>/dev/null)
+    tcp6=$(jq -r '.ports.established_tcp6 // 0' "$f" 2>/dev/null)
+    rat=$(jq -r '.mobile.rat // "UNKNOWN"' "$f" 2>/dev/null)
+    roaming=$(jq -r '.mobile.roaming // 0' "$f" 2>/dev/null)
+    div=$(jq -r '.xiaomi_divergence // 0' "$f" 2>/dev/null)
+
+    [ "$dns" = "0" ] && add_finding "URGENT" "rahzerd"         "DNS RESOLUTION FAILURE"         "Device cannot resolve DNS — possible network hijack or captive portal."         "april_oneil.sh" "Refresh Channel 6"
+
+    [ "$roaming" = "1" ] && add_finding "WARNING" "rahzerd"         "DEVICE ROAMING — ${rat}"         "Mobile data active on roaming network. Higher interception risk."         "april_oneil.sh" "Check connectivity"
+
+    [ "${tcp4:-0}" -gt 50 ] && add_finding "WARNING" "rahzerd"         "HIGH CONNECTION COUNT — ${tcp4} TCP4 + ${tcp6} TCP6"         "Unusually high number of active connections. Possible data exfiltration."         "april_oneil.sh" "Check ports"
+
+    [ "$div" = "1" ] && add_finding "URGENT" "rahzerd"         "XIAOMI CONNECTIVITY DIVERGENCE DETECTED"         "Xiaomi network behaviour deviated from baseline — possible telemetry spike."         "april_oneil.sh" "Refresh Channel 6"
+}
+
+parse_overlordd() {
+    local f="$RESULTS/overlordd.json"; [ ! -f "$f" ] && return
+    local threat patterns
+
+    threat=$(jq -r '.threat_level // "NOMINAL"' "$f" 2>/dev/null)
+    patterns=$(jq -r '.pattern_count // 0' "$f" 2>/dev/null)
+
+    [ "$threat" = "CRITICAL" ] && add_finding "URGENT" "overlordd"         "THREAT LEVEL CRITICAL — ${patterns} CORRELATED PATTERNS"         "$(jq -r '.patterns[0].detail // ""' "$f" 2>/dev/null | cut -c1-100)"         "april_oneil.sh" "Full briefing"
+
+    [ "$threat" = "HIGH" ] || [ "$threat" = "ELEVATED" ] && add_finding "WARNING" "overlordd"         "THREAT LEVEL ${threat} — ${patterns} CORRELATED PATTERNS"         "$(jq -r '.patterns[0].detail // ""' "$f" 2>/dev/null | cut -c1-100)"         "april_oneil.sh" "Full briefing"
+
+    # Individual pattern findings
+    jq -c '.patterns[]' "$f" 2>/dev/null | while IFS= read -r p; do
+        local name sev detail mitre conf
+        name=$(echo "$p" | jq -r '.name')
+        sev=$(echo "$p" | jq -r '.severity')
+        detail=$(echo "$p" | jq -r '.detail' | cut -c1-120)
+        mitre=$(echo "$p" | jq -r '.mitre')
+        conf=$(echo "$p" | jq -r '.confidence')
+
+        [ "$sev" = "CRITICAL" ] && add_finding "URGENT" "overlordd"             "${name} [${mitre}] conf=${conf}"             "$detail" "april_oneil.sh" "Investigate"
+        [ "$sev" = "WARNING" ] && add_finding "WARNING" "overlordd"             "${name} [${mitre}] conf=${conf}"             "$detail" "april_oneil.sh" "Investigate"
+    done
+}
+
 parse_granitord() {
     local f="$RESULTS/granitord.json"; [ ! -f "$f" ] && return
     local score grade selinux vboot root drift_detected
@@ -171,6 +218,33 @@ parse_ratkingd() {
     [ "$mem_low" = "true" ] && add_finding "URGENT" "ratkingd"         "MEMORY PRESSURE — ${pressure}MB AVAILABLE"         "Device memory critically low. Performance and stability at risk."         "ram_slammer_v2.sh" "Memory summary (option 3)"
 
     [ "${orphans:-0}" -gt 3 ] && add_finding "WARNING" "ratkingd"         "${orphans} ORPHAN PROCESSES DETECTED"         "Processes with no parent — possible injection or crash remnants."         "ram_slammer_v2.sh" "Process investigation (option 2)"
+}
+
+parse_tigerclawd() {
+    local f="$RESULTS/tigerclawd.json"; [ ! -f "$f" ] && return
+    local score drift suspicious selinux codename ver
+
+    score=$(jq -r '.trust_score // 100' "$f" 2>/dev/null)
+    drift=$(jq -r '.binder.drift // 0' "$f" 2>/dev/null)
+    suspicious=$(jq -r '.binder.suspicious_services // 0' "$f" 2>/dev/null)
+    selinux=$(jq -r '.integrity.selinux_enforcing // true' "$f" 2>/dev/null)
+    codename=$(jq -r '.device.codename // "unknown"' "$f" 2>/dev/null)
+    ver=$(jq -r '.device.hyperos_version // "unknown"' "$f" 2>/dev/null)
+
+    [ "$selinux" = "false" ] && add_finding "URGENT" "tigerclawd" \
+        "SELINUX PERMISSIVE ON ${codename}" \
+        "SELinux enforcement disabled — root or tamper likely." \
+        "StalkerSlayer.sh" "Check root indicators"
+
+    [ "${suspicious:-0}" -gt 0 ] && add_finding "URGENT" "tigerclawd" \
+        "${suspicious} SUSPICIOUS BINDER SERVICE(S)" \
+        "Frida/Xposed/injection artifacts in binder registry." \
+        "StalkerSlayer.sh" "Full telemetry sweep"
+
+    [ "${score:-100}" -lt 70 ] && add_finding "WARNING" "tigerclawd" \
+        "DEVICE TRUST SCORE ${score}/100 — ${codename} ${ver}" \
+        "HyperOS integrity checks degraded." \
+        "april_oneil.sh" "Refresh Channel 6"
 }
 
 parse_leatherheadd() {
@@ -218,9 +292,9 @@ parse_bebopd() {
 parse_fugitoidd() {
     local f="$RESULTS/fugitoidd.json"; [ ! -f "$f" ] && return
     local crashes anrs ooms
-    crashes=$(jq -r '.crash_count // 0' "$f" 2>/dev/null)
-    anrs=$(jq -r '.anr_count // 0' "$f" 2>/dev/null)
-    ooms=$(jq -r '.oom_count // 0' "$f" 2>/dev/null)
+    crashes=$(jq -r '.crashes // .crash_count // 0' "$f" 2>/dev/null)
+    anrs=$(jq -r '.anrs // .anr_count // 0' "$f" 2>/dev/null)
+    ooms=$(jq -r '.oom_events // .oom_count // 0' "$f" 2>/dev/null)
 
     [ "${ooms:-0}" -gt 0 ] && add_finding "URGENT" "fugitoidd" \
         "${ooms} OUT-OF-MEMORY KILL EVENTS" \
@@ -327,7 +401,10 @@ render_findings() {
 render_status() {
     block_head "$BGBLUE" "$WHITE" "BUREAU STATUS — DAEMON HEALTH"
     echo ""
-    local daemons="gaveld burned granitord leatherheadd rocksteadyd bebopd rahzerd ratkingd metalheadd shredderd fugitoidd krangd turtlecomd splinterd"
+    local infra="gaveld splinterd krangd turtlecomd"
+    local monitors="nulld"
+    local daemons="burned granitord leatherheadd metalheadd rahzerd ratkingd rocksteadyd shredderd tigerclawd bebopd fugitoidd overlordd"
+    printf "\n  ${BOLD}${CYN}SYNDICATE FLEET${RST}\n"
     for d in $daemons; do
         local result="$RESULTS/${d}.json"
         local running ts
@@ -338,6 +415,35 @@ render_status() {
         else
             printf " %b${INK}%-16s${RESET} ${GREY}no results yet${RESET}\n" "$running" "$d"
         fi
+    done
+    echo ""
+    printf "  ${BOLD}${CYN}BACKGROUND MONITORS${RST}\n"
+    for d in $monitors; do
+        local pid_file="$BASE/pipes/pids/${d}.pid"
+        local status="stopped"
+        local extra=""
+        if [ -f "$pid_file" ]; then
+            local pid=$(cat "$pid_file" 2>/dev/null)
+            kill -0 "$pid" 2>/dev/null && status="running" || status="stopped"
+        fi
+        local f="$RESULTS/${d}.json"
+        if [ -f "$f" ]; then
+            local spikes=$(jq -r '.total_spike_events // 0' "$f" 2>/dev/null)
+            local screen=$(jq -r '.screen // "?"' "$f" 2>/dev/null)
+            extra="screen=${screen} spikes=${spikes}"
+        fi
+        printf " ${CYN}○ monitor ${WHT}%-12s${RST} ${DIM}%s %s${RST}\n" "$d" "$status" "$extra"
+    done
+    echo ""
+    printf "  ${BOLD}${CYN}INFRASTRUCTURE${RST}\n"
+    for d in $infra; do
+        local pid_file="$BASE/pipes/pids/${d}.pid"
+        local status="stopped"
+        if [ -f "$pid_file" ]; then
+            local pid=$(cat "$pid_file" 2>/dev/null)
+            kill -0 "$pid" 2>/dev/null && status="running (pid $pid)" || status="stopped"
+        fi
+        printf " ${CYN}○ infra  ${WHT}%-16s${RST} ${DIM}%s${RST}\n" "$d" "$status"
     done
     echo ""
 }
@@ -401,7 +507,7 @@ menu() {
 
 run_parsers() {
     FINDINGS=()
-    parse_burned; parse_metalheadd; parse_shredderd; parse_granitord; parse_ratkingd
+    parse_burned; parse_metalheadd; parse_shredderd; parse_granitord; parse_ratkingd; parse_rahzerd; parse_tigerclawd; parse_overlordd
     parse_leatherheadd; parse_rocksteadyd; parse_bebopd; parse_fugitoidd
 }
 

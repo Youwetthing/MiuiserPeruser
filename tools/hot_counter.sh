@@ -121,10 +121,10 @@ show_last_scan() {
         col=$(heat_color "${hal:-$cached}")
         flag=""
         abs_delta=${delta#-}
-        [ "${abs_delta%.*}" -ge 5 ] 2>/dev/null && flag="  ${R0}⚠ MISMATCH${RESET}"
+        [ "${abs_delta%.*}" -ge 5 ] 2>/dev/null && flag="  \033[38;5;196m⚠ MISMATCH\033[0m"
 
-        printf "  ${WHITE}%-14s${RESET}  ${col}%8s${RESET}  ${col}%8s${RESET}  %+8s%s\n" \
-               "$name" "$cached" "$hal" "$delta" "$flag"
+        printf "  ${WHITE}%-14s${RESET}  ${col}%8s${RESET}  ${col}%8s${RESET}  %+8s${flag}\n" \
+               "$name" "$cached" "$hal" "$delta"
     done
     echo ""
 }

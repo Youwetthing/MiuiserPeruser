@@ -1,17 +1,17 @@
 {
   "daemon": "granitord",
   "version": "2.0",
-  "timestamp": "17:50:38",
+  "timestamp": "12:16:36",
   "poll_interval_sec": 30,
 
   "posture": {
-    "score": 83,
-    "grade": "CAUTION",
+    "score": 93,
+    "grade": "SECURE",
     "selinux": "Enforcing",
     "verified_boot_state": "green",
-    "verified_boot_mode": "unknown",
+    "verified_boot_mode": "enforcing",
     "ro_secure": "1",
-    "ro_debuggable": "(unset)",
+    "ro_debuggable": "0",
     "encryption": "encrypted",
     "root_present": false,
     "su_found": false,
@@ -35,11 +35,9 @@
 
   "hardware_attestation": [{"type":"tee_present","path":"/dev/teei_client"}],
 
-  "filesystem_integrity": [],
+  "filesystem_integrity": [{"type":"verity_disabled","mounts":"/dev/block/dm-20 /mnt/vendor/mi_ext erofs ro,seclabel,relatime,user_xattr,acl,cache_strategy=readaro"}],
 
   "persistence_audit": [],
 
-  "mimd_cgroup": [{"type":"mimd_cage","caged":true,"cgroup":"4:memory:/mimd/critical2"}],
-
-  "threat_indicators": [{"type":"correlated","confidence":80,"score":83,"description":"Hardware attestation failure without root = possible hardware attack","degradation_confirmed":false}]
+  "threat_indicators": [{"type":"correlated","confidence":80,"score":93,"description":"Hardware attestation failure without root = possible hardware attack","degradation_confirmed":false}]
 }

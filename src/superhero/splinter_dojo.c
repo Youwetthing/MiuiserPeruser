@@ -1,6 +1,7 @@
 #include "splinter_dojo.h"
 #include "backend_common.h"
 #include "leo_detection.h"
+extern void leo_write_detection(const char *turtle, const char *type, const char *description, const char *priority, int confidence);
 #include "../core/include/april_event.h"
 #include "../core/include/sensei_types.h"
 #include <stdio.h>
@@ -80,6 +81,8 @@ static void print_findings(const char *turtle, SENSEI_DETECTION_LIST *r) {
                 turtle, pri, d->detection_type, d->description);
             g_findings_count++;
         }
+        /* Persist to superhero.db with MITRE tags */
+        leo_write_detection(turtle, d->detection_type, d->description, pri, d->confidence);
         d = d->next;
     }
 }
@@ -156,21 +159,24 @@ SENSEI_STATUS splinter_run_scan_cycle(uint32_t interval_ms) {
 
         /* Verbose per-PID scan */
         printf("\n[RAPH/DON] Per-process deep scan...\n");
-        char *pids = rish_cmd("ls /proc 2>/dev/null | grep -E '^[0-9]+$'");
+        /* Dump all PIDs via script — avoids rish quoting/truncation */
+        system("/data/data/com.termux/files/home/MiuiserPeruser/scripts/dump_pids.sh");
+        FILE *pid_fp = fopen("/data/data/com.termux/files/home/MiuiserPeruser/pipes/state/pid_names", "r");
+        char pid_buf[65536] = {0};
+        if (pid_fp) { fread(pid_buf, 1, sizeof(pid_buf)-1, pid_fp); fclose(pid_fp); }
+        char *pid_names = pid_buf;
+        char *pids = pid_names;
         if (pids) {
             char *tok = strtok(pids, "\n");
             while (tok) {
+                char *colon = strchr(tok, ':');
+                if (!colon) { tok = strtok(NULL, "\n"); continue; }
+                *colon = 0;
                 uint32_t pid = (uint32_t)atoi(tok);
+                char name[32] = "?";
+                strncpy(name, colon+1, sizeof(name)-1);
+                name[strcspn(name, "\n\r")] = 0;
                 if (pid > 1) {
-                    char cmd[128];
-                    snprintf(cmd, sizeof(cmd), "cat /proc/%u/comm 2>/dev/null", pid);
-                    char *comm = rish_cmd(cmd);
-                    char name[32] = "?";
-                    if (comm && strlen(comm) > 0) {
-                        strncpy(name, comm, sizeof(name)-1);
-                        name[strcspn(name, "\n")] = 0;
-                    }
-                    free(comm);
                     printf("  \u2192 [%5u] %-20s ", pid, name);
                     fflush(stdout);
 
@@ -187,7 +193,6 @@ SENSEI_STATUS splinter_run_scan_cycle(uint32_t interval_ms) {
                 }
                 tok = strtok(NULL, "\n");
             }
-            free(pids);
         }
     }
 
