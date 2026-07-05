@@ -52,20 +52,14 @@ static int confirmed_degradation = 0;
 
 /* ── rish read with dedicated buffer ─────────────────────────────────────────── */
 static char *rish_read(const char *cmd, char *buf, size_t bufsize) {
-    char full[1024];
-    snprintf(full, sizeof(full),
-        "RISH_APPLICATION_ID=com.termux "
-        "/data/data/com.termux/files/home/Rish/rish -c '%s' 2>/dev/null", cmd);
-    FILE *fp = popen(full, "r");
-    if (!fp) { buf[0] = 0; return buf; }
-    size_t pos = 0;
-    char line[512];
-    while (fgets(line, sizeof(line), fp) && pos < bufsize - 1) {
-        size_t l = strlen(line);
-        if (pos + l < bufsize - 1) { memcpy(buf + pos, line, l); pos += l; }
-    }
-    buf[pos] = 0;
-    pclose(fp);
+    char *result = bexec(cmd);
+    if (!result) { buf[0] = 0; return buf; }
+
+    strncpy(buf, result, bufsize - 1);
+    buf[bufsize - 1] = 0;
+    free(result);
+
+    size_t pos = strlen(buf);
     while (pos > 0 && (buf[pos-1] == '\n' || buf[pos-1] == '\r')) buf[--pos] = 0;
     return buf;
 }
@@ -312,7 +306,7 @@ static void check_mimd_cage(char *mimd_json, size_t mimd_size) {
     strncat(mimd_json, entry, mimd_size - 1);
 
     /* Check for frozen/unfrozen cgroups under root — visible even without write access */
-    char *frozen = rish_read("ls /sys/fs/cgroup/*frozen* /sys/fs/cgroup/*unfrozen* 2>/dev/null", buf, sizeof(buf));
+    char *frozen = rish_read("ls -d /sys/fs/cgroup/*frozen* /sys/fs/cgroup/*unfrozen* 2>/dev/null", buf, sizeof(buf));
     if (frozen && strlen(frozen) > 0) {
         char entry2[512];
         snprintf(entry2, sizeof(entry2),
