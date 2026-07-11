@@ -26,13 +26,12 @@ set(SYNDICATE_SRC
     ../core/splinterd.c
 )
 
-add_library(syndicate ${SYNDICATE_SRC})
-
-target_include_directories(syndicate PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/daemon
-    ${CMAKE_SOURCE_DIR}/src/core/include
-    ${CMAKE_SOURCE_DIR}/src/gaveld
-    ${CMAKE_SOURCE_DIR}/src/core
-    ${CMAKE_SOURCE_DIR}/syndicate/daemon
-)
+# add_library(syndicate ...) removed 2026-07-10 — confirmed zero consumers via
+# `grep -rn "target_link_libraries.*syndicate" --include="CMakeLists.txt" .`
+# across the whole repo. It bundled a second copy of every daemon .c file
+# (granitord, bebopd, ratkingd, shredderd, splinterd, etc.) into a static
+# library nothing ever linked against — pure wasted compile time on every
+# full rebuild. Daemons build correctly as their own executables via
+# src/daemon/CMakeLists.txt; this was dead weight, not infrastructure.
+# SYNDICATE_SRC left defined above in case anyone wants to revive it
+# deliberately with a real consumer in mind.

@@ -1,7 +1,7 @@
 {
   "daemon": "shredderd",
   "version": "2.1",
-  "timestamp": "2026-06-25T12:16:53",
+  "timestamp": "2026-07-10T04:22:54",
   "poll_interval_sec": 30,
 
   "baseline": {
@@ -18,7 +18,7 @@
     "kernelsu": 0,
     "verified_boot_state": "",
     "verified_boot_mode": "",
-    "selinux": "Enforcing"
+    "selinux": "enforcing"
   },
 
   "drift": {

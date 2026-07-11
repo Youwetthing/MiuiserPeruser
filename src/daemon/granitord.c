@@ -241,7 +241,7 @@ static void check_filesystem_integrity(char *fs_json, size_t fs_size) {
     }
 
     /* Check if verity is disabled on any partition */
-    char *mounts = rish_read("cat /proc/mounts 2>/dev/null | grep -E 'system|vendor' | grep -v 'dm-verity'",
+    char *mounts = rish_read("cat /proc/mounts 2>/dev/null | grep -E 'system|vendor' | grep -v 'dm-verity' | tr '\n' ' '",
                               buf, sizeof(buf));
     if (mounts && strlen(mounts) > 0) {
         char entry[256];
@@ -256,7 +256,7 @@ static void audit_persistence(char *persist_json, size_t persist_size) {
 
     /* Check for unauthorized init.rc modifications */
     char buf[512];
-    char *init_rc = rish_read("find /system/etc/init /vendor/etc/init -name '*.rc' -newer /system/build.prop 2>/dev/null",
+    char *init_rc = rish_read("find /system/etc/init /vendor/etc/init -name '*.rc' -newer /system/build.prop 2>/dev/null | tr '\n' ' '",
                                buf, sizeof(buf));
     if (init_rc && strlen(init_rc) > 0) {
         char entry[256];
@@ -265,7 +265,7 @@ static void audit_persistence(char *persist_json, size_t persist_size) {
     }
 
     /* Check for post-fs-data hooks */
-    char *postfs = rish_read("ls /data/adb/post-fs-data.d/ 2>/dev/null", buf, sizeof(buf));
+    char *postfs = rish_read("ls /data/adb/post-fs-data.d/ 2>/dev/null | tr '\n' ' '", buf, sizeof(buf));
     if (postfs && strlen(postfs) > 0) {
         char entry[256];
         snprintf(entry, sizeof(entry), "{\"type\":\"postfs_hooks\",\"files\":\"%.100s\"},", postfs);
@@ -305,7 +305,11 @@ static void check_mimd_cage(char *mimd_json, size_t mimd_size) {
     strncat(mimd_json, entry, mimd_size - 1);
 
     /* Check for frozen/unfrozen cgroups under root — visible even without write access */
-    char *frozen = rish_read("ls -d /sys/fs/cgroup/*frozen* /sys/fs/cgroup/*unfrozen* 2>/dev/null", buf, sizeof(buf));
+    /* tr '\n' ' ' collapses multi-line ls output onto one line before it
+     * ever reaches the JSON snprintf below — a raw embedded newline here
+     * previously broke JSON parsers (jq, etc.) even though the naive
+     * strstr-based overlordd reader tolerated it silently. */
+    char *frozen = rish_read("ls -d /sys/fs/cgroup/*frozen* /sys/fs/cgroup/*unfrozen* 2>/dev/null | tr '\n' ' '", buf, sizeof(buf));
     if (frozen && strlen(frozen) > 0) {
         char entry2[512];
         snprintf(entry2, sizeof(entry2),
