@@ -21,6 +21,7 @@
 
 #include "ipc_globals.h"
 #include "gaveld_emit.h"
+#include "backend_exec.h"
 
 #define BASE         "/data/data/com.termux/files/home/MiuiserPeruser"
 #define RESULTS_FILE  BASE "/Registry/daemon_results/nulld.json"
@@ -51,6 +52,15 @@ static int            g_idle_secs   = 0;
 static int            g_spike_count = 0;
 static int            g_total_events = 0;
 
+/* ADB/adb_cli reachability tracking — without this, a dropped ADB
+ * connection (e.g. wireless debugging re-pairing, port change) produces
+ * silent zeros indistinguishable from legitimate "all quiet" idle data.
+ * check_adb_health() round-trips a known string through the same
+ * null_run() path every real command uses, so it reflects true reachability. */
+static int g_adb_healthy         = 1;
+static int g_consecutive_failures = 0;
+static time_t g_last_health_check = 0;
+
 /* Known Xiaomi/MIUI system UIDs that shouldn't transmit while idle */
 static const char *SUSPICIOUS_IDLE_PKGS[] = {
     "com.miui.analytics",
@@ -72,21 +82,51 @@ static void tlog(const char *lvl, const char *msg) {
 }
 
 static char *null_run(const char *cmd) {
-    char full[2048];
-    snprintf(full, sizeof(full),
-        "%s tcp 127.0.0.1:5555 shell \"%s\" 2>/dev/null", ADB, cmd);
-    FILE *fp = popen(full, "r");
-    if (!fp) return NULL;
-    char *buf = malloc(65536);
-    if (!buf) { pclose(fp); return NULL; }
-    size_t tot = 0, n; char tmp[1024];
-    while ((n = fread(tmp, 1, sizeof(tmp), fp)) > 0) {
-        if (tot+n >= 65535) break;
-        memcpy(buf+tot, tmp, n); tot += n;
+    /* Routed through the shared bexec() abstraction instead of a hardcoded
+     * adb_cli-only popen. bexec() already probes rish -> adb_cli -> adb ->
+     * direct with a disk-cached backend choice (backend_exec.c), so nulld
+     * now survives a dropped ADB pairing the same way every other daemon
+     * in the fleet does, instead of going fully dark the instant ADB drops
+     * even while Shizuku/rish is alive and reachable. */
+    char *out = bexec(cmd);
+    if (!out) return NULL;
+    if (strlen(out) == 0) { free(out); return NULL; }
+    return out;
+}
+
+/* ── Backend health check ─────────────────────────────────────── *
+ * Reflects whether ANY bexec backend (rish, adb_cli, adb) is currently
+ * reachable — not ADB specifically. bexec() may resolve via rish even
+ * when ADB is fully down, so this check (and the resulting sensor_health
+ * JSON field) intentionally covers the whole privileged-access path, not
+ * just one transport. */
+static int check_adb_health(void) {
+    char *out = null_run("echo adb_ok");
+    int healthy = (out && strstr(out, "adb_ok") != NULL);
+    if (out) free(out);
+
+    if (healthy) {
+        if (!g_adb_healthy) {
+            char msg[128];
+            snprintf(msg, sizeof(msg),
+                "Privileged backend restored after %d failed check(s)",
+                g_consecutive_failures);
+            tlog("INFO", msg);
+        }
+        g_consecutive_failures = 0;
+    } else {
+        g_consecutive_failures++;
+        char msg[128];
+        snprintf(msg, sizeof(msg),
+            "No privileged backend reachable — consecutive_failures=%d "
+            "(all readings this cycle are stale/zero, not real idle data)",
+            g_consecutive_failures);
+        tlog("WARN", msg);
     }
-    pclose(fp); buf[tot] = 0;
-    if (!tot) { free(buf); return NULL; }
-    return buf;
+
+    g_adb_healthy = healthy;
+    g_last_health_check = time(NULL);
+    return healthy;
 }
 
 /* ── Screen state ─────────────────────────────────────────────── */
@@ -205,7 +245,7 @@ static void write_json(screen_state_t screen, int tcp4, int tcp6,
     fprintf(f,
         "{\n"
         "  \"daemon\": \"nulld\",\n"
-        "  \"version\": \"1.0\",\n"
+        "  \"version\": \"1.1\",\n"
         "  \"timestamp\": \"%s\",\n"
         "  \"screen\": \"%s\",\n"
         "  \"idle_seconds\": %d,\n"
@@ -221,14 +261,20 @@ static void write_json(screen_state_t screen, int tcp4, int tcp6,
         "  },\n"
         "  \"idle_spike_detected\": %s,\n"
         "  \"total_spike_events\": %d,\n"
-        "  \"suspicious_transmitters\": \"%s\"\n"
+        "  \"suspicious_transmitters\": \"%s\",\n"
+        "  \"sensor_health\": {\n"
+        "    \"adb_reachable\": %s,\n"
+        "    \"consecutive_failures\": %d\n"
+        "  }\n"
         "}\n",
         ts, screen_str, idle_secs,
         tcp4, tcp6, rx, tx,
         idle_rx_delta, idle_tx_delta,
         spike ? "true" : "false",
         total_events,
-        suspicious ? suspicious : "");
+        suspicious ? suspicious : "",
+        g_adb_healthy ? "true" : "false",
+        g_consecutive_failures);
     fflush(f); fclose(f);
 }
 
@@ -244,6 +290,7 @@ int main(void) {
     long baseline_rx = 0, baseline_tx = 0;
 
     while (tc_running) {
+        check_adb_health();
         g_screen = get_screen_state();
 
         int tcp4 = 0, tcp6 = 0;
