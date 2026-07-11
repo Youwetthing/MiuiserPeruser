@@ -1,8 +1,8 @@
 {
   "daemon": "fugitoidd",
-  "timestamp": "2026-06-25T12:17:01",
+  "timestamp": "2026-07-10T04:25:15",
   "scan_number": 2,
-  "foreground_app": "com.termux",
+  "foreground_app": "unknown",
   "crashes": 0,
   "anrs": 0,
   "oom_events": 0

@@ -536,6 +536,36 @@ static void detect_memory_pressure_manip(void) {
         free(ratking); free(fugi); free(rocky); free(bebopd); return;
     }
 
+    int avail_mb  = json_get_int(ratking,  "avail_mb");
+    int mem_low   = json_get_bool(ratking, "memory_low");
+    int zombies   = json_get_int(ratking,  "zombies");
+    int ooms      = json_get_int(fugi,     "oom_events");
+    int crashes   = json_get_int(fugi,     "crashes");
+    int throttled = rocky  ? json_get_int(rocky, "throttled_cores") : -1;
+    double drain  = bebopd ? json_get_double(bebopd, "drain_mah_h") : -1.0;
+
+    /* Contradiction: system reports memory as healthy while OOM/crash
+     * evidence says otherwise — the same "reported vs actual" deception
+     * shape as THERMAL_OOM_MANIPULATION, applied to memory instead of heat. */
+    int reported_healthy = (mem_low == 0) && (avail_mb < 0 || avail_mb > 400);
+    int actual_pressure   = (ooms > 0 || crashes > 0 || zombies > 3);
+
+    if (reported_healthy && actual_pressure) {
+        char detail[512];
+        snprintf(detail, sizeof(detail),
+            "Reported healthy (avail=%dMB, memory_low=false) but %d OOMs + "
+            "%d crashes + %d zombies say otherwise — memory state may be "
+            "misreported or artificially masked",
+            avail_mb, ooms, crashes, zombies);
+        double conf = 0.55;
+        if (throttled > 4) conf += 0.1;
+        if (drain > 400.0) conf += 0.1;
+        if (ooms > 1)       conf += 0.1;
+        add_pattern("MEMORY_PRESSURE_MANIPULATION", "HIGH",
+                    detail, "T1414", conf);
+    }
+
+    free(ratking); free(fugi); free(rocky); free(bebopd);
 }
 
 
@@ -680,7 +710,7 @@ static void detect_privacy_decoy(void) {
     int sigs    = json_get_int(burned, "privacy_signal_count");
     int trust   = tiger   ? json_get_int(tiger,   "trust_score") : 100;
     int g_score = granite ? json_get_int(granite, "score")       : 100;
-    if (sigs > 10 && trust > 90 && g_score > 90) {
+    if (sigs >= 10 && trust > 90 && g_score > 90) {
         char detail[512];
         snprintf(detail, sizeof(detail),
             "%d signals but trust %d/100 + posture %d/100 high "
@@ -753,7 +783,7 @@ int main(void) {
     signal(SIGINT, handle_sig);
     signal(SIGTERM, handle_sig);
     tlog("INFO", "overlordd v1.0 — cross-fleet meta-correlation online");
-    tlog("INFO", "11 correlation patterns active (5 original + 6 Kimi)");
+    tlog("INFO", "17 correlation patterns active (5 original + 6 Kimi + 6 more)");
 
     FILE *pf = fopen(PID_FILE, "w");
     if (pf) { fprintf(pf, "%d\n", getpid()); fclose(pf); }

@@ -1,20 +1,20 @@
 {
   "daemon": "tigerclawd",
   "version": "1.1",
-  "timestamp": "2026-06-25T09:42:26",
+  "timestamp": "2026-07-10T04:23:59",
   "poll_interval_sec": 30,
   "device": {
     "codename": "dew",
-    "board": "dew",
+    "board": "unknown",
     "hardware": "mt6768",
     "hyperos_version": "V816",
     "security_patch": "2026-04-01",
     "bootloader_locked": true
   },
   "binder": {
-    "service_count": 473,
+    "service_count": 236,
     "baseline_count": 473,
-    "drift": 0,
+    "drift": -237,
     "suspicious_services": 0
   },
   "integrity": {
@@ -22,9 +22,9 @@
     "debug_props_clean": true,
     "security_center_running": false,
     "developer_options": false,
-    "adb_enabled": true,
+    "adb_enabled": false,
     "adb_over_network": false,
-    "prop_hash_drift": false
+    "prop_hash_drift": true
   },
   "trust_score": 85,
   "anomalies": [
@@ -32,7 +32,17 @@
       "type": "WARNING",
       "code": "SECURITY_CENTER_DOWN",
       "detail": "MIUI Security Center installed but not running"
+    },
+    {
+      "type": "WARNING",
+      "code": "BINDER_TOPOLOGY_DRIFT",
+      "detail": "Binder drift: -237 services (baseline 473, now 236)"
+    },
+    {
+      "type": "WARNING",
+      "code": "PROP_HASH_DRIFT",
+      "detail": "Read-only property set changed since baseline"
     }
   ],
-  "poll_duration_ms": 102860
+  "poll_duration_ms": 44693
 }

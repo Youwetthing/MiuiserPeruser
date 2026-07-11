@@ -75,12 +75,9 @@ static splinter_sub_t g_subscribers[] = {
         .enabled   = 1,
     },
     {
-    },
-    {
         .name      = "footclan",
         .sock_path = MP_PIPES_DIR "/footclan.sock",
         .interests = { "*", NULL },
-        .enabled   = 1,
         .enabled   = 1,
     },
     { NULL, NULL, { NULL }, 0 }
