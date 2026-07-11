@@ -9,6 +9,18 @@
  * Correlate with which UIDs are transmitting during idle.
  *
  * Named after the Null villain — invisible, corporate, always watching.
+ *
+ * v1.1 — 2026-07-11 fixes:
+ *   - Routed through the shared bexec() abstraction instead of a
+ *     hardcoded adb_cli-only popen (survives dropped ADB pairing via
+ *     rish failover, same as every other daemon in the fleet)
+ *   - Added sensor_health JSON field (adb_reachable, consecutive_failures)
+ *     so a dead privileged backend produces an explicit signal instead of
+ *     silent zeros indistinguishable from legitimate idle data
+ *   - Fixed: main() never set g_running = true, so the poll loop never
+ *     ran a single time regardless of backend state — found and fixed
+ *     2026-07-11 after this exact daemon repeatedly showed "no data" all
+ *     night for what turned out to be an unrelated reason
  */
 
 #include <stdio.h>
@@ -27,13 +39,9 @@
 #define RESULTS_FILE  BASE "/Registry/daemon_results/nulld.json"
 #define BASELINE_FILE BASE "/data/nulld_baseline.json"
 #define PID_FILE      BASE "/pipes/pids/nulld.pid"
-#define ADB           "/data/data/com.termux/files/home/.cargo/bin/adb_cli"
 #define POLL_SEC      10
 #define IDLE_SPIKE_THRESHOLD  5   /* TCP connection increase while idle */
 #define IDLE_BYTES_THRESHOLD  102400 /* 100KB transmitted while idle */
-
-static volatile int tc_running = 1;
-static void handle_sig(int s) { (void)s; tc_running = 0; }
 
 typedef enum { SCREEN_UNKNOWN, SCREEN_ON, SCREEN_OFF } screen_state_t;
 
@@ -278,18 +286,33 @@ static void write_json(screen_state_t screen, int tcp4, int tcp6,
     fflush(f); fclose(f);
 }
 
+/* g_running declared extern in ipc_globals.h, defined once in
+ * ipc_globals.c (defaults to false). Every daemon must set it true
+ * before its main loop — nulld's main() previously never did, so the
+ * while(g_running) loop below never ran a single iteration regardless
+ * of backend/ADB/rish state. Found and fixed 2026-07-11. */
+static void handle_sig(int sig) {
+    (void)sig;
+    g_running = false;
+}
+
 int main(void) {
     signal(SIGINT, handle_sig);
     signal(SIGTERM, handle_sig);
-    tlog("INFO", "nulld v1.0 — idle transmission monitor online");
+
+    bexec_init();
+
+    tlog("INFO", "nulld v1.1 -- idle transmission monitor online");
     tlog("INFO", "Watching what Xiaomi does while you sleep");
 
     FILE *pf = fopen(PID_FILE, "w");
     if (pf) { fprintf(pf, "%d\n", getpid()); fclose(pf); }
 
+    g_running = true;
+
     long baseline_rx = 0, baseline_tx = 0;
 
-    while (tc_running) {
+    while (g_running) {
         check_adb_health();
         g_screen = get_screen_state();
 
@@ -395,7 +418,7 @@ int main(void) {
                    suspicious, g_total_events);
 
         g_prev_screen = g_screen;
-        for (int i = 0; i < POLL_SEC && tc_running; i++) sleep(1);
+        for (int i = 0; i < POLL_SEC && g_running; i++) sleep(1);
     }
 
     tlog("INFO", "nulld shutdown");

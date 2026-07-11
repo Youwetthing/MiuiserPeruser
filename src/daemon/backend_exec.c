@@ -18,6 +18,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <poll.h>
+#include <time.h>
+#include <signal.h>
+#include <errno.h>
 
 /* ── Internal state ───────────────────────────────────────────────────────── */
 
@@ -27,7 +33,14 @@ static char            g_rish_path[256] = "";
 static int             g_rish_disabled  = 0;
 
 #define ADB_TRANSPORT  "/data/data/com.termux/files/home/.cargo/bin/adb_cli tcp 127.0.0.1:5555 shell"
-#define RISH_TIMEOUT   3
+#define RISH_TIMEOUT   8   /* was 3 — measured live 2026-07-11: a healthy,
+                              successful rish call took 2.6s just for a
+                              trivial echo (Shizuku IPC round-trip cost on
+                              this device). 3s left near-zero margin, so the
+                              probe intermittently failed on perfectly good
+                              rish sessions and silently fell back to
+                              adb/direct. 8s gives real headroom without
+                              hanging too long if rish is genuinely dead. */
 #define TIMEOUT_BIN    "/data/data/com.termux/files/usr/bin/timeout"
 
 /* ── Timeout availability ─────────────────────────────────────────────────── */
@@ -40,6 +53,169 @@ static int has_timeout_cmd(void)
     return cached;
 }
 
+/* ── run_via_pty ──────────────────────────────────────────────────────────── */
+
+#define PTY_POLL_MS 100
+
+static int run_via_pty(const char *cmd, char *out, size_t outsize, int timeout_sec)
+{
+    int master = posix_openpt(O_RDWR | O_NOCTTY);
+    if (master < 0) return -1;
+
+    if (grantpt(master) != 0 || unlockpt(master) != 0) {
+        close(master);
+        return -1;
+    }
+
+    char *slave_name = ptsname(master);
+    if (!slave_name) {
+        close(master);
+        return -1;
+    }
+
+    char slave_path[256];
+    snprintf(slave_path, sizeof(slave_path), "%s", slave_name);
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(master);
+        return -1;
+    }
+
+    if (pid == 0) {
+        setsid();
+
+        int slave = open(slave_path, O_RDWR);
+        if (slave < 0)
+            _exit(127);
+
+        dup2(slave, STDIN_FILENO);
+        dup2(slave, STDOUT_FILENO);
+        dup2(slave, STDERR_FILENO);
+
+        if (slave > STDERR_FILENO)
+            close(slave);
+
+        close(master);
+
+        execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+        _exit(127);
+    }
+
+    size_t total = 0;
+    out[0] = '\0';
+
+    time_t deadline = time(NULL) + timeout_sec;
+
+    int child_exited = 0;
+    int child_status = 0;
+
+    for (;;) {
+
+        int remaining_ms = (int)((deadline - time(NULL)) * 1000);
+
+        if (remaining_ms <= 0) {
+
+            kill(-pid, SIGKILL);
+
+            while (waitpid(pid, NULL, WNOHANG) == 0)
+                usleep(10000);
+
+            close(master);
+            out[total] = '\0';
+            return (int)total;
+        }
+
+        if (!child_exited) {
+
+            pid_t w = waitpid(pid, &child_status, WNOHANG);
+
+            if (w == pid)
+                child_exited = 1;
+            else if (w < 0 && errno != EINTR)
+                child_exited = 1;
+        }
+
+        if (child_exited) {
+
+            int flags = fcntl(master, F_GETFL, 0);
+            fcntl(master, F_SETFL, flags | O_NONBLOCK);
+
+            for (;;) {
+
+                char tmp[4096];
+
+                ssize_t n = read(master, tmp, sizeof(tmp));
+
+                if (n <= 0)
+                    break;
+
+                if (total + (size_t)n < outsize - 1) {
+                    memcpy(out + total, tmp, (size_t)n);
+                    total += (size_t)n;
+                }
+            }
+
+            close(master);
+            out[total] = '\0';
+            return (int)total;
+        }
+
+        struct pollfd pfd = {
+            .fd = master,
+            .events = POLLIN
+        };
+
+        int pr = poll(&pfd, 1,
+                      remaining_ms > PTY_POLL_MS ?
+                      PTY_POLL_MS :
+                      remaining_ms);
+
+        if (pr < 0) {
+            if (errno == EINTR)
+                continue;
+            break;
+        }
+
+        if (pr == 0)
+            continue;
+
+        if (pfd.revents & (POLLIN | POLLHUP | POLLERR)) {
+
+            char tmp[4096];
+
+            ssize_t n = read(master, tmp, sizeof(tmp));
+
+            if (n < 0) {
+
+                if (errno == EAGAIN || errno == EINTR)
+                    continue;
+
+                break;
+            }
+
+            if (n == 0)
+                continue;
+
+            if (total + (size_t)n < outsize - 1) {
+                memcpy(out + total, tmp, (size_t)n);
+                total += (size_t)n;
+            }
+        }
+    }
+
+    kill(-pid, SIGKILL);
+
+    while (waitpid(pid, NULL, WNOHANG) == 0)
+        usleep(10000);
+
+    close(master);
+
+    out[total] = '\0';
+
+    return (int)total;
+}
+
 /* ── try_run ──────────────────────────────────────────────────────────────── */
 
 /*
@@ -48,27 +224,11 @@ static int has_timeout_cmd(void)
  */
 static int try_run(const char *cmd, const char *expected_out)
 {
-    char wrapped[1024];
-
-    if (has_timeout_cmd()) {
-        snprintf(wrapped, sizeof(wrapped),
-                 TIMEOUT_BIN " %d sh -c '%s' 2>/dev/null",
-                 RISH_TIMEOUT, cmd);
-    } else {
-        snprintf(wrapped, sizeof(wrapped), "sh -c '%s' 2>/dev/null", cmd);
-    }
-
-    FILE *f = popen(wrapped, "r");
-    if (!f) return 0;
-
     char buf[128] = {0};
-    int matched = 0;
-    if (fgets(buf, sizeof(buf), f)) {
-        buf[strcspn(buf, "\r\n")] = '\0';
-        matched = (strcmp(buf, expected_out) == 0);
-    }
-    pclose(f);
-    return matched;
+    int n = run_via_pty(cmd, buf, sizeof(buf), RISH_TIMEOUT);
+    if (n <= 0) return 0;
+    buf[strcspn(buf, "\r\n")] = '\0';
+    return (strcmp(buf, expected_out) == 0);
 }
 
 /* ── rish probe ───────────────────────────────────────────────────────────── */
@@ -126,7 +286,23 @@ static int probe_rish(void)
                  "RISH_APPLICATION_ID=com.termux %s -c \"echo rish_ok\"",
                  path);
 
-        if (try_run(probe, "rish_ok")) {
+        /* Shizuku IPC on this device is intermittently slow — confirmed
+         * live 2026-07-11: identical probe commands succeeded in 2.6-3.1s
+         * on some attempts and failed outright on others, even with an
+         * 8s timeout. A single-shot probe treats normal jitter as "rish is
+         * dead" and silently falls back to adb/direct. Retry a few times
+         * before giving up. */
+        int rish_ok = 0;
+        for (int attempt = 1; attempt <= 2 && !rish_ok; attempt++) {
+            if (try_run(probe, "rish_ok")) {
+                rish_ok = 1;
+                break;
+            }
+            if (attempt < 2) usleep(1500000); /* 1.5s — give Shizuku's IPC
+                                                  room to release the prior
+                                                  connection before retry */
+        }
+        if (rish_ok) {
             snprintf(g_rish_path, sizeof(g_rish_path), "%s", path);
             return 1;
         }
@@ -167,19 +343,21 @@ void bexec_init(void)
 
     setenv("RISH_APPLICATION_ID", "com.termux", 1);
 
-    if (probe_adb_cli()) {
-        g_backend = BACKEND_ADB_CLI;
-        printf("[BEXEC] privileged shell backend: adb_cli  (" ADB_CLI_TRANSPORT ")\n");
-        return;
-    }
-
     if (probe_rish()) {
         g_backend = BACKEND_RISH;
         printf("[BEXEC] privileged shell backend: rish  (%s)\n", g_rish_path);
         return;
     }
 
-    printf("[BEXEC] rish probe failed — trying ADB\n");
+    printf("[BEXEC] rish probe failed — trying adb_cli\n");
+
+    if (probe_adb_cli()) {
+        g_backend = BACKEND_ADB_CLI;
+        printf("[BEXEC] privileged shell backend: adb_cli  (" ADB_CLI_TRANSPORT ")\n");
+        return;
+    }
+
+    printf("[BEXEC] adb_cli probe failed — trying ADB\n");
 
     if (probe_adb()) {
         g_backend = BACKEND_ADB;
@@ -225,7 +403,7 @@ static char *escape_for_rish(const char *cmd)
     if (!out) return NULL;
     size_t j = 0;
     for (size_t i = 0; i < len; i++) {
-        if (cmd[i] == '\'') {
+        if (cmd[i] == '\'\0') {
             out[j++] = '\'';
             out[j++] = '\\';
             out[j++] = '\'';
@@ -253,15 +431,13 @@ char *bexec_n(const char *cmd, size_t max_bytes)
     size_t fullsz;
 
     if (g_backend == BACKEND_RISH) {
-        char *escaped = escape_for_rish(cmd);
-        if (!escaped) { free(out); return NULL; }
-        fullsz = strlen(g_rish_path) + strlen(escaped) + 64;
-        full   = malloc(fullsz);
-        if (!full) { free(escaped); free(out); return NULL; }
-        snprintf(full, fullsz,
-                 "RISH_APPLICATION_ID=com.termux %s -c '%s' 2>/dev/null",
-                 g_rish_path, escaped);
-        free(escaped);
+        char rishcmd[1600];
+        snprintf(rishcmd, sizeof(rishcmd),
+                 "RISH_APPLICATION_ID=com.termux %s -c \"%s\"",
+                 g_rish_path, cmd);
+        int n = run_via_pty(rishcmd, out, cap, RISH_TIMEOUT);
+        if (n < 0) { out[0] = '\0'; }
+        return out;
 
     } else if (g_backend == BACKEND_ADB_CLI) {
         fullsz = strlen(ADB_CLI_TRANSPORT) + strlen(cmd) + 32;

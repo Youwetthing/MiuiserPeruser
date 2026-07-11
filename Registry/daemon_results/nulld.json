@@ -1,16 +1,16 @@
 {
   "daemon": "nulld",
   "version": "1.1",
-  "timestamp": "2026-07-11T13:43:59",
-  "screen": "unknown",
+  "timestamp": "2026-07-11T23:41:55",
+  "screen": "on",
   "idle_seconds": 0,
   "connections": {
-    "tcp4": -1,
-    "tcp6": -1
+    "tcp4": 4,
+    "tcp6": 19
   },
   "traffic": {
-    "rx_bytes": 0,
-    "tx_bytes": 0,
+    "rx_bytes": 52371268,
+    "tx_bytes": 8181146,
     "idle_rx_delta": 0,
     "idle_tx_delta": 0
   },
