@@ -115,6 +115,16 @@ static void add_pattern(const char *name, const char *sev,
 }
 
 /* ── JSON helpers ─────────────────────────────────────────────── */
+/* KNOWN RISK, not yet fixed (2026-07-11): returns -1.0 for both "key not
+ * found" and "key found, value is genuinely -1". 89 call sites across this
+ * file rely on this function. Checked empirically: the two fields most
+ * likely to collide (leatherheadd.thermal_score, ratkingd.pressure.avail_mb)
+ * are both consistently positive in real operation, so this is currently a
+ * design smell, not an active bug. Before trusting any pattern-detector
+ * threshold that checks for `< 0` as "missing data", verify the specific
+ * field can't legitimately be negative — deserves a proper found/not-found
+ * redesign (e.g. an out-parameter) in a dedicated session rather than a
+ * rushed full-file migration. */
 static double json_get_double(const char *json, const char *key) {
     if (!json || !key) return -1.0;
     char needle[128];
