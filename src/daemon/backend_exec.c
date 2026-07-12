@@ -43,6 +43,9 @@ static int             g_rish_disabled  = 0;
                               hanging too long if rish is genuinely dead. */
 #define TIMEOUT_BIN    "/data/data/com.termux/files/usr/bin/timeout"
 
+#define BEXEC_CACHE_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/state/.bexec_backend"
+#define BEXEC_CACHE_TTL  300  /* seconds — reprobe if stale */
+
 /* ── Timeout availability ─────────────────────────────────────────────────── */
 
 static int has_timeout_cmd(void)
@@ -334,6 +337,55 @@ static int probe_adb(void)
     return try_run(ADB_TRANSPORT " echo adb_ok", "adb_ok");
 }
 
+/* ── bexec cache ──────────────────────────────────────────────────────────── *
+ * Without this, every daemon process re-runs the full probe chain from
+ * scratch — each probe now costs real time even with the pty fix working
+ * correctly (a healthy rish round-trip is still ~3s). Twelve daemons in a
+ * scan round would mean twelve redundant probes for the same answer.
+ * Format: "<unix_ts> <backend_int> <rish_path_or_dash>\n" — one line,
+ * space-separated, readable by any daemon process without a JSON parser.
+ * Best-effort: any read/write failure just falls through to a fresh probe.
+ */
+
+static int try_load_cache(void)
+{
+    FILE *f = fopen(BEXEC_CACHE_PATH, "r");
+    if (!f) return 0;
+
+    long ts = 0;
+    int  backend = -1;
+    char rish_path[256] = "-";
+
+    int n = fscanf(f, "%ld %d %255s", &ts, &backend, rish_path);
+    fclose(f);
+
+    if (n != 3) return 0;
+    if (backend < BACKEND_RISH || backend > BACKEND_ADB_CLI) return 0;
+    if (time(NULL) - ts > BEXEC_CACHE_TTL) return 0;
+
+    g_backend = (BACKEND_TYPE)backend;
+    if (g_backend == BACKEND_RISH && strcmp(rish_path, "-") != 0)
+        snprintf(g_rish_path, sizeof(g_rish_path), "%s", rish_path);
+
+    return 1;
+}
+
+static void save_cache(void)
+{
+    FILE *f = fopen(BEXEC_CACHE_PATH, "w");
+    if (!f) return; /* best-effort — pipes/state/ may not exist yet */
+    fprintf(f, "%ld %d %s\n",
+            (long)time(NULL),
+            (int)g_backend,
+            g_rish_path[0] ? g_rish_path : "-");
+    fclose(f);
+}
+
+static void delete_cache(void)
+{
+    unlink(BEXEC_CACHE_PATH);
+}
+
 /* ── bexec_init ───────────────────────────────────────────────────────────── */
 
 void bexec_init(void)
@@ -343,9 +395,16 @@ void bexec_init(void)
 
     setenv("RISH_APPLICATION_ID", "com.termux", 1);
 
+    if (try_load_cache()) {
+        printf("[BEXEC] privileged shell backend (cached): %s\n",
+               backend_name(g_backend));
+        return;
+    }
+
     if (probe_rish()) {
         g_backend = BACKEND_RISH;
         printf("[BEXEC] privileged shell backend: rish  (%s)\n", g_rish_path);
+        save_cache();
         return;
     }
 
@@ -354,6 +413,7 @@ void bexec_init(void)
     if (probe_adb_cli()) {
         g_backend = BACKEND_ADB_CLI;
         printf("[BEXEC] privileged shell backend: adb_cli  (" ADB_CLI_TRANSPORT ")\n");
+        save_cache();
         return;
     }
 
@@ -362,6 +422,7 @@ void bexec_init(void)
     if (probe_adb()) {
         g_backend = BACKEND_ADB;
         printf("[BEXEC] privileged shell backend: adb  (" ADB_TRANSPORT ")\n");
+        save_cache();
         return;
     }
 
@@ -369,6 +430,7 @@ void bexec_init(void)
     printf("[BEXEC] privileged shell backend: direct"
            "  (no privilege — some commands may return empty output)\n");
     g_backend = BACKEND_DIRECT;
+    save_cache();
 }
 
 /* ── escape_for_adb ───────────────────────────────────────────────────────── */
@@ -394,27 +456,12 @@ static char *escape_for_adb(const char *cmd)
     return out;
 }
 
-/* ── escape_for_rish ──────────────────────────────────────────────────────── */
-
-static char *escape_for_rish(const char *cmd)
-{
-    size_t len = strlen(cmd);
-    char *out = malloc(len * 4 + 1);
-    if (!out) return NULL;
-    size_t j = 0;
-    for (size_t i = 0; i < len; i++) {
-        if (cmd[i] == '\'\0') {
-            out[j++] = '\'';
-            out[j++] = '\\';
-            out[j++] = '\'';
-            out[j++] = '\'';
-        } else {
-            out[j++] = cmd[i];
-        }
-    }
-    out[j] = '\0';
-    return out;
-}
+/* escape_for_rish() removed 2026-07-11 — confirmed zero call sites via
+ * grep. Dead since the pty rewrite of bexec_n()'s RISH branch replaced
+ * single-quote escaping with direct double-quote wrapping. Had a
+ * malformed multi-character literal ('\'\0' instead of '\'') that the
+ * compiler was correctly flagging as always-false — harmless only because
+ * nothing called it. */
 
 /* ── bexec_n ──────────────────────────────────────────────────────────────── */
 
@@ -495,6 +542,7 @@ void backend_reprobe(void)
     g_rish_disabled = 0;
     g_rish_path[0]  = '\0';
     g_backend       = BACKEND_DIRECT;
+    delete_cache();
     bexec_init();
 }
 
