@@ -92,35 +92,36 @@ static const char *get_slot_suffix(void) {
     return g_slot_suffix;
 }
 
-/* ── SHA256 helper ──────────────────────────────────────────────────────────── *
- * KNOWN LIMITATION, not yet fixed (2026-07-11): this opens the target path
- * with a plain local fopen() — running as the unprivileged Termux app UID,
- * NOT through rish/bexec. Confirmed live: even after fixing the A/B slot
- * partition-matching bug (previously targeted the wrong "bootloader2"
- * partition entirely), boot/vbmeta hashing still reports UNAVAILABLE on
- * this unrooted, locked-bootloader device — because reading a raw
- * /dev/block/* device node requires root or specific group membership
- * shell/Shizuku-granted UID doesn't have here. The partition-matching fix
- * is still correct and worth keeping (prevents ever hashing the wrong
- * partition on any device where raw reads DO succeed, e.g. rooted). A real
- * fix would compute the hash on-device via a privileged command through
- * bexec() (e.g. "sha256sum /dev/block/by-name/boot_a") instead of reading
- * raw bytes into this unprivileged process — deserves its own session. */
+/* ── SHA256 helper ──────────────────────────────────────────────────────────── */
 static void sha256_file(const char *path, char *out) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    FILE *f = fopen(path, "rb");
-    if (!f) { strcpy(out, "UNAVAILABLE"); return; }
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
-    char buf[4096];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), f)) > 0)
-        SHA256_Update(&ctx, buf, n);
-    SHA256_Final(hash, &ctx);
-    fclose(f);
-    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++)
-        sprintf(out + i * 2, "%02x", hash[i]);
+    /* Routed through bexec() (on-device `sha256sum`) instead of a local
+     * fopen(). A plain unprivileged fopen() can never read root-only
+     * block devices (e.g. boot_a target /dev/block/mmcblk0p25, mode
+     * 0600 root:root on this unrooted device) -- bexec() at least gets
+     * a shot via rish/adb_cli/adb, and will produce real hashes on any
+     * future rooted device. */
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "sha256sum '%s' 2>/dev/null", path);
+
+    char *result = bexec(cmd);
+    if (!result || strlen(result) < 64) {
+        strcpy(out, "UNAVAILABLE");
+        if (result) free(result);
+        return;
+    }
+
+    for (int i = 0; i < 64; i++) {
+        char c = result[i];
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) {
+            strcpy(out, "UNAVAILABLE");
+            free(result);
+            return;
+        }
+    }
+
+    memcpy(out, result, 64);
     out[64] = 0;
+    free(result);
 }
 
 /* ── Baseline management ──────────────────────────────────────────────────── */
