@@ -419,6 +419,7 @@ static void write_json(
     const char *ro_secure, const char *ro_debug, const char *ro_encrypt,
     int has_su, int has_magisk, int rooted,
     long kptr, long dmesg, long perf, long aslr, long hardlinks, long symlinks,
+    int selinux_blocks_kernel_params,
     const char *drift, const char *attest,
     const char *fs_events, const char *persist, const char *mimd,
     const char *threat_indicator)
@@ -466,7 +467,8 @@ static void write_json(
         "    \"perf_paranoid\": %ld,\n"
         "    \"aslr\": %ld,\n"
         "    \"protected_hardlinks\": %ld,\n"
-        "    \"protected_symlinks\": %ld\n"
+        "    \"protected_symlinks\": %ld,\n"
+        "    \"selinux_blocks_kernel_params\": %s\n"
         "  },\n\n"
         "  \"drift\": {\n"
         "    \"detected\": %s,\n"
@@ -486,6 +488,7 @@ static void write_json(
         has_su ? "true" : "false",
         has_magisk ? "true" : "false",
         kptr, dmesg, perf, aslr, hardlinks, symlinks,
+        selinux_blocks_kernel_params ? "true" : "false",
         strlen(d) > 0 ? "true" : "false",
         confirmed_degradation ? "true" : "false",
         d, a, f, p, m, threat_indicator);
@@ -575,18 +578,39 @@ static void poll_security(void) {
 
     /* ── Kernel params ───────────────────────────────────────────────── */
     long kptr = -1, dmesg = -1, perf = -1, aslr = -1, hardlinks = -1, symlinks = -1;
+    int kparam_eacces = 0;
+
+    errno = 0;
     FILE *f = fopen("/proc/sys/kernel/kptr_restrict", "r");
     if (f) { fscanf(f, "%ld", &kptr); fclose(f); }
+    else if (errno == EACCES) kparam_eacces = 1;
+
+    errno = 0;
     f = fopen("/proc/sys/kernel/dmesg_restrict", "r");
     if (f) { fscanf(f, "%ld", &dmesg); fclose(f); }
+    else if (errno == EACCES) kparam_eacces = 1;
+
+    errno = 0;
     f = fopen("/proc/sys/kernel/perf_event_paranoid", "r");
     if (f) { fscanf(f, "%ld", &perf); fclose(f); }
+    else if (errno == EACCES) kparam_eacces = 1;
+
+    errno = 0;
     f = fopen("/proc/sys/kernel/randomize_va_space", "r");
     if (f) { fscanf(f, "%ld", &aslr); fclose(f); }
+    else if (errno == EACCES) kparam_eacces = 1;
+
+    errno = 0;
     f = fopen("/proc/sys/fs/protected_hardlinks", "r");
     if (f) { fscanf(f, "%ld", &hardlinks); fclose(f); }
+    else if (errno == EACCES) kparam_eacces = 1;
+
+    errno = 0;
     f = fopen("/proc/sys/fs/protected_symlinks", "r");
     if (f) { fscanf(f, "%ld", &symlinks); fclose(f); }
+    else if (errno == EACCES) kparam_eacces = 1;
+
+    int selinux_blocks_kernel_params = kparam_eacces && enforcing;
 
     if (kptr < 1) score -= 2;
     if (dmesg < 1) score -= 2;
@@ -658,6 +682,7 @@ static void poll_security(void) {
                ro_secure, ro_debug, ro_encrypt,
                has_su, has_magisk, rooted,
                kptr, dmesg, perf, aslr, hardlinks, symlinks,
+               selinux_blocks_kernel_params,
                drift_json, attest_json, fs_json, persist_json, mimd_json, threat_json);
 }
 
