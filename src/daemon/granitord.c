@@ -67,7 +67,45 @@ static int contains(const char *s, const char *needle) {
     return s && needle && strstr(s, needle) != NULL;
 }
 
-/* ── SHA256 helper ──────────────────────────────────────────────────────────── */
+/* A/B slot suffix.
+ * Confirmed live 2026-07-11: find /dev/block -name boot-wildcard on this
+ * A/B slot device (MTK, boot_a, boot_b, bootloader1, bootloader2,
+ * init_boot_a, and more) non-deterministically matched "bootloader2" (an
+ * unrelated LK bootloader partition, by-name lk2) instead of the actual
+ * Android boot image, because find's traversal order isn't alphabetical
+ * and multiple unrelated partitions all start with "boot". Same problem
+ * affects vbmeta (vbmeta_a, vbmeta_b, vbmeta_system variants, and
+ * vbmeta_vendor variants all match a bare vbmeta-wildcard). Querying
+ * ro.boot.slot_suffix once and targeting the exact partition name removes
+ * the ambiguity entirely. */
+static char g_slot_suffix[8] = "";
+static int  g_slot_queried   = 0;
+
+static const char *get_slot_suffix(void) {
+    if (!g_slot_queried) {
+        char sbuf[32];
+        char *s = rish_read("getprop ro.boot.slot_suffix 2>/dev/null", sbuf, sizeof(sbuf));
+        if (s && strlen(s) > 0)
+            snprintf(g_slot_suffix, sizeof(g_slot_suffix), "%s", s);
+        g_slot_queried = 1;
+    }
+    return g_slot_suffix;
+}
+
+/* ── SHA256 helper ──────────────────────────────────────────────────────────── *
+ * KNOWN LIMITATION, not yet fixed (2026-07-11): this opens the target path
+ * with a plain local fopen() — running as the unprivileged Termux app UID,
+ * NOT through rish/bexec. Confirmed live: even after fixing the A/B slot
+ * partition-matching bug (previously targeted the wrong "bootloader2"
+ * partition entirely), boot/vbmeta hashing still reports UNAVAILABLE on
+ * this unrooted, locked-bootloader device — because reading a raw
+ * /dev/block/* device node requires root or specific group membership
+ * shell/Shizuku-granted UID doesn't have here. The partition-matching fix
+ * is still correct and worth keeping (prevents ever hashing the wrong
+ * partition on any device where raw reads DO succeed, e.g. rooted). A real
+ * fix would compute the hash on-device via a privileged command through
+ * bexec() (e.g. "sha256sum /dev/block/by-name/boot_a") instead of reading
+ * raw bytes into this unprivileged process — deserves its own session. */
 static void sha256_file(const char *path, char *out) {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     FILE *f = fopen(path, "rb");
@@ -118,7 +156,7 @@ static void establish_baseline(void) {
     /* Boot image hash if accessible */
     char boot_path[256];
     snprintf(boot_path, sizeof(boot_path),
-        "find /dev/block -name 'boot*' -o -name 'BOOT*' 2>/dev/null | head -1");
+        "echo /dev/block/by-name/boot%s", get_slot_suffix());
     char buf[512];
     char *boot_dev = rish_read(boot_path, buf, sizeof(buf));
     if (boot_dev && strlen(boot_dev) > 0 && strncmp(boot_dev, "/dev/block", 10) == 0) {
@@ -127,7 +165,7 @@ static void establish_baseline(void) {
 
     /* vbmeta hash */
     char vbmeta_path[256];
-    snprintf(vbmeta_path, sizeof(vbmeta_path), "find /dev/block -name 'vbmeta*' 2>/dev/null | head -1");
+    snprintf(vbmeta_path, sizeof(vbmeta_path), "echo /dev/block/by-name/vbmeta%s", get_slot_suffix());
     char *vbmeta_dev = rish_read(vbmeta_path, buf, sizeof(buf));
     if (vbmeta_dev && strlen(vbmeta_dev) > 0 && strncmp(vbmeta_dev, "/dev/block", 10) == 0) {
         sha256_file(vbmeta_dev, baseline_vbmeta_hash);
@@ -186,7 +224,7 @@ static void check_hardware_attestation(char *attest_json, size_t attest_size) {
     /* Check verified boot hash consistency */
     char vb_hash[65];
     char vbmeta_path[256];
-    snprintf(vbmeta_path, sizeof(vbmeta_path), "find /dev/block -name 'vbmeta*' 2>/dev/null | head -1");
+    snprintf(vbmeta_path, sizeof(vbmeta_path), "echo /dev/block/by-name/vbmeta%s", get_slot_suffix());
     char *vbmeta_dev = rish_read(vbmeta_path, buf, sizeof(buf));
     if (vbmeta_dev && strlen(vbmeta_dev) > 0 && baseline_vbmeta_hash[0]) {
         sha256_file(vbmeta_dev, vb_hash);
@@ -275,7 +313,7 @@ static void audit_persistence(char *persist_json, size_t persist_size) {
     /* Check for boot image modification */
     if (baseline_boot_hash[0]) {
         char boot_path[256];
-        snprintf(boot_path, sizeof(boot_path), "find /dev/block -name 'boot*' 2>/dev/null | head -1");
+        snprintf(boot_path, sizeof(boot_path), "echo /dev/block/by-name/boot%s", get_slot_suffix());
         char *boot_dev = rish_read(boot_path, buf, sizeof(buf));
         if (boot_dev && strlen(boot_dev) > 0) {
             char current_hash[65];
