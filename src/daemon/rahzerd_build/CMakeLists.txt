@@ -2,6 +2,7 @@ add_executable(rahzerd
     ${CMAKE_SOURCE_DIR}/src/daemon/rahzerd.c
     ${CMAKE_SOURCE_DIR}/src/daemon/ipc_globals.c
     ${CMAKE_SOURCE_DIR}/src/daemon/backend_exec.c
+    ${CMAKE_SOURCE_DIR}/src/daemon/local_exec.c
     ${CMAKE_SOURCE_DIR}/src/daemon/daemon_common.c
     ${CMAKE_SOURCE_DIR}/src/core/log_safe.c
     ${CMAKE_SOURCE_DIR}/src/core/fugitoid_log_impl.c
