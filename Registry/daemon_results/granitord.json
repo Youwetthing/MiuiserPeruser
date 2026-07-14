@@ -1,17 +1,17 @@
 {
   "daemon": "granitord",
   "version": "2.0",
-  "timestamp": "00:55:17",
+  "timestamp": "15:44:23",
   "poll_interval_sec": 30,
 
   "posture": {
-    "score": 93,
-    "grade": "SECURE",
-    "selinux": "Enforcing",
+    "score": 58,
+    "grade": "AT RISK",
+    "selinux": "unknown",
     "verified_boot_state": "green",
     "verified_boot_mode": "enforcing",
-    "ro_secure": "1",
-    "ro_debuggable": "0",
+    "ro_secure": "(unset)",
+    "ro_debuggable": "(unset)",
     "encryption": "encrypted",
     "root_present": false,
     "su_found": false,
@@ -33,13 +33,13 @@
     "param_changes": []
   },
 
-  "hardware_attestation": [{"type":"tee_present","path":"/dev/teei_client"}],
+  "hardware_attestation": [],
 
   "filesystem_integrity": [{"type":"verity_disabled","mounts":"/dev/block/dm-20 /mnt/vendor/mi_ext erofs ro,seclabel,relatime,user_xattr,acl,cache_strategy=readaro"}],
 
   "persistence_audit": [],
 
-  "mimd_cgroup": [{"type":"mimd_cage","caged":true,"cgroup":"4:memory:/mimd/critical2"},{"type":"mimd_freeze_cgroups_present","paths":"/sys/fs/cgroup/frozen /sys/fs/cgroup/unfrozen /sys/fs/cgroup/unfrozen "}],
+  "mimd_cgroup": [{"type":"mimd_cage","caged":false,"cgroup":"4:memory:/"}],
 
-  "threat_indicators": [{"type":"correlated","confidence":80,"score":93,"description":"Hardware attestation failure without root = possible hardware attack","degradation_confirmed":false}]
+  "threat_indicators": [{"type":"correlated","confidence":90,"score":58,"description":"Filesystem integrity failure + SELinux permissive = exploit aftermath","degradation_confirmed":false}]
 }
