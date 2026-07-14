@@ -25,6 +25,8 @@
 #include <signal.h>
 #include <errno.h>
 
+#include "local_exec.h"
+
 /* ── Internal state ───────────────────────────────────────────────────────── */
 
 static BACKEND_TYPE    g_backend        = BACKEND_DIRECT;
@@ -32,7 +34,14 @@ static int             g_init_done      = 0;
 static char            g_rish_path[256] = "";
 static int             g_rish_disabled  = 0;
 
-#define ADB_TRANSPORT  "/data/data/com.termux/files/home/.cargo/bin/adb_cli tcp 127.0.0.1:5555 shell"
+#define ADB_PORT_DEFAULT   5555
+#define ADB_PORT_SCAN_LO   30000
+#define ADB_PORT_SCAN_HI   45000
+#define PORTSCAN_PATH      "/data/data/com.termux/files/home/MiuiserPeruser/bin/portscan"
+#define ADB_CLI_PATH       "/data/data/com.termux/files/home/.cargo/bin/adb_cli"
+
+static char g_adb_transport[192]     = "";
+static char g_adb_cli_transport[192] = "";
 #define RISH_TIMEOUT   8   /* was 3 — measured live 2026-07-11: a healthy,
                               successful rish call took 2.6s just for a
                               trivial echo (Shizuku IPC round-trip cost on
@@ -45,6 +54,39 @@ static int             g_rish_disabled  = 0;
 
 #define BEXEC_CACHE_PATH "/data/data/com.termux/files/home/MiuiserPeruser/pipes/state/.bexec_backend"
 #define BEXEC_CACHE_TTL  300  /* seconds — reprobe if stale */
+
+/* ── resolve_adb_port ─────────────────────────────────────────────────────── *
+ * Builds g_adb_transport/g_adb_cli_transport at runtime instead of a
+ * hardcoded :5555. Uses local_exec() (not bexec()) since portscan needs
+ * no privilege — routing it through bexec() would pay rish's measured
+ * 2.6-3.1s Shizuku round-trip for a task that runs in milliseconds.
+ * Falls back to ADB_PORT_DEFAULT if portscan isn't built yet or finds
+ * nothing in range, so a missing binary degrades to prior behavior
+ * instead of breaking bexec entirely.
+ */
+static void resolve_adb_port(void)
+{
+    int port = ADB_PORT_DEFAULT;
+
+    if (access(PORTSCAN_PATH, X_OK) == 0) {
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "%s %d %d 127.0.0.1",
+                 PORTSCAN_PATH, ADB_PORT_SCAN_LO, ADB_PORT_SCAN_HI);
+        char *out = local_exec(cmd);
+        if (out && out[0]) {
+            int found = atoi(out);
+            if (found > 0 && found <= 65535)
+                port = found;
+        }
+        free(out);
+    }
+
+    snprintf(g_adb_transport, sizeof(g_adb_transport),
+             "/data/data/com.termux/files/home/.cargo/bin/adb_cli tcp 127.0.0.1:%d shell",
+             port);
+    snprintf(g_adb_cli_transport, sizeof(g_adb_cli_transport),
+             "timeout 5 %s tcp 127.0.0.1:%d shell", ADB_CLI_PATH, port);
+}
 
 /* ── Timeout availability ─────────────────────────────────────────────────── */
 
@@ -321,20 +363,21 @@ static int probe_rish(void)
 
 /* ── adb_cli probe ────────────────────────────────────────────────────────── */
 
-#define ADB_CLI_PATH "/data/data/com.termux/files/home/.cargo/bin/adb_cli"
-#define ADB_CLI_TRANSPORT "timeout 5 " ADB_CLI_PATH " tcp 127.0.0.1:5555 shell"
-
 static int probe_adb_cli(void)
 {
     if (access(ADB_CLI_PATH, X_OK) != 0) return 0;
-    return try_run(ADB_CLI_TRANSPORT " echo adb_cli_ok", "adb_cli_ok");
+    char cmd[224];
+    snprintf(cmd, sizeof(cmd), "%s echo adb_cli_ok", g_adb_cli_transport);
+    return try_run(cmd, "adb_cli_ok");
 }
 
 /* ── ADB probe ────────────────────────────────────────────────────────────── */
 
 static int probe_adb(void)
 {
-    return try_run(ADB_TRANSPORT " echo adb_ok", "adb_ok");
+    char cmd[224];
+    snprintf(cmd, sizeof(cmd), "%s echo adb_ok", g_adb_transport);
+    return try_run(cmd, "adb_ok");
 }
 
 /* ── bexec cache ──────────────────────────────────────────────────────────── *
@@ -396,6 +439,8 @@ void bexec_init(void)
     setenv("RISH_APPLICATION_ID", "com.termux", 1);
 
     if (try_load_cache()) {
+        if (g_backend == BACKEND_ADB || g_backend == BACKEND_ADB_CLI)
+            resolve_adb_port();
         printf("[BEXEC] privileged shell backend (cached): %s\n",
                backend_name(g_backend));
         return;
@@ -409,10 +454,11 @@ void bexec_init(void)
     }
 
     printf("[BEXEC] rish probe failed — trying adb_cli\n");
+    resolve_adb_port();
 
     if (probe_adb_cli()) {
         g_backend = BACKEND_ADB_CLI;
-        printf("[BEXEC] privileged shell backend: adb_cli  (" ADB_CLI_TRANSPORT ")\n");
+        printf("[BEXEC] privileged shell backend: adb_cli  (%s)\n", g_adb_cli_transport);
         save_cache();
         return;
     }
@@ -421,7 +467,7 @@ void bexec_init(void)
 
     if (probe_adb()) {
         g_backend = BACKEND_ADB;
-        printf("[BEXEC] privileged shell backend: adb  (" ADB_TRANSPORT ")\n");
+        printf("[BEXEC] privileged shell backend: adb  (%s)\n", g_adb_transport);
         save_cache();
         return;
     }
@@ -487,20 +533,20 @@ char *bexec_n(const char *cmd, size_t max_bytes)
         return out;
 
     } else if (g_backend == BACKEND_ADB_CLI) {
-        fullsz = strlen(ADB_CLI_TRANSPORT) + strlen(cmd) + 32;
+        fullsz = strlen(g_adb_cli_transport) + strlen(cmd) + 32;
         full   = malloc(fullsz);
         if (!full) { free(out); return NULL; }
         snprintf(full, fullsz,
-                 ADB_CLI_TRANSPORT " %s 2>/dev/null", cmd);
+                 "%s %s 2>/dev/null", g_adb_cli_transport, cmd);
 
     } else if (g_backend == BACKEND_ADB) {
         char *escaped = escape_for_adb(cmd);
         if (!escaped) { free(out); return NULL; }
-        fullsz = strlen(ADB_TRANSPORT) + strlen(escaped) + 32;
+        fullsz = strlen(g_adb_transport) + strlen(escaped) + 32;
         full   = malloc(fullsz);
         if (!full) { free(escaped); free(out); return NULL; }
         snprintf(full, fullsz,
-                 ADB_TRANSPORT " \"%s\" 2>/dev/null", escaped);
+                 "%s \"%s\" 2>/dev/null", g_adb_transport, escaped);
         free(escaped);
 
     } else {

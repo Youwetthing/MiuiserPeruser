@@ -8,6 +8,7 @@ set(DAEMON_COMMON
     ../core/log_safe.c
     ../core/fugitoid_log_impl.c
     backend_exec.c
+    local_exec.c          # <-- ADD THIS
 )
 
 set(DAEMON_INCLUDES
