@@ -210,17 +210,10 @@ static void detect_param_drift(char *drift_json, size_t drift_size) {
 static void check_hardware_attestation(char *attest_json, size_t attest_size) {
     attest_json[0] = 0;
 
-    /* Check Knox fuse status on Samsung/Xiaomi devices */
+    /* Knox warranty-bit check removed: ro.boot.warranty_bit is a Samsung
+     * Knox e-fuse property with no Xiaomi/MIUI equivalent -- always reads
+     * empty on this device, contributed nothing. */
     char buf[256];
-    char *knox = rish_read("getprop ro.boot.warranty_bit 2>/dev/null", buf, sizeof(buf));
-    if (knox && strlen(knox) > 0) {
-        int tripped = (strcmp(knox, "1") == 0);
-        char entry[256];
-        snprintf(entry, sizeof(entry),
-            "{\"type\":\"knox_warranty\",\"tripped\":%s,\"raw\":\"%s\"},",
-            tripped ? "true" : "false", knox);
-        strncat(attest_json, entry, attest_size - 1);
-    }
 
     /* Check verified boot hash consistency */
     char vb_hash[65];
@@ -358,6 +351,103 @@ static void check_mimd_cage(char *mimd_json, size_t mimd_size) {
 }
 
 /* ── Threat correlation with temporal analysis ───────────────────────────── */
+/* -- Kernel taint decode -------------------------------------------------- */
+static const char *TAINT_BIT_NAMES[] = {
+    "PROPRIETARY_MODULE", "FORCED_MODULE", "CPU_OUT_OF_SPEC", "FORCED_RMMOD",
+    "MACHINE_CHECK", "BAD_PAGE", "USER", "DIED_RECENTLY",
+    "ACPI_OVERRIDE", "WARN", "STAGING_DRIVER", "FIRMWARE_WORKAROUND",
+    "OUT_OF_TREE_MODULE", "UNSIGNED_MODULE", "SOFT_LOCKUP", "LIVEPATCH",
+    "AUX", "RANDSTRUCT"
+};
+#define TAINT_BIT_COUNT (int)(sizeof(TAINT_BIT_NAMES) / sizeof(TAINT_BIT_NAMES[0]))
+
+static void strip_trailing_comma(char *s);
+
+static void check_kernel_taint(char *taint_json, size_t taint_size) {
+    /* Confirmed live 2026-07-15: this read fails (permission denied /
+     * Shizuku IPC timeout, seen both) at least some of the time on this
+     * device. val==-1 previously collapsed into "tainted":false, which
+     * reads as "confirmed clean" when the truth is "couldn't check" --
+     * same sentinel-collision bug already fixed for kernel_params via
+     * selinux_blocks_kernel_params. read_blocked distinguishes the two
+     * so a failed read is never misrepresented as a confirmed result. */
+    char buf[64];
+    char *t = rish_read("cat /proc/sys/kernel/tainted 2>/dev/null", buf, sizeof(buf));
+    int read_blocked = !(t && strlen(t) > 0);
+    long val = read_blocked ? -1 : atol(t);
+
+    char bits_buf[512] = "";
+    if (val > 0) {
+        for (int i = 0; i < TAINT_BIT_COUNT; i++) {
+            if (val & (1L << i)) {
+                char entry[32];
+                snprintf(entry, sizeof(entry), "\"%s\",", TAINT_BIT_NAMES[i]);
+                strncat(bits_buf, entry, sizeof(bits_buf) - strlen(bits_buf) - 1);
+            }
+        }
+        strip_trailing_comma(bits_buf);
+    }
+
+    snprintf(taint_json, taint_size,
+        "{\"value\":%ld,\"tainted\":%s,\"read_blocked\":%s,\"bits\":[%s]}",
+        val, (!read_blocked && val > 0) ? "true" : "false",
+        read_blocked ? "true" : "false", bits_buf);
+}
+
+/* -- Process capabilities (CapBnd) ----------------------------------------- */
+static const char *CAP_NAMES[32] = {
+    "CHOWN","DAC_OVERRIDE","DAC_READ_SEARCH","FOWNER","FSETID","KILL",
+    "SETGID","SETUID","SETPCAP","LINUX_IMMUTABLE","NET_BIND_SERVICE",
+    "NET_BROADCAST","NET_ADMIN","NET_RAW","IPC_LOCK","IPC_OWNER",
+    "SYS_MODULE","SYS_RAWIO","SYS_CHROOT","SYS_PTRACE","SYS_PACCT",
+    "SYS_ADMIN","SYS_BOOT","SYS_NICE","SYS_RESOURCE","SYS_TIME",
+    "SYS_TTY_CONFIG","MKNOD","LEASE","AUDIT_WRITE","AUDIT_CONTROL","SETFCAP"
+};
+
+static void check_capabilities(char *cap_json, size_t cap_size) {
+    char buf[4096];
+    char *status = rish_read("grep CapBnd /proc/self/status 2>/dev/null", buf, sizeof(buf));
+    char capbnd_hex[32] = "unknown";
+    unsigned long long capbnd_val = 0;
+    if (status && strlen(status) > 0) {
+        char *colon = strchr(status, ':');
+        if (colon) {
+            colon++;
+            while (*colon == ' ' || *colon == '\t') colon++;
+            strncpy(capbnd_hex, colon, sizeof(capbnd_hex) - 1);
+            capbnd_hex[sizeof(capbnd_hex) - 1] = 0;
+            capbnd_val = strtoull(capbnd_hex, NULL, 16);
+        }
+    }
+
+    char names_buf[1024] = "";
+    for (int i = 0; i < 32; i++) {
+        if (capbnd_val & (1ULL << i)) {
+            char entry[32];
+            snprintf(entry, sizeof(entry), "\"%s\",", CAP_NAMES[i]);
+            strncat(names_buf, entry, sizeof(names_buf) - strlen(names_buf) - 1);
+        }
+    }
+    strip_trailing_comma(names_buf);
+
+    snprintf(cap_json, cap_size,
+        "{\"cap_bnd\":\"%s\",\"capabilities\":[%s]}",
+        capbnd_hex, names_buf);
+}
+
+/* -- Seccomp status --------------------------------------------------------- */
+static void check_seccomp(char *seccomp_json, size_t seccomp_size) {
+    char buf[4096];
+    char *status = rish_read("grep -i ^Seccomp: /proc/self/status 2>/dev/null", buf, sizeof(buf));
+    int mode = -1;
+    if (status && strlen(status) > 0) {
+        char *colon = strchr(status, ':');
+        if (colon) mode = atoi(colon + 1);
+    }
+    snprintf(seccomp_json, seccomp_size,
+        "{\"mode\":%d,\"enabled\":%s}", mode, mode > 0 ? "true" : "false");
+}
+
 static int correlate_threats(
     int score, int enforcing, int rooted,
     const char *drift, const char *attest,
@@ -421,6 +511,7 @@ static void write_json(
     int has_su, int has_magisk, int rooted,
     long kptr, long dmesg, long perf, long aslr, long hardlinks, long symlinks,
     int selinux_blocks_kernel_params,
+    const char *taint_json, const char *cap_json, const char *seccomp_json,
     const char *drift, const char *attest,
     const char *fs_events, const char *persist, const char *mimd,
     const char *threat_indicator)
@@ -471,6 +562,9 @@ static void write_json(
         "    \"protected_symlinks\": %ld,\n"
         "    \"selinux_blocks_kernel_params\": %s\n"
         "  },\n\n"
+        "  \"kernel_taint\": %s,\n\n"
+        "  \"capabilities\": %s,\n\n"
+        "  \"seccomp\": %s,\n\n"
         "  \"drift\": {\n"
         "    \"detected\": %s,\n"
         "    \"confirmed_degradation\": %s,\n"
@@ -490,6 +584,7 @@ static void write_json(
         has_magisk ? "true" : "false",
         kptr, dmesg, perf, aslr, hardlinks, symlinks,
         selinux_blocks_kernel_params ? "true" : "false",
+        taint_json, cap_json, seccomp_json,
         strlen(d) > 0 ? "true" : "false",
         confirmed_degradation ? "true" : "false",
         d, a, f, p, m, threat_indicator);
@@ -613,11 +708,21 @@ static void poll_security(void) {
 
     int selinux_blocks_kernel_params = kparam_eacces && enforcing;
 
-    if (kptr < 1) score -= 2;
-    if (dmesg < 1) score -= 2;
-    if (aslr < 2) score -= 3;
-    if (!hardlinks) score -= 1;
-    if (!symlinks) score -= 1;
+    if (kparam_eacces && enforcing) {
+        /* SELinux blocks these six reads outright under enforcing mode --
+         * verified live (2026-07-15): this is hardening, not failure. An
+         * unprivileged process genuinely cannot read these values, which
+         * is the secure outcome, not evidence of a permissive kernel.
+         * Don't apply the below penalties, which assume a successful
+         * read that came back permissive. */
+    } else {
+        if (kptr < 1) score -= 2;
+        if (dmesg < 1) score -= 2;
+        if (perf == -1) score -= 3;
+        if (aslr < 2) score -= 3;
+        if (!hardlinks) score -= 1;
+        if (!symlinks) score -= 1;
+    }
 
     printf("[GRANITOR]  Kernel: kptr=%ld dmesg=%ld perf=%ld aslr=%ld hardlinks=%ld symlinks=%ld\n",
            kptr, dmesg, perf, aslr, hardlinks, symlinks);
@@ -643,6 +748,14 @@ static void poll_security(void) {
     /* ── Deep dive: MIMD cgroup escape ─────────────────────────────────── */
     char mimd_json[1024] = "";
     check_mimd_cage(mimd_json, sizeof(mimd_json));
+
+    /* Deep dive: kernel taint / capabilities / seccomp */
+    char taint_json[512] = "";
+    check_kernel_taint(taint_json, sizeof(taint_json));
+    char cap_json[1024] = "";
+    check_capabilities(cap_json, sizeof(cap_json));
+    char seccomp_json[256] = "";
+    check_seccomp(seccomp_json, sizeof(seccomp_json));
 
     /* ── Threat correlation ──────────────────────────────────────────── */
     char threat_json[512] = "";
@@ -684,6 +797,7 @@ static void poll_security(void) {
                has_su, has_magisk, rooted,
                kptr, dmesg, perf, aslr, hardlinks, symlinks,
                selinux_blocks_kernel_params,
+               taint_json, cap_json, seccomp_json,
                drift_json, attest_json, fs_json, persist_json, mimd_json, threat_json);
 }
 
