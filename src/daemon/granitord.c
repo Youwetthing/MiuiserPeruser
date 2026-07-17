@@ -448,6 +448,76 @@ static void check_seccomp(char *seccomp_json, size_t seccomp_size) {
         "{\"mode\":%d,\"enabled\":%s}", mode, mode > 0 ? "true" : "false");
 }
 
+/* -- Kernel hardening flags (KASAN / CFI) -- */
+static void check_kernel_hardening(char *hard_json, size_t hard_size) {
+    hard_json[0] = 0;
+
+    /* Not all Xiaomi kernels expose /proc/config.gz -- some ROMs strip
+     * CONFIG_IKCONFIG_PROC entirely. Try zcat first, fall back to plain
+     * cat in case a fork ships it uncompressed. Absence is reported as
+     * unavailable, never conflated with a confirmed-disabled result. */
+    char buf[8192];
+    char *cfg = rish_read("zcat /proc/config.gz 2>/dev/null", buf, sizeof(buf));
+    if (!cfg || strlen(cfg) == 0) {
+        cfg = rish_read("cat /proc/config.gz 2>/dev/null", buf, sizeof(buf));
+    }
+
+    if (!cfg || strlen(cfg) == 0) {
+        snprintf(hard_json, hard_size,
+                 "{\"read_blocked\":true,\"kasan\":null,\"cfi_clang\":null}");
+        return;
+    }
+
+    int kasan = contains(cfg, "CONFIG_KASAN=y");
+    int cfi   = contains(cfg, "CONFIG_CFI_CLANG=y");
+
+    snprintf(hard_json, hard_size,
+             "{\"read_blocked\":false,\"kasan\":%s,\"cfi_clang\":%s}",
+             kasan ? "true" : "false", cfi ? "true" : "false");
+}
+
+/* -- CPU vulnerability mitigation status (Spectre/Meltdown family) -- */
+static const char *CPU_VULN_FILES[] = {
+    "meltdown", "spectre_v1", "spectre_v2", "spec_store_bypass",
+    "l1tf", "mds", "srbds", "tsx_async_abort", "itlb_multihit",
+    "mmio_stale_data", "retbleed", NULL
+};
+
+static void check_cpu_vulnerabilities(char *vuln_json, size_t vuln_size) {
+    vuln_json[0] = 0;
+    char buf[256], cmd[160];
+    int any_read = 0;
+
+    for (int i = 0; CPU_VULN_FILES[i]; i++) {
+        snprintf(cmd, sizeof(cmd),
+                 "cat /sys/devices/system/cpu/vulnerabilities/%s 2>/dev/null",
+                 CPU_VULN_FILES[i]);
+        char *line = rish_read(cmd, buf, sizeof(buf));
+
+        /* File may not exist for this SoC -- some vulnerability names are
+         * Intel-era and absent/stubbed on ARM parts. Skip silently; that
+         * is not a finding either way. */
+        if (!line || strlen(line) == 0) continue;
+        any_read = 1;
+
+        /* Surface non-clean lines verbatim rather than collapsing to a
+         * bool -- the mitigation text itself is the finding, e.g.
+         * "Vulnerable: Unprivileged eBPF enabled". */
+        if (!contains(line, "Not affected")) {
+            char entry[384];
+            snprintf(entry, sizeof(entry),
+                     "{\"name\":\"%s\",\"status\":\"%.200s\"},",
+                     CPU_VULN_FILES[i], line);
+            strncat(vuln_json, entry, vuln_size - strlen(vuln_json) - 1);
+        }
+    }
+
+    if (!any_read) {
+        snprintf(vuln_json, vuln_size,
+                 "{\"name\":\"_meta\",\"status\":\"read_blocked\"},");
+    }
+}
+
 static int correlate_threats(
     int score, int enforcing, int rooted,
     const char *drift, const char *attest,
@@ -512,21 +582,25 @@ static void write_json(
     long kptr, long dmesg, long perf, long aslr, long hardlinks, long symlinks,
     int selinux_blocks_kernel_params,
     const char *taint_json, const char *cap_json, const char *seccomp_json,
+    const char *hard_json, const char *vuln_json,
     const char *drift, const char *attest,
     const char *fs_events, const char *persist, const char *mimd,
     const char *threat_indicator)
 {
-    char d[4096], a[4096], f[4096], p[4096], m[4096];
+    char d[4096], a[4096], f[4096], p[4096], m[4096], hw[512], vu[4096];
     strncpy(d, drift, sizeof(d) - 1); d[sizeof(d) - 1] = 0;
     strncpy(a, attest, sizeof(a) - 1); a[sizeof(a) - 1] = 0;
     strncpy(f, fs_events, sizeof(f) - 1); f[sizeof(f) - 1] = 0;
     strncpy(p, persist, sizeof(p) - 1); p[sizeof(p) - 1] = 0;
     strncpy(m, mimd, sizeof(m) - 1); m[sizeof(m) - 1] = 0;
+    strncpy(hw, hard_json, sizeof(hw) - 1); hw[sizeof(hw) - 1] = 0;
+    strncpy(vu, vuln_json, sizeof(vu) - 1); vu[sizeof(vu) - 1] = 0;
     strip_trailing_comma(d);
     strip_trailing_comma(a);
     strip_trailing_comma(f);
     strip_trailing_comma(p);
     strip_trailing_comma(m);
+    strip_trailing_comma(vu);
 
     FILE *out = fopen("/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/granitord.json", "w");
     if (!out) {
@@ -565,6 +639,8 @@ static void write_json(
         "  \"kernel_taint\": %s,\n\n"
         "  \"capabilities\": %s,\n\n"
         "  \"seccomp\": %s,\n\n"
+        "  \"kernel_hardening\": %s,\n\n"
+        "  \"cpu_vulnerabilities\": [%s],\n\n"
         "  \"drift\": {\n"
         "    \"detected\": %s,\n"
         "    \"confirmed_degradation\": %s,\n"
@@ -584,7 +660,7 @@ static void write_json(
         has_magisk ? "true" : "false",
         kptr, dmesg, perf, aslr, hardlinks, symlinks,
         selinux_blocks_kernel_params ? "true" : "false",
-        taint_json, cap_json, seccomp_json,
+        taint_json, cap_json, seccomp_json, hw, vu,
         strlen(d) > 0 ? "true" : "false",
         confirmed_degradation ? "true" : "false",
         d, a, f, p, m, threat_indicator);
@@ -757,6 +833,11 @@ static void poll_security(void) {
     char seccomp_json[256] = "";
     check_seccomp(seccomp_json, sizeof(seccomp_json));
 
+    char hard_json[512] = "";
+    check_kernel_hardening(hard_json, sizeof(hard_json));
+    char vuln_json[4096] = "";
+    check_cpu_vulnerabilities(vuln_json, sizeof(vuln_json));
+
     /* ── Threat correlation ──────────────────────────────────────────── */
     char threat_json[512] = "";
     int confidence = correlate_threats(score, enforcing, rooted,
@@ -797,7 +878,7 @@ static void poll_security(void) {
                has_su, has_magisk, rooted,
                kptr, dmesg, perf, aslr, hardlinks, symlinks,
                selinux_blocks_kernel_params,
-               taint_json, cap_json, seccomp_json,
+               taint_json, cap_json, seccomp_json, hard_json, vuln_json,
                drift_json, attest_json, fs_json, persist_json, mimd_json, threat_json);
 }
 
