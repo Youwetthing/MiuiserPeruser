@@ -29,4 +29,27 @@ char *bexec(const char *cmd);
 char *bexec_n(const char *cmd, size_t maxout);
 char *bexec_read_file(const char *path);
 
+
+/* ── bexec_batch: multi-command batching within RISH's byte budget ────────
+ * See backend_exec.c for rationale. Do not hand-combine commands with
+ * bexec_n() directly -- this exists specifically to enforce
+ * BEXEC_CMD_BUDGET and avoid the silent-truncation failure mode found
+ * 2026-07 (tigerclawd/shredderd batching incident: rishcmd[1600] silently
+ * truncated combined commands with no error, producing false clean data).
+ */
+#define BEXEC_CMD_BUDGET 1450
+#define BEXEC_MAX_BATCH  12
+
+typedef struct {
+    const char *label;   /* for debug/logging only */
+    const char *cmd;     /* input: command to run */
+    char       *result;  /* output: malloc'd, NULL on miss -- caller frees */
+} bexec_batch_item_t;
+
+/* Runs up to BEXEC_MAX_BATCH commands in one privileged round-trip.
+ * Returns 0 on success (check individual items[i].result for NULL on a
+ * per-command miss), -1 if the batch itself failed (over budget, exec
+ * failure) -- in that case all items[i].result are NULL. */
+int bexec_batch(bexec_batch_item_t *items, int n_items);
+
 #endif /* DAEMON_BACKEND_EXEC_H */
