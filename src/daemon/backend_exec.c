@@ -161,6 +161,30 @@ static int run_via_pty(const char *cmd, char *out, size_t outsize, int timeout_s
 
         if (remaining_ms <= 0) {
 
+            /* Drain whatever is already sitting in the pty's kernel buffer
+             * before killing -- previously this branch killed and closed
+             * immediately, discarding any output the child had already
+             * produced but that hadn't been read yet (the poll loop below
+             * only checks every PTY_POLL_MS, so up to that much
+             * already-produced data could be sitting unread the instant
+             * the deadline hits). Mirrors the drain the child_exited
+             * branch already does. Doesn't rescue data the child hadn't
+             * produced yet -- that's a real timeout, not a bug -- but
+             * stops discarding data that was already there. */
+            int flags = fcntl(master, F_GETFL, 0);
+            fcntl(master, F_SETFL, flags | O_NONBLOCK);
+
+            for (;;) {
+                char tmp[4096];
+                ssize_t n = read(master, tmp, sizeof(tmp));
+                if (n <= 0)
+                    break;
+                if (total + (size_t)n < outsize - 1) {
+                    memcpy(out + total, tmp, (size_t)n);
+                    total += (size_t)n;
+                }
+            }
+
             kill(-pid, SIGKILL);
 
             while (waitpid(pid, NULL, WNOHANG) == 0)
@@ -574,6 +598,81 @@ char *bexec_n(const char *cmd, size_t max_bytes)
 }
 
 /* ── bexec ────────────────────────────────────────────────────────────────── */
+
+/* ── bexec_batch ─────────────────────────────────────────────────────────── */
+
+int bexec_batch(bexec_batch_item_t *items, int n_items)
+{
+    bexec_init();
+
+    if (!items || n_items <= 0 || n_items > BEXEC_MAX_BATCH) return -1;
+
+    char combined[4096];
+    combined[0] = '\0';
+    size_t pos = 0;
+
+    for (int i = 0; i < n_items; i++) {
+        int n = snprintf(combined + pos, sizeof(combined) - pos,
+                          "%secho __BX_%d__; %s",
+                          i ? "; " : "", i, items[i].cmd);
+        if (n < 0 || (size_t)n >= sizeof(combined) - pos) {
+            fprintf(stderr, "[BEXEC_BATCH] combined command overflowed local 4096 buffer\n");
+            return -1;
+        }
+        pos += (size_t)n;
+    }
+
+    /* Budget check applies unconditionally, not just when the RISH backend
+     * is currently active. Only bexec_n()'s RISH branch has the fixed
+     * 1600-byte rishcmd buffer (ADB_CLI/ADB build 'full' dynamically off
+     * strlen(cmd)), but the active backend can flip between polls -- cache
+     * TTL expiry, reprobe on failure -- so a batch that's safe on ADB_CLI
+     * today must still be safe if RISH wins next poll. Enforcing here,
+     * once, means callers never have to think about it. */
+    if (strlen(combined) > BEXEC_CMD_BUDGET) {
+        fprintf(stderr,
+            "[BEXEC_BATCH] combined command %zu bytes exceeds %d-byte budget -- "
+            "refusing (would silently truncate on RISH backend)\n",
+            strlen(combined), BEXEC_CMD_BUDGET);
+        return -1;
+    }
+
+    char *raw = bexec(combined);
+    if (!raw) {
+        for (int i = 0; i < n_items; i++) items[i].result = NULL;
+        return -1;
+    }
+
+    char *cursor = raw;
+    for (int i = 0; i < n_items; i++) {
+        char marker[32];
+        snprintf(marker, sizeof(marker), "__BX_%d__", i);
+
+        char *start = strstr(cursor, marker);
+        if (!start) { items[i].result = NULL; continue; }
+        start += strlen(marker);
+        while (*start == '\n' || *start == '\r') start++;
+
+        char *end = NULL;
+        if (i + 1 < n_items) {
+            char next_marker[32];
+            snprintf(next_marker, sizeof(next_marker), "__BX_%d__", i + 1);
+            end = strstr(start, next_marker);
+        }
+
+        size_t len = end ? (size_t)(end - start) : strlen(start);
+        while (len > 0 && (start[len-1] == '\n' || start[len-1] == '\r')) len--;
+
+        char *res = malloc(len + 1);
+        if (res) { memcpy(res, start, len); res[len] = '\0'; }
+        items[i].result = res;
+
+        cursor = end ? end : start + len;
+    }
+
+    free(raw);
+    return 0;
+}
 
 char *bexec(const char *cmd)
 {
