@@ -242,46 +242,6 @@ static void check_hardware_attestation(char *attest_json, size_t attest_size) {
 }
 
 /* ── Runtime integrity: dm-verity & f2fs monitoring ────────────────────────── */
-static void check_filesystem_integrity(char *fs_json, size_t fs_size) {
-    fs_json[0] = 0;
-
-    /* dm-verity status from dmesg */
-    char buf[4096];
-    char *verity = rish_read("dmesg 2>/dev/null | grep -i 'dm-verity.*corruption' | tail -3",
-                              buf, sizeof(buf));
-    if (verity && strlen(verity) > 0) {
-        char *line = strtok(verity, "\n");
-        while (line) {
-            char entry[512];
-            snprintf(entry, sizeof(entry), "{\"type\":\"verity_corruption\",\"msg\":\"%.200s\"},", line);
-            strncat(fs_json, entry, fs_size - 1);
-            line = strtok(NULL, "\n");
-        }
-    }
-
-    /* f2fs errors */
-    char *f2fs = rish_read("dmesg 2>/dev/null | grep -iE 'f2fs.*error|f2fs.*corruption' | tail -3",
-                            buf, sizeof(buf));
-    if (f2fs && strlen(f2fs) > 0) {
-        char *line = strtok(f2fs, "\n");
-        while (line) {
-            char entry[512];
-            snprintf(entry, sizeof(entry), "{\"type\":\"f2fs_error\",\"msg\":\"%.200s\"},", line);
-            strncat(fs_json, entry, fs_size - 1);
-            line = strtok(NULL, "\n");
-        }
-    }
-
-    /* Check if verity is disabled on any partition */
-    char *mounts = rish_read("cat /proc/mounts 2>/dev/null | grep -E 'system|vendor' | grep -v 'dm-verity' | tr '\n' ' '",
-                              buf, sizeof(buf));
-    if (mounts && strlen(mounts) > 0) {
-        char entry[256];
-        snprintf(entry, sizeof(entry), "{\"type\":\"verity_disabled\",\"mounts\":\"%.100s\"},", mounts);
-        strncat(fs_json, entry, fs_size - 1);
-    }
-}
-
 /* ── Persistence audit ─────────────────────────────────────────────────────── */
 static void audit_persistence(char *persist_json, size_t persist_size) {
     persist_json[0] = 0;
@@ -329,11 +289,14 @@ static void check_mimd_cage(char *mimd_json, size_t mimd_size) {
     char buf[512];
     char *cgroup = rish_read("grep memory /proc/self/cgroup 2>/dev/null", buf, sizeof(buf));
 
-    int caged = (cgroup && contains(cgroup, "mimd"));
+    int cgroup_read_blocked = (cgroup && contains(cgroup, "Request timeout"));
+    int caged = (!cgroup_read_blocked && cgroup && contains(cgroup, "mimd"));
     char entry[512];
     snprintf(entry, sizeof(entry),
-        "{\"type\":\"mimd_cage\",\"caged\":%s,\"cgroup\":\"%.200s\"},",
-        caged ? "true" : "false", cgroup ? cgroup : "unknown");
+        "{\"type\":\"mimd_cage\",\"caged\":%s,\"read_blocked\":%s,\"cgroup\":\"%.200s\"},",
+        caged ? "true" : "false",
+        cgroup_read_blocked ? "true" : "false",
+        cgroup_read_blocked ? "unavailable (Shizuku IPC timeout)" : (cgroup ? cgroup : "unknown"));
     strncat(mimd_json, entry, mimd_size - 1);
 
     /* Check for frozen/unfrozen cgroups under root — visible even without write access */
@@ -584,20 +547,18 @@ static void write_json(
     const char *taint_json, const char *cap_json, const char *seccomp_json,
     const char *hard_json, const char *vuln_json,
     const char *drift, const char *attest,
-    const char *fs_events, const char *persist, const char *mimd,
+    const char *persist, const char *mimd,
     const char *threat_indicator)
 {
-    char d[4096], a[4096], f[4096], p[4096], m[4096], hw[512], vu[4096];
+    char d[4096], a[4096], p[4096], m[4096], hw[512], vu[4096];
     strncpy(d, drift, sizeof(d) - 1); d[sizeof(d) - 1] = 0;
     strncpy(a, attest, sizeof(a) - 1); a[sizeof(a) - 1] = 0;
-    strncpy(f, fs_events, sizeof(f) - 1); f[sizeof(f) - 1] = 0;
     strncpy(p, persist, sizeof(p) - 1); p[sizeof(p) - 1] = 0;
     strncpy(m, mimd, sizeof(m) - 1); m[sizeof(m) - 1] = 0;
     strncpy(hw, hard_json, sizeof(hw) - 1); hw[sizeof(hw) - 1] = 0;
     strncpy(vu, vuln_json, sizeof(vu) - 1); vu[sizeof(vu) - 1] = 0;
     strip_trailing_comma(d);
     strip_trailing_comma(a);
-    strip_trailing_comma(f);
     strip_trailing_comma(p);
     strip_trailing_comma(m);
     strip_trailing_comma(vu);
@@ -647,7 +608,6 @@ static void write_json(
         "    \"param_changes\": [%s]\n"
         "  },\n\n"
         "  \"hardware_attestation\": [%s],\n\n"
-        "  \"filesystem_integrity\": [%s],\n\n"
         "  \"persistence_audit\": [%s],\n\n"
         "  \"mimd_cgroup\": [%s],\n\n"
         "  \"threat_indicators\": [%s]\n"
@@ -663,7 +623,7 @@ static void write_json(
         taint_json, cap_json, seccomp_json, hw, vu,
         strlen(d) > 0 ? "true" : "false",
         confirmed_degradation ? "true" : "false",
-        d, a, f, p, m, threat_indicator);
+        d, a, p, m, threat_indicator);
 
     fflush(out);
     fclose(out);
@@ -693,9 +653,20 @@ static void poll_security(void) {
             selinux[sizeof(selinux) - 1] = 0;
         }
     }
+    /* Any leftover error text (Shizuku timeout, Permission denied) that
+     * slipped through the getenforce/getprop fallback chain collapses to
+     * 'unknown' here instead of being treated as a real property value --
+     * confirmed live 2026-07-19: a raw timeout string previously fell
+     * through and got reported as PERMISSIVE. */
+    int selinux_read_blocked = (strcmp(selinux, "unknown") == 0) ||
+                                contains(selinux, "Request timeout") ||
+                                contains(selinux, "Permission");
+    if (selinux_read_blocked) strcpy(selinux, "unknown");
+
     int enforcing = contains(selinux, "enforcing") || contains(selinux, "Enforcing");
-    if (!enforcing) score -= 25;
-    printf("[GRANITOR]  SELinux: %-12s %s\n", selinux, enforcing ? "ok" : "!!! PERMISSIVE");
+    if (!selinux_read_blocked && !enforcing) score -= 25;
+    printf("[GRANITOR]  SELinux: %-12s %s\n", selinux,
+           selinux_read_blocked ? "READ BLOCKED" : (enforcing ? "ok" : "!!! PERMISSIVE"));
 
     /* ── Verified Boot ─────────────────────────────────────────────────── */
     char vb_state[32], vb_mode[32], flash_lock[16];
@@ -813,10 +784,6 @@ static void poll_security(void) {
     char attest_json[4096] = "";
     check_hardware_attestation(attest_json, sizeof(attest_json));
 
-    /* ── Deep dive: filesystem integrity ──────────────────────────────── */
-    char fs_json[4096] = "";
-    check_filesystem_integrity(fs_json, sizeof(fs_json));
-
     /* ── Deep dive: persistence audit ─────────────────────────────────── */
     char persist_json[4096] = "";
     audit_persistence(persist_json, sizeof(persist_json));
@@ -842,7 +809,7 @@ static void poll_security(void) {
     char threat_json[512] = "";
     int confidence = correlate_threats(score, enforcing, rooted,
                                         drift_json, attest_json,
-                                        fs_json, persist_json,
+                                        "", persist_json,
                                         threat_json, sizeof(threat_json));
 
     if (score < 0) score = 0;
@@ -858,8 +825,6 @@ static void poll_security(void) {
         printf("[GRANITOR]  DRIFT: %s\n", drift_json);
     if (strlen(attest_json) > 0)
         printf("[GRANITOR]  ATTEST: %s\n", attest_json);
-    if (strlen(fs_json) > 0)
-        printf("[GRANITOR]  FS: %s\n", fs_json);
     if (strlen(persist_json) > 0)
         printf("[GRANITOR]  PERSIST: %s\n", persist_json);
     if (strlen(mimd_json) > 0)
@@ -879,7 +844,7 @@ static void poll_security(void) {
                kptr, dmesg, perf, aslr, hardlinks, symlinks,
                selinux_blocks_kernel_params,
                taint_json, cap_json, seccomp_json, hard_json, vuln_json,
-               drift_json, attest_json, fs_json, persist_json, mimd_json, threat_json);
+               drift_json, attest_json, persist_json, mimd_json, threat_json);
 }
 
 /* ── Main ───────────────────────────────────────────────────────────────── */
