@@ -7,6 +7,7 @@
 #include "backend_thermals.h"
 #include "backend_adb.h"
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <sys/select.h>
 #include <arpa/inet.h>
@@ -190,6 +191,12 @@ static int create_socket(const char *path)
 
     if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         close(fd);
+        return -1;
+    }
+
+    if (chmod(path, 0600) < 0) {
+        close(fd);
+        unlink(path);
         return -1;
     }
 

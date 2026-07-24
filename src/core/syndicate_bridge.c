@@ -6,8 +6,8 @@
 
 void fugitoid_init() {
     // Ensures the workspace is ready for the daemons
-    mkdir("/data/data/com.termux/files/home/MiuiserPeruser/pipes", 0777);
-    mkdir("/data/data/com.termux/files/home/MiuiserPeruser/logs", 0777);
+    mkdir("/data/data/com.termux/files/home/MiuiserPeruser/pipes", 0700);
+    mkdir("/data/data/com.termux/files/home/MiuiserPeruser/logs", 0700);
 }
 
 void fugitoid_log(const char* level, const char* fmt, ...) {
