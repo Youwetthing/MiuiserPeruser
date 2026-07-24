@@ -45,7 +45,7 @@ int main() {
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, KRANG_PATH, sizeof(addr.sun_path)-1);
     bind(serv_fd, (struct sockaddr*)&addr, sizeof(addr));
-    chmod(KRANG_PATH, 0666);
+    chmod(KRANG_PATH, 0600);
     listen(serv_fd, 5);
 
     while (1) {

@@ -10,7 +10,7 @@
 #define PIPE_DIR "/data/data/com.termux/files/home/MiuiserPeruser/pipes"
 
 int main() {
-    mkdir(PIPE_DIR, 0777);
+    mkdir(PIPE_DIR, 0700);
     unlink(HUB_PATH); // Self-heal stale socket
 
     int serv_fd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -24,7 +24,7 @@ int main() {
         return 1;
     }
     
-    chmod(HUB_PATH, 0666);
+    chmod(HUB_PATH, 0600);
     listen(serv_fd, 10);
     printf("TURTLECOM: Sewer Hub Online. Path: %s\n", HUB_PATH);
 

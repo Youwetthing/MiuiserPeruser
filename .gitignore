@@ -130,3 +130,6 @@ bin/
 rish /
 Registry/daemon_results/*.json
 data/*_baseline.json
+
+# Runtime GDPR export (device data — never commit)
+gdpr_export.txt
