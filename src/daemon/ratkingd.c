@@ -4,6 +4,7 @@
  *            network correlation, memory attribution, lifecycle tracking
  */
 
+#include "daemon_common.h"
 #include "daemon_core.h"
 #include "ipc_globals.h"
 #include <stdbool.h>
@@ -425,7 +426,7 @@ static void write_json(
     strip_trailing_comma(pr);
     strip_trailing_comma(nw);
 
-    FILE *f = fopen(RESULTS_FILE, "w");
+    FILE *f = results_open(DAEMON_NAME, RESULTS_FILE);
     if (!f) return;
 
     fprintf(f,
@@ -463,7 +464,7 @@ static void write_json(
         tc, tm, an, pr, nw);
 
     fflush(f);
-    fclose(f);
+    results_close(DAEMON_NAME, RESULTS_FILE, f);
 }
 
 /* ── Main poll ─────────────────────────────────────────────────────────────── */

@@ -5,6 +5,7 @@
  * Learns the device's normal state and flags deviations.
  */
 
+#include "daemon_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -279,11 +280,11 @@ static uint32_t get_prop_hash(void) {
 
 /* ── Baseline ─────────────────────────────────────────────────── */
 static void save_baseline(int svc_count, uint32_t prop_hash) {
-    FILE *f = fopen(BASELINE_FILE, "w");
+    FILE *f = results_open("tigerclawd", BASELINE_FILE);
     if (!f) return;
     fprintf(f, "{\"service_count\":%d,\"prop_hash\":%u,\"established_at\":%ld}\n",
             svc_count, prop_hash, (long)time(NULL));
-    fclose(f);
+    results_close("tigerclawd", BASELINE_FILE, f);
     g_baseline_svc = svc_count;
     g_baseline_prop_hash = prop_hash;
     g_baseline_established = 1;
@@ -329,7 +330,7 @@ static void write_json(int svc_count, int svc_drift, int suspicious,
                        const char *hardware, const char *hyperos,
                        const char *sec_patch, const char *bootloader,
                        int ms) {
-    FILE *f = fopen(RESULTS_FILE, "w");
+    FILE *f = results_open("tigerclawd", RESULTS_FILE);
     if (!f) return;
     char ts[32]; time_t t = time(NULL);
     strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
@@ -394,7 +395,7 @@ static void write_json(int svc_count, int svc_drift, int suspicious,
         "  \"poll_duration_ms\": %d\n"
         "}\n", ms);
 
-    fflush(f); fclose(f);
+    fflush(f); results_close("tigerclawd", RESULTS_FILE, f);
 }
 
 int main(void) {

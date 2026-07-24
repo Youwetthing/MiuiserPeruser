@@ -32,6 +32,7 @@
  *   burned.scan_count— max polls before exit, 0 = unlimited
  */
 
+#include "daemon_common.h"
 #include "ipc_globals.h"
 #include "gaveld_emit.h"
 #include <stdio.h>
@@ -81,19 +82,7 @@ static int get_max_scans(void) { return config_int("scan_count", 0); }
 
 static void splinterd_emit(const char *type, const char *payload)
 {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return;
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, SPLINTER_SOCKET, sizeof(addr.sun_path) - 1);
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-        char buf[512];
-        int n = snprintf(buf, sizeof(buf),
-                         "APRIL|" DAEMON_NAME "|%s|%s\n", type, payload);
-        if (n > 0) write(fd, buf, (size_t)n);
-    }
-    close(fd);
+    splinter_emit(DAEMON_NAME, SPLINTER_SOCKET, type, payload);
 }
 
 /* ── Getprop ──────────────────────────────────────────────────────────── */
@@ -221,7 +210,7 @@ static void write_results(int n_invasive, int n_privacy, int n_change,
                            const char *inv_list, const char *priv_list,
                            int scan_num)
 {
-    FILE *f = fopen(RESULTS_FILE, "w");
+    FILE *f = results_open(DAEMON_NAME, RESULTS_FILE);
     if (!f) return;
     time_t t = time(NULL);
     char ts[32];
@@ -253,7 +242,7 @@ static void write_results(int n_invasive, int n_privacy, int n_change,
                 i < g_npprops - 1 ? "," : "");
     }
     fprintf(f, "  ]\n}\n");
-    fclose(f);
+    results_close(DAEMON_NAME, RESULTS_FILE, f);
 }
 
 /* ── Poll ─────────────────────────────────────────────────────────────── */

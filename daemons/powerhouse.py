@@ -29,33 +29,45 @@ class PowerhouseDaemon:
             s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             s.settimeout(1.0)
             s.connect(SEWER_SOCK)
-        except:
-            # Fall back to TCP
+        except OSError as unix_err:
+            # Fall back to TCP, but keep the UNIX error: reporting only the
+            # TCP failure hid the reason the primary transport was down.
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.settimeout(1.0)
                 s.connect(TCP_FALLBACK)
-            except Exception as e:
-                print(f"[Powerhouse] Both sockets failed: {e}")
+            except OSError as tcp_err:
+                print(f"[Powerhouse] Both sockets failed: "
+                      f"unix={unix_err}, tcp={tcp_err}")
                 return None
 
-        data = cmd.encode()
-        s.sendall(struct.pack("!I", len(data)))
-        s.sendall(data)
+        try:
+            data = cmd.encode()
+            s.sendall(struct.pack("!I", len(data)))
+            s.sendall(data)
 
-        hdr = s.recv(4)
-        if len(hdr) < 4:
-            s.close()
+            hdr = s.recv(4)
+            if len(hdr) < 4:
+                # Every one of these paths used to return a bare None, so the
+                # caller could not tell a dead peer from an empty reply.
+                print(f"[Powerhouse] Short header ({len(hdr)}/4 bytes) "
+                      f"for command: {cmd}")
+                return None
+            resp_len = struct.unpack("!I", hdr)[0]
+            resp = b""
+            while len(resp) < resp_len:
+                chunk = s.recv(resp_len - len(resp))
+                if not chunk:
+                    print(f"[Powerhouse] Truncated response "
+                          f"({len(resp)}/{resp_len} bytes) for command: {cmd}")
+                    return None
+                resp += chunk
+            return resp.decode()
+        except OSError as e:
+            print(f"[Powerhouse] Transport error for command {cmd}: {e}")
             return None
-        resp_len = struct.unpack("!I", hdr)[0]
-        resp = b""
-        while len(resp) < resp_len:
-            chunk = s.recv(resp_len - len(resp))
-            if not chunk:
-                break
-            resp += chunk
-        s.close()
-        return resp.decode()
+        finally:
+            s.close()
 
     def start_loop(self):
         self.active = True

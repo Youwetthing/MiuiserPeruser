@@ -24,8 +24,11 @@ static void notify_user(const char *title, const char *content) {
         "termux-notification --title \"gaveld audit: %s\""
         " --content \"%s\" 2>/dev/null",
         title, content);
-    system(cmd);
-    glog("INFO", "AUDIT_NOTIFY title=%s", title);
+    int rc = system(cmd);
+    if (rc != 0)
+        glog("WARN", "AUDIT_NOTIFY failed title=%s rc=%d", title, rc);
+    else
+        glog("INFO", "AUDIT_NOTIFY title=%s", title);
 }
 
 /* ── Check 1: verdict rate ───────────────────────────────────────────────── */

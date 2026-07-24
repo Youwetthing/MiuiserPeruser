@@ -7,6 +7,7 @@
  * Uses adb directly — dumpsys sensorservice is 150KB+, bexec buffer too small
  */
 
+#include "daemon_common.h"
 #include "ipc_globals.h"
 #include "gaveld_emit.h"
 #include "backend_exec.h"
@@ -71,19 +72,7 @@ static int get_max_scans(void) { return config_get_int("scan_count", 0); }
 
 static void splinterd_emit(const char *type, const char *payload)
 {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return;
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, SPLINTER_SOCKET, sizeof(addr.sun_path) - 1);
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-        char buf[512];
-        int n = snprintf(buf, sizeof(buf),
-                         "APRIL|" DAEMON_NAME "|%s|%s\n", type, payload);
-        if (n > 0) write(fd, buf, (size_t)n);
-    }
-    close(fd);
+    splinter_emit(DAEMON_NAME, SPLINTER_SOCKET, type, payload);
 }
 
 /* ── Type helpers ─────────────────────────────────────────────────────── */
@@ -134,20 +123,36 @@ static char *fetch_sensorservice(void)
     char *buf = malloc(cap);
     if (!buf) { pclose(f); return NULL; }
 
+    int truncated = 0;
     char tmp[512];
     while (fgets(tmp, sizeof(tmp), f)) {
         size_t tl = strlen(tmp);
         if (len + tl + 1 >= cap) {
             cap *= 2;
             char *nb = realloc(buf, cap);
-            if (!nb) break;
+            if (!nb) { truncated = 1; break; }
             buf = nb;
         }
         memcpy(buf + len, tmp, tl);
         len += tl;
     }
     buf[len] = '\0';
-    pclose(f);
+
+    if (truncated)
+        fprintf(stderr, "[METALHEAD] sensor dump truncated at %zu bytes "
+                        "(out of memory)\n", len);
+
+    /* An adb transport that is down exits non-zero with no output. Without
+     * checking that, the caller parses an empty dump and reports zero
+     * sensors -- a clean scan indistinguishable from a real one. */
+    int status = pclose(f);
+    if (len == 0 && status != 0) {
+        fprintf(stderr, "[METALHEAD] dumpsys sensorservice failed "
+                        "(adb exit status %d)\n", status);
+        free(buf);
+        return NULL;
+    }
+
     return buf;
 }
 
@@ -219,7 +224,7 @@ static int parse_sensors(const char *dump)
 static void write_results(int score, int scan_num, int sigs,
                            int nsensors, int sensitive_active, int flood)
 {
-    FILE *f = fopen(RESULTS_FILE, "w");
+    FILE *f = results_open(DAEMON_NAME, RESULTS_FILE);
     if (!f) return;
     time_t t = time(NULL);
     char ts[32];
@@ -242,7 +247,7 @@ static void write_results(int score, int scan_num, int sigs,
         "}\n",
         ts, scan_num, sigs, score, grade,
         nsensors, sensitive_active, flood);
-    fclose(f);
+    results_close(DAEMON_NAME, RESULTS_FILE, f);
 }
 
 /* ── Main poll ────────────────────────────────────────────────────────── */

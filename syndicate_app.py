@@ -1,8 +1,15 @@
 #!/data/data/com.termux/files/usr/bin/python3
 from flask import Flask, render_template_string, jsonify
+import logging
 import subprocess, os, time
 
 app = Flask(__name__)
+log = logging.getLogger(__name__)
+
+DAEMONS = ['rocksteadyd', 'krangd', 'splinterd', 'bebopd', 'leatherheadd',
+           'metalheadd', 'ratkingd', 'shredderd', 'tigerclawd', 'granitord',
+           'foot_clan_supreme', 'sysportd', 'powerhouse', 'flip_switch']
+DB_PATH = "logs/syndicate_footclan.db"
 
 HTML = '''
 <!DOCTYPE html>
@@ -70,38 +77,82 @@ def home():
 def status():
     try:
         out = subprocess.check_output(['ps', 'aux'], text=True)
-        return '<br>'.join([line for line in out.splitlines() if any(x in line for x in ['rocksteadyd','krangd','splinterd','bebopd','leatherheadd','metalheadd','ratkingd','shredderd','tigerclawd','granitord','foot_clan_supreme','sysportd','powerhouse','flip_switch'])])
-    except:
-        return "Error reading status"
+    except (OSError, subprocess.CalledProcessError) as e:
+        # A bare except here reported "Error reading status" for everything,
+        # including a genuinely empty daemon list.
+        log.exception("ps aux failed")
+        return f"Error reading status: {e}", 500
+    return '<br>'.join(line for line in out.splitlines()
+                       if any(d in line for d in DAEMONS))
 
 @app.route('/logs')
 def logs():
+    # shell=True with a list argv silently ran only 'tail', ignoring the
+    # glob and the line count.
     try:
-        return subprocess.check_output(['tail', '-n', '30', 'logs/*.log'], text=True, shell=True)
-    except:
-        return "No logs yet"
+        return subprocess.check_output("tail -n 30 logs/*.log",
+                                       text=True, shell=True,
+                                       stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        log.warning("tail failed (%s): %s", e.returncode, e.output)
+        return f"No logs yet: {e.output}", 404
+    except OSError as e:
+        log.exception("tail failed")
+        return f"Error reading logs: {e}", 500
 
 @app.route('/toggle-granitor')
 def toggle_granitor():
-    subprocess.run(["sqlite3", "logs/syndicate_footclan.db", "UPDATE heartbeats SET status_flag = (status_flag + 1) % 2 WHERE daemon_name='granitor_killing_enabled';"])
+    try:
+        subprocess.run(
+            ["sqlite3", DB_PATH,
+             "UPDATE heartbeats SET status_flag = (status_flag + 1) % 2 "
+             "WHERE daemon_name='granitor_killing_enabled';"],
+            check=True, capture_output=True, text=True)
+    except (OSError, subprocess.CalledProcessError) as e:
+        # The UI reported "Toggled" whether or not the update ran.
+        log.exception("granitor toggle failed")
+        return f"Toggle failed: {e}", 500
     return "Toggled"
 
 @app.route('/scan')
 def scan():
-    subprocess.Popen(["nohup", "bin/tigerclawd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.Popen(["nohup", "bin/tigerclawd"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as e:
+        log.exception("tigerclawd launch failed")
+        return f"Scan failed to start: {e}", 500
     return "Scan started"
+
+def _section(cmd):
+    """Run a shell command for the export, keeping failures in the export.
+
+    subprocess.getoutput() merges stderr into stdout and drops the exit
+    status, so a failed section was indistinguishable from an empty one.
+    """
+    result = subprocess.run(cmd, shell=True, text=True, capture_output=True)
+    if result.returncode != 0:
+        log.warning("export section failed (%s): %s", cmd, result.stderr.strip())
+        return (f"[unavailable: command exited {result.returncode}]\n"
+                f"{result.stderr.strip()}\n")
+    return result.stdout
 
 @app.route('/gdpr')
 def gdpr():
-    with open("gdpr_export.txt", "w") as f:
-        f.write("=== GDPR / SUBJECT ACCESS REQUEST EXPORT ===\n")
-        f.write(f"Generated: {time.ctime()}\n\n")
-        f.write("=== RUNNING PROCESSES ===\n")
-        f.write(subprocess.getoutput("ps aux | grep -E 'rocksteadyd|krangd|...|sysportd|powerhouse|flip_switch'"))
-        f.write("\n\n=== HEARTBEATS ===\n")
-        f.write(subprocess.getoutput("sqlite3 logs/syndicate_footclan.db 'SELECT * FROM heartbeats;'"))
-        f.write("\n\n=== RECENT LOGS ===\n")
-        f.write(subprocess.getoutput("tail -n 100 logs/*.log"))
+    ps_filter = '|'.join(DAEMONS)
+    try:
+        with open("gdpr_export.txt", "w") as f:
+            f.write("=== GDPR / SUBJECT ACCESS REQUEST EXPORT ===\n")
+            f.write(f"Generated: {time.ctime()}\n\n")
+            f.write("=== RUNNING PROCESSES ===\n")
+            f.write(_section(f"ps aux | grep -E '{ps_filter}'"))
+            f.write("\n\n=== HEARTBEATS ===\n")
+            f.write(_section(f"sqlite3 {DB_PATH} 'SELECT * FROM heartbeats;'"))
+            f.write("\n\n=== RECENT LOGS ===\n")
+            f.write(_section("tail -n 100 logs/*.log"))
+    except OSError as e:
+        log.exception("GDPR export failed")
+        return f"GDPR export failed: {e}", 500
     return "GDPR export ready. Download gdpr_export.txt from your files."
 
 if __name__ == '__main__':

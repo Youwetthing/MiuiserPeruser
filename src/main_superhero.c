@@ -3,6 +3,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
 #include "superhero_mode.h"
 #include "splinter_dojo.h"
 #include "leo_detection.h"

@@ -16,6 +16,7 @@
  *   - All JSON trailing commas handled
  */
 
+#include "daemon_common.h"
 #include "ipc_globals.h"
 #include "backend_exec.h"
 #include "gaveld_emit.h"
@@ -123,7 +124,7 @@ static void load_baseline(void) {
 }
 
 static void save_baseline(void) {
-    FILE *f = fopen(BASELINE_FILE, "w");
+    FILE *f = results_open(DAEMON_NAME, BASELINE_FILE);
     if (!f) return;
     for (int i = 0; i < baseline_mod_count; i++) {
         fprintf(f, "%s %s %zu %s %ld\n",
@@ -133,7 +134,7 @@ static void save_baseline(void) {
             baseline_mods[i].path,
             baseline_mods[i].first_seen);
     }
-    fclose(f);
+    results_close(DAEMON_NAME, BASELINE_FILE, f);
 }
 
 static void establish_baseline(void) {
@@ -692,11 +693,8 @@ static void write_json(
     strip_trailing_comma(fs_clean);
     strip_trailing_comma(reasons_clean);
 
-    FILE *f = fopen(RESULTS_FILE, "w");
-    if (!f) {
-        fprintf(stderr, "[SHREDDER] ERROR: cannot write %s\n", RESULTS_FILE);
-        return;
-    }
+    FILE *f = results_open(DAEMON_NAME, RESULTS_FILE);
+    if (!f) return;
 
     fprintf(f,
         "{\n"
@@ -769,7 +767,7 @@ static void write_json(
         suspicious_mod ? suspicious_mod : "");
 
     fflush(f);
-    fclose(f);
+    results_close(DAEMON_NAME, RESULTS_FILE, f);
     fprintf(stderr, "[SHREDDER] JSON written: score=%d grade=%s drift_confirmed=%s\n",
         score, grade, confirmed_drift ? "YES" : "no");
 }

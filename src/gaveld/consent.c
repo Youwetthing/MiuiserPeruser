@@ -57,7 +57,11 @@ static void send_notification(const pending_t *p) {
         r->case_id, GAVELD_SOCK);
 
     int rc = system(cmd);
-    glog("INFO", "NOTIF sent case=%s src=%s verdict=%s rc=%d",
+    /* rc != 0 means the user never saw the consent prompt, so the pending
+     * case will time out with no decision rather than be approved/denied. */
+    glog(rc == 0 ? "INFO" : "WARN",
+         "NOTIF %s case=%s src=%s verdict=%s rc=%d",
+         rc == 0 ? "sent" : "FAILED",
          r->case_id, r->source, r->verdict, rc);
 }
 
@@ -70,7 +74,9 @@ static void dismiss_notification(const char *case_id) {
     char cmd[256];
     snprintf(cmd, sizeof(cmd),
         "termux-notification-remove %d 2>/dev/null", notif_id);
-    system(cmd);
+    int rc = system(cmd);
+    if (rc != 0)
+        glog("WARN", "NOTIF dismiss failed case=%s rc=%d", case_id, rc);
 }
 
 /* ── Find slot by case_id (caller holds lock) ────────────────────────────── */

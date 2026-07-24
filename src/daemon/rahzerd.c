@@ -10,6 +10,7 @@
  *   RAHZERD_NO_RISH     1 = skip rish
  */
 
+#include "daemon_common.h"
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -74,7 +75,10 @@ char *rz_run(const char *cmd) {
     char safe_cmd[2048];
     snprintf(safe_cmd, sizeof(safe_cmd), "timeout 3 %s", cmd);
     FILE *f = popen(safe_cmd, "r");
-    if (!f) return NULL;
+    if (!f) {
+        rzlog("WARN", "popen failed (%s): %.80s", strerror(errno), cmd);
+        return NULL;
+    }
     char *buf = malloc(MAX_CMD_OUT);
     if (!buf) { pclose(f); return NULL; }
     size_t tot = 0, n;
@@ -82,8 +86,21 @@ char *rz_run(const char *cmd) {
         tot += n;
         if (tot >= (size_t)(MAX_CMD_OUT - 1)) break;
     }
-    pclose(f);
+    int read_failed = ferror(f);
+    /* `timeout 3` reports 124 on expiry, the command's own status
+     * otherwise. Discarding it meant a killed or missing command was
+     * reported to the caller exactly like a command with no output. */
+    int status = pclose(f);
     buf[tot] = '\0';
+
+    if (status != -1 && WIFEXITED(status) && WEXITSTATUS(status) == 124)
+        rzlog("WARN", "command timed out after 3s: %.80s", cmd);
+    else if (read_failed || status != 0)
+        /* Non-zero is routine here (grep with no match), so this stays at
+         * DEBUG and only shows up with debugging on. */
+        rzlog("DEBUG", "command failed (status %d%s): %.80s",
+              status, read_failed ? ", read error" : "", cmd);
+
     if (!tot) { free(buf); return NULL; }
     return buf;
 }
@@ -891,7 +908,7 @@ static int  g_baseline_dns_ms   = 0;
 static int  g_baseline_established = 0;
 
 static void rz_write_json(const rz_snapshot_t *snap) {
-    FILE *f = fopen(RESULTS_FILE, "w");
+    FILE *f = results_open("rahzerd", RESULTS_FILE);
     if (!f) return;
     char ts[32];
     time_t t = time(NULL);
@@ -948,7 +965,7 @@ static void rz_write_json(const rz_snapshot_t *snap) {
         snap->xiaomi.divergence_detected,
         snap->poll_duration_ms);
     fflush(f);
-    fclose(f);
+    results_close("rahzerd", RESULTS_FILE, f);
 }
 
 static void rz_establish_baseline(const rz_snapshot_t *snap) {

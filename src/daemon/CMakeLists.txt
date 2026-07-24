@@ -27,4 +27,6 @@ endforeach()
 
 # shredderd needs OpenSSL for SHA256
 target_link_libraries(shredderd PRIVATE crypto)
+# ratkingd uses sqrt() for its z-score baseline
+target_link_libraries(ratkingd PRIVATE m)
 target_link_libraries(granitord PRIVATE crypto)

@@ -15,8 +15,10 @@
  * immediately rather than hanging the calling daemon.
  */
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 /*
@@ -39,9 +41,26 @@
  */
 static inline int gaveld_emit(const char *source, const char *signal,
                                double weight, const char *ctx) {
+    /*
+     * Every call site ignores the return value, so a dropped signal used
+     * to be completely invisible: the daemon logs the finding, gaveld
+     * never scores it, and nothing says why. Report the first drop per
+     * process (and the first after a recovery) instead of once per poll,
+     * which would flood the log while gaveld is down.
+     */
+    static int warned = 0;
+
     /* Non-blocking open — returns ENXIO immediately if no reader */
     int fd = open(GAVELD_INGEST_PIPE, O_WRONLY | O_NONBLOCK);
-    if (fd < 0) return -1;
+    if (fd < 0) {
+        if (!warned) {
+            warned = 1;
+            fprintf(stderr, "[GAVELD] signal dropped (%s: %s): %s/%s\n",
+                    GAVELD_INGEST_PIPE, strerror(errno),
+                    source ? source : "unknown", signal ? signal : "");
+        }
+        return -1;
+    }
 
     /*
      * Buffer sized for worst-case:
@@ -56,10 +75,24 @@ static inline int gaveld_emit(const char *source, const char *signal,
                      ctx    ? ctx    : "");
 
     int rc = -1;
-    if (n > 0 && n < (int)sizeof(buf))
-        rc = (write(fd, buf, (size_t)n) == n) ? 0 : -1;
+    int write_errno = 0;
+    if (n <= 0 || n >= (int)sizeof(buf)) {
+        write_errno = EMSGSIZE;   /* record truncated before it was sent */
+    } else if (write(fd, buf, (size_t)n) == n) {
+        rc = 0;
+        warned = 0;               /* re-arm: report the next drop too */
+    } else {
+        write_errno = errno;      /* short write or EAGAIN on a full pipe */
+    }
 
     close(fd);
+
+    if (rc != 0 && !warned) {
+        warned = 1;
+        fprintf(stderr, "[GAVELD] signal dropped (write: %s): %s/%s\n",
+                strerror(write_errno),
+                source ? source : "unknown", signal ? signal : "");
+    }
     return rc;
 }
 
