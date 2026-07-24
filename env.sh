@@ -19,3 +19,6 @@ INGEST_PIPE="$PIPES/ingest.pipe"
 # Logs
 TURTLEPOWER_LOG="$BASE/src/turtle_power/logs/turtlepower.log"
 SYNDICATE_FEED_SOCK="$PIPES/syndicate_feed.sock"
+
+# Shared helpers (run_shell, _rotate_log, db_log_* stubs)
+[ -f "$BASE/lib/miuiserperuser_common.sh" ] && . "$BASE/lib/miuiserperuser_common.sh"

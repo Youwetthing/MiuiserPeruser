@@ -23,14 +23,7 @@ EVAL_INTERVAL=10   # seconds between engine rule evaluations
 
 mkdir -p "$TP_DIR/logs" "$PIDDIR"
 
-MAX_LOG_BYTES=524288  # 500KB
-
-_rotate_log() {
-    if [ -f "$LOG" ] && [ "$(stat -c%s "$LOG" 2>/dev/null || echo 0)" -gt "$MAX_LOG_BYTES" ]; then
-        mv "$LOG" "${LOG}.1"
-        > "$LOG"
-    fi
-}
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../lib/miuiserperuser_common.sh"
 
 log() { _rotate_log; echo "[TP_DAEMON] $(date +%s) $1" >> "$LOG"; }
 

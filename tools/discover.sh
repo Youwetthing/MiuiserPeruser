@@ -9,7 +9,6 @@ source "$(dirname "$0")/lib/tool_backend.sh"
 # -------------------------------------------------------------------
 
 export PATH="$PATH:$HOME/.shizuku:$PREFIX/bin"
-source lib/miuiserperuser_common.sh 2>/dev/null || true
 db_log_tool_start "Discover"
 
 # Colors
@@ -24,19 +23,6 @@ BOX_TL_THICK='╔'; BOX_TR_THICK='╗'; BOX_BL_THICK='╚'; BOX_BR_THICK='╝'
 
 TMP_DIR="data/tmp"
 mkdir -p "$TMP_DIR"
-
-# ------------------------------------------------------------
-#  Shell Dispatcher
-# ------------------------------------------------------------
-run_shell() {
-    if [[ -x "$HOME/rish" ]]; then
-        "$HOME/rish" -c "$*" 2>/dev/null
-    elif command -v adb >/dev/null 2>&1; then
-        adb shell "$@" 2>/dev/null
-    else
-        return 1
-    fi
-}
 
 # ------------------------------------------------------------
 #  Connection Test

@@ -6,14 +6,8 @@
 
 export PATH="$PATH:$HOME/.shizuku:$PREFIX/bin"
 
-# Fallback logging
 db_log_battery() { :; }
-db_log_tool_start() { :; }
-db_log_tool_end() { :; }
-
-if [[ -f lib/miuiserperuser_common.sh ]]; then
-    source lib/miuiserperuser_common.sh
-fi
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../lib/miuiserperuser_common.sh"
 db_log_tool_start "BatteryTruth"
 
 # Colors
@@ -28,19 +22,6 @@ BOX_TL_THICK='╔'; BOX_TR_THICK='╗'; BOX_BL_THICK='╚'; BOX_BR_THICK='╝'
 
 TMP_DIR="data/tmp"
 mkdir -p "$TMP_DIR"
-
-# ------------------------------------------------------------
-#  Shell Dispatcher — rish first (with -c), ADB fallback
-# ------------------------------------------------------------
-run_shell() {
-    if [[ -x "$HOME/.shizuku/rish" ]]; then
-        "$HOME/.shizuku/rish" -c "$*" 2>/dev/null
-    elif command -v adb >/dev/null 2>&1; then
-        adb shell "$@" 2>/dev/null
-    else
-        return 1
-    fi
-}
 
 ua_to_ma() { local ua="$1"; [[ -n "$ua" && "$ua" =~ ^-?[0-9]+$ ]] && echo $((ua / 1000)) || echo "N/A"; }
 
