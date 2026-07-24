@@ -23,6 +23,7 @@
  *     night for what turned out to be an unrelated reason
  */
 
+#include "daemon_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -242,7 +243,7 @@ static void write_json(screen_state_t screen, int tcp4, int tcp6,
                        long rx, long tx, int spike, int idle_secs,
                        long idle_rx_delta, long idle_tx_delta,
                        const char *suspicious, int total_events) {
-    FILE *f = fopen(RESULTS_FILE, "w");
+    FILE *f = results_open("nulld", RESULTS_FILE);
     if (!f) return;
     char ts[32]; time_t t = time(NULL);
     strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
@@ -283,7 +284,7 @@ static void write_json(screen_state_t screen, int tcp4, int tcp6,
         suspicious ? suspicious : "",
         g_adb_healthy ? "true" : "false",
         g_consecutive_failures);
-    fflush(f); fclose(f);
+    fflush(f); results_close("nulld", RESULTS_FILE, f);
 }
 
 /* g_running declared extern in ipc_globals.h, defined once in

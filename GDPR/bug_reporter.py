@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import sys
 from datetime import datetime
 
 class BugReporter:
@@ -9,7 +10,7 @@ class BugReporter:
             current_dir = os.path.dirname(os.path.abspath(__file__))
             self.base_dir = os.path.abspath(os.path.join(current_dir, '..'))
         else:
-            self.base_dir = os.path.abspath(target_dir)
+            self.base_dir = os.path.abspath(base_dir)
 
         self.anonymized_map = {}
         self.id_counter = 1
@@ -56,7 +57,13 @@ class BugReporter:
                                 if len(subject) > 2: # Avoid tiny strings
                                     self.anonymized_map[subject] = f"app_{self.id_counter}"
                                     self.id_counter += 1
-            except: pass
+            except OSError as e:
+                # Skipping a file here means its identifiers stay un-anonymised
+                # in pass two, so the omission has to be visible.
+                report.setdefault("skipped_files", []).append(
+                    {"file": os.path.relpath(file_path, self.base_dir),
+                     "phase": "scan", "error": str(e)})
+                print(f"[Syndicate] Cannot scan {file_path}: {e}", file=sys.stderr)
 
         # Second pass: Collect and Scrub
         for file_path in files_to_process:
@@ -72,7 +79,11 @@ class BugReporter:
                             content = content.replace(real_id, anon_id)
                         file_data["entries"].append(content)
                 report["anonymized_data"].append(file_data)
-            except: pass
+            except OSError as e:
+                report.setdefault("skipped_files", []).append(
+                    {"file": os.path.relpath(file_path, self.base_dir),
+                     "phase": "collect", "error": str(e)})
+                print(f"[Syndicate] Cannot read {file_path}: {e}", file=sys.stderr)
 
         return report
 
@@ -95,4 +106,7 @@ if __name__ == '__main__':
         
     print(f"[Syndicate] Repo-wide anonymized debug report generated.")
     print(f"[Syndicate] Files analyzed: {len(data['anonymized_data'])}")
+    skipped = data.get("skipped_files", [])
+    if skipped:
+        print(f"[Syndicate] Files skipped (unreadable): {len(skipped)}")
     print(f"[Syndicate] Exported to: {path}")

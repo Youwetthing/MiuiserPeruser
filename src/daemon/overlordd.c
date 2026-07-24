@@ -37,6 +37,7 @@
  *   T1481 Exploit via Radio Interface
  */
 
+#include "daemon_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -749,7 +750,7 @@ static const char *threat_level(void) {
 
 /* ── Write JSON ───────────────────────────────────────────────── */
 static void write_json(int poll_ms) {
-    FILE *f = fopen(RESULTS_FILE, "w");
+    FILE *f = results_open("overlordd", RESULTS_FILE);
     if (!f) return;
     char ts[32]; time_t t = time(NULL);
     strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
@@ -786,7 +787,7 @@ static void write_json(int poll_ms) {
         "  ],\n"
         "  \"poll_duration_ms\": %d\n"
         "}\n", poll_ms);
-    fflush(f); fclose(f);
+    fflush(f); results_close("overlordd", RESULTS_FILE, f);
 }
 
 int main(void) {

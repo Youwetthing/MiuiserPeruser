@@ -33,6 +33,7 @@ static BACKEND_TYPE    g_backend        = BACKEND_DIRECT;
 static int             g_init_done      = 0;
 static char            g_rish_path[256] = "";
 static int             g_rish_disabled  = 0;
+static BEXEC_STATUS    g_last_status    = BEXEC_OK;
 
 #define ADB_PORT_DEFAULT   5555
 #define ADB_PORT_SCAN_LO   30000
@@ -102,8 +103,18 @@ static int has_timeout_cmd(void)
 
 #define PTY_POLL_MS 100
 
-static int run_via_pty(const char *cmd, char *out, size_t outsize, int timeout_sec)
+/*
+ * Returns the number of bytes captured, or -1 if the command could not
+ * be started. *status (optional) reports what happened to the child:
+ * BEXEC_OK, BEXEC_ERR_EXIT (non-zero exit or killed by signal),
+ * BEXEC_ERR_TIMEOUT or BEXEC_ERR_SPAWN. Without it a caller cannot tell
+ * a command that legitimately printed nothing from one that never ran.
+ */
+static int run_via_pty(const char *cmd, char *out, size_t outsize,
+                       int timeout_sec, BEXEC_STATUS *status)
 {
+    if (status) *status = BEXEC_ERR_SPAWN;
+
     int master = posix_openpt(O_RDWR | O_NOCTTY);
     if (master < 0) return -1;
 
@@ -168,6 +179,9 @@ static int run_via_pty(const char *cmd, char *out, size_t outsize, int timeout_s
 
             close(master);
             out[total] = '\0';
+            fprintf(stderr, "[BEXEC] timeout after %ds: %.80s\n",
+                    timeout_sec, cmd);
+            if (status) *status = BEXEC_ERR_TIMEOUT;
             return (int)total;
         }
 
@@ -203,6 +217,10 @@ static int run_via_pty(const char *cmd, char *out, size_t outsize, int timeout_s
 
             close(master);
             out[total] = '\0';
+            if (status)
+                *status = (WIFEXITED(child_status) &&
+                           WEXITSTATUS(child_status) == 0)
+                          ? BEXEC_OK : BEXEC_ERR_EXIT;
             return (int)total;
         }
 
@@ -249,6 +267,11 @@ static int run_via_pty(const char *cmd, char *out, size_t outsize, int timeout_s
         }
     }
 
+    /* Broke out of the loop on a poll()/read() error — the child is still
+     * running, so kill it and report the read failure rather than passing
+     * off whatever partial output we happened to collect as complete. */
+    int read_errno = errno;
+
     kill(-pid, SIGKILL);
 
     while (waitpid(pid, NULL, WNOHANG) == 0)
@@ -257,6 +280,10 @@ static int run_via_pty(const char *cmd, char *out, size_t outsize, int timeout_s
     close(master);
 
     out[total] = '\0';
+
+    fprintf(stderr, "[BEXEC] pty read failed (%s): %.80s\n",
+            strerror(read_errno), cmd);
+    if (status) *status = BEXEC_ERR_EXIT;
 
     return (int)total;
 }
@@ -270,7 +297,7 @@ static int run_via_pty(const char *cmd, char *out, size_t outsize, int timeout_s
 static int try_run(const char *cmd, const char *expected_out)
 {
     char buf[128] = {0};
-    int n = run_via_pty(cmd, buf, sizeof(buf), RISH_TIMEOUT);
+    int n = run_via_pty(cmd, buf, sizeof(buf), RISH_TIMEOUT, NULL);
     if (n <= 0) return 0;
     buf[strcspn(buf, "\r\n")] = '\0';
     return (strcmp(buf, expected_out) == 0);
@@ -416,12 +443,21 @@ static int try_load_cache(void)
 static void save_cache(void)
 {
     FILE *f = fopen(BEXEC_CACHE_PATH, "w");
-    if (!f) return; /* best-effort — pipes/state/ may not exist yet */
+    if (!f) {
+        /* Best-effort — pipes/state/ may not exist yet — but say so:
+         * a silently unwritable cache means every daemon pays the full
+         * probe chain forever with no indication why. */
+        fprintf(stderr, "[BEXEC] cache write skipped: %s: %s\n",
+                BEXEC_CACHE_PATH, strerror(errno));
+        return;
+    }
     fprintf(f, "%ld %d %s\n",
             (long)time(NULL),
             (int)g_backend,
             g_rish_path[0] ? g_rish_path : "-");
-    fclose(f);
+    if (fclose(f) != 0)
+        fprintf(stderr, "[BEXEC] cache write failed: %s: %s\n",
+                BEXEC_CACHE_PATH, strerror(errno));
 }
 
 static void delete_cache(void)
@@ -515,9 +551,11 @@ char *bexec_n(const char *cmd, size_t max_bytes)
 {
     if (!g_init_done) bexec_init();
 
+    g_last_status = BEXEC_OK;
+
     size_t cap = (max_bytes > 0) ? max_bytes + 1 : 65536 + 1;
     char  *out = malloc(cap);
-    if (!out) return NULL;
+    if (!out) { g_last_status = BEXEC_ERR_NOMEM; return NULL; }
     out[0] = '\0';
 
     char  *full = NULL;
@@ -528,23 +566,31 @@ char *bexec_n(const char *cmd, size_t max_bytes)
         snprintf(rishcmd, sizeof(rishcmd),
                  "RISH_APPLICATION_ID=com.termux %s -c \"%s\"",
                  g_rish_path, cmd);
-        int n = run_via_pty(rishcmd, out, cap, RISH_TIMEOUT);
-        if (n < 0) { out[0] = '\0'; }
+        BEXEC_STATUS st = BEXEC_OK;
+        int n = run_via_pty(rishcmd, out, cap, RISH_TIMEOUT, &st);
+        g_last_status = st;
+        /* Only a failure that produced nothing is reported as NULL:
+         * partial output from a timed-out or failing command is still
+         * worth returning, and the status stays readable either way. */
+        if (n <= 0 && st != BEXEC_OK) {
+            free(out);
+            return NULL;
+        }
         return out;
 
     } else if (g_backend == BACKEND_ADB_CLI) {
         fullsz = strlen(g_adb_cli_transport) + strlen(cmd) + 32;
         full   = malloc(fullsz);
-        if (!full) { free(out); return NULL; }
+        if (!full) { free(out); g_last_status = BEXEC_ERR_NOMEM; return NULL; }
         snprintf(full, fullsz,
                  "%s %s 2>/dev/null", g_adb_cli_transport, cmd);
 
     } else if (g_backend == BACKEND_ADB) {
         char *escaped = escape_for_adb(cmd);
-        if (!escaped) { free(out); return NULL; }
+        if (!escaped) { free(out); g_last_status = BEXEC_ERR_NOMEM; return NULL; }
         fullsz = strlen(g_adb_transport) + strlen(escaped) + 32;
         full   = malloc(fullsz);
-        if (!full) { free(escaped); free(out); return NULL; }
+        if (!full) { free(escaped); free(out); g_last_status = BEXEC_ERR_NOMEM; return NULL; }
         snprintf(full, fullsz,
                  "%s \"%s\" 2>/dev/null", g_adb_transport, escaped);
         free(escaped);
@@ -552,13 +598,20 @@ char *bexec_n(const char *cmd, size_t max_bytes)
     } else {
         fullsz = strlen(cmd) + 16;
         full   = malloc(fullsz);
-        if (!full) { free(out); return NULL; }
+        if (!full) { free(out); g_last_status = BEXEC_ERR_NOMEM; return NULL; }
         snprintf(full, fullsz, "%s 2>/dev/null", cmd);
     }
 
     FILE *f = popen(full, "r");
+    if (!f) {
+        fprintf(stderr, "[BEXEC] popen failed (%s): %.80s\n",
+                strerror(errno), full);
+        free(full);
+        free(out);
+        g_last_status = BEXEC_ERR_SPAWN;
+        return NULL;
+    }
     free(full);
-    if (!f) { free(out); return NULL; }
 
     size_t total = 0;
     char   tmp[4096];
@@ -569,7 +622,24 @@ char *bexec_n(const char *cmd, size_t max_bytes)
         total += n;
     }
     out[total] = '\0';
-    pclose(f);
+
+    /* pclose()'s status was previously discarded, so a transport that
+     * failed outright (adb offline, rish gone, shell not found) handed
+     * back an empty string that callers scored as a real measurement. */
+    int wstatus = pclose(f);
+    if (wstatus == -1) {
+        g_last_status = BEXEC_ERR_SPAWN;
+    } else if (!WIFEXITED(wstatus) || WEXITSTATUS(wstatus) != 0) {
+        g_last_status = BEXEC_ERR_EXIT;
+    }
+
+    if (total == 0 && g_last_status != BEXEC_OK) {
+        fprintf(stderr, "[BEXEC] command failed (%s), no output: %.80s\n",
+                bexec_status_str(g_last_status), cmd);
+        free(out);
+        return NULL;
+    }
+
     return out;
 }
 
@@ -595,6 +665,20 @@ void backend_reprobe(void)
 /* ── Accessors ────────────────────────────────────────────────────────────── */
 
 BACKEND_TYPE backend_get(void) { return g_backend; }
+
+BEXEC_STATUS bexec_last_status(void) { return g_last_status; }
+
+const char *bexec_status_str(BEXEC_STATUS s)
+{
+    switch (s) {
+        case BEXEC_OK:          return "ok";
+        case BEXEC_ERR_EXIT:    return "non-zero exit";
+        case BEXEC_ERR_SPAWN:   return "spawn failed";
+        case BEXEC_ERR_TIMEOUT: return "timeout";
+        case BEXEC_ERR_NOMEM:   return "out of memory";
+        default:                return "unknown";
+    }
+}
 
 const char *backend_name(BACKEND_TYPE b)
 {

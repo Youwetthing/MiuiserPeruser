@@ -101,6 +101,25 @@ static void *scorer_thread_fn(void *arg) {
 
 /* ── Socket server ───────────────────────────────────────────────────────── */
 
+/*
+ * write() on a client socket returns short on a full buffer and fails
+ * outright when the client has already hung up. Both were ignored, so a
+ * truncated or entirely undelivered reply looked like a delivered one.
+ */
+static int reply(int client_fd, const char *s) {
+    size_t len = strlen(s), off = 0;
+    while (off < len) {
+        ssize_t n = write(client_fd, s + off, len - off);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            glog("WARN", "reply to client failed: %s", strerror(errno));
+            return -1;
+        }
+        off += (size_t)n;
+    }
+    return 0;
+}
+
 static void handle_status(int client_fd) {
     db_threat_t rows[512];
     int nrows = 0;
@@ -111,9 +130,9 @@ static void handle_status(int client_fd) {
         snprintf(line, sizeof(line), "%s|%.2f|%s|%d|%d\n",
                  rows[i].source, rows[i].score, rows[i].state,
                  rows[i].prior_jails, rows[i].prior_quarantines);
-        write(client_fd, line, strlen(line));
+        if (reply(client_fd, line) != 0) return;
     }
-    write(client_fd, "END\n", 4);
+    reply(client_fd, "END\n");
 }
 
 static void handle_client(int client_fd) {
@@ -131,15 +150,15 @@ static void handle_client(int client_fd) {
 
     } else if (strncmp(buf, "QUERY|DECAY", 11) == 0) {
         decay_tick();
-        write(client_fd, "OK\n", 3);
+        reply(client_fd, "OK\n");
 
     } else if (strncmp(buf, "APPROVE|", 8) == 0) {
         consent_reply(buf + 8, 1);
-        write(client_fd, "OK\n", 3);
+        reply(client_fd, "OK\n");
 
     } else if (strncmp(buf, "DENY|", 5) == 0) {
         consent_reply(buf + 5, 0);
-        write(client_fd, "OK\n", 3);
+        reply(client_fd, "OK\n");
 
     } else {
         /* Treat as a direct signal: SOURCE|SIGNAL|WEIGHT|CONTEXT */
@@ -164,13 +183,13 @@ static void handle_client(int client_fd) {
                                rec.weight, rec.ctx, &result) == 0) {
                 char resp[256];
                 scorer_format(&result, resp, sizeof(resp));
-                write(client_fd, resp, strlen(resp));
+                reply(client_fd, resp);
                 cases_assemble(&result, rec.signal, rec.ctx);
             } else {
-                write(client_fd, "ERROR\n", 6);
+                reply(client_fd, "ERROR\n");
             }
         } else {
-            write(client_fd, "ERROR\n", 6);
+            reply(client_fd, "ERROR\n");
         }
     }
 }

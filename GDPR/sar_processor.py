@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import sys
 from datetime import datetime
 import shutil
 
@@ -27,7 +28,8 @@ class SARProcessor:
             'subject_id': subject_id,
             'timestamp': datetime.now().isoformat(),
             'target_directory': self.base_dir,
-            'findings': []
+            'findings': [],
+            'scan_errors': []
         }
         for source_key, rel_path in self.data_sources.items():
             file_path = os.path.join(self.base_dir, rel_path)
@@ -58,10 +60,20 @@ class SARProcessor:
                             'content': line.strip(),
                             'parsed_data': self._parse_line(line, source_key)
                         })
-        except: pass
+        except OSError as e:
+            # A file that cannot be read is not a file without findings:
+            # swallowing this understated the subject access report and, on
+            # an erasure request, left the subject's data in place while
+            # still reporting success.
+            report.setdefault('scan_errors', []).append({
+                'file': os.path.relpath(file_path, self.base_dir),
+                'error': str(e)
+            })
+            print(f"[Syndicate] Cannot scan {file_path}: {e}", file=sys.stderr)
 
     def erasure_request(self, subject_id, anonymize=True):
         report = self.process_request(subject_id, recursive=True)
+        scan_errors = report.get('scan_errors', [])
         affected_files = set(f['file'] for f in report['findings'])
         for rel_path in affected_files:
             file_path = os.path.join(self.base_dir, rel_path)
@@ -73,7 +85,13 @@ class SARProcessor:
                         else: continue
                     else: fout.write(line)
             os.replace(temp_path, file_path)
-        return {"status": "success", "subject_id": subject_id, "action": "anonymized" if anonymize else "deleted", "files_affected": list(affected_files)}
+        return {
+            "status": "success" if not scan_errors else "incomplete",
+            "subject_id": subject_id,
+            "action": "anonymized" if anonymize else "deleted",
+            "files_affected": list(affected_files),
+            "unscanned_files": scan_errors
+        }
 
     def _parse_line(self, line, source_key):
         parts = line.strip().split('|')
@@ -83,10 +101,12 @@ class SARProcessor:
                 if len(parts) >= 1 and parts[0].isdigit():
                     parsed['timestamp_raw'] = parts[0]
                     try: parsed['timestamp_human'] = datetime.fromtimestamp(int(parts[0])).isoformat()
-                    except: pass
+                    except (ValueError, OSError, OverflowError) as e:
+                        parsed['timestamp_error'] = str(e)
                 if len(parts) >= 2: parsed['subject'] = parts[1]
                 if len(parts) >= 3: parsed['event'] = parts[2]
-        except: pass
+        except (ValueError, IndexError) as e:
+            parsed['parse_error'] = str(e)
         return parsed
 
 if __name__ == '__main__':

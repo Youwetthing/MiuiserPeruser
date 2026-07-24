@@ -26,6 +26,7 @@
  * Runtime config: enabled, interval (default 30), scan_count
  */
 
+#include "daemon_common.h"
 #include "ipc_globals.h"
 #include "gaveld_emit.h"
 #include "backend_exec.h"
@@ -89,19 +90,7 @@ static int get_max_scans(void) { return config_get_int("scan_count", 0); }
 
 static void splinterd_emit(const char *type, const char *payload)
 {
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return;
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, SPLINTER_SOCKET, sizeof(addr.sun_path) - 1);
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-        char buf[512];
-        int n = snprintf(buf, sizeof(buf),
-                         "APRIL|" DAEMON_NAME "|%s|%s\n", type, payload);
-        if (n > 0) write(fd, buf, (size_t)n);
-    }
-    close(fd);
+    splinter_emit(DAEMON_NAME, SPLINTER_SOCKET, type, payload);
 }
 
 /* ?? Parse wakelocks from dumpsys power ?????????????????????????????????? */
@@ -272,7 +261,7 @@ static void write_results(int score, int scan_num, int sigs,
                            int battery, float drain, int wl_count,
                            int full_nonsys)
 {
-    FILE *f = fopen(RESULTS_FILE, "w");
+    FILE *f = results_open(DAEMON_NAME, RESULTS_FILE);
     if (!f) return;
 
     time_t t = time(NULL);
@@ -300,7 +289,7 @@ static void write_results(int score, int scan_num, int sigs,
         ts, scan_num, sigs, score, grade,
         battery, drain, wl_count, full_nonsys);
 
-    fclose(f);
+    results_close(DAEMON_NAME, RESULTS_FILE, f);
 }
 
 /* ?? Main poll ?????????????????????????????????????????????????????????? */

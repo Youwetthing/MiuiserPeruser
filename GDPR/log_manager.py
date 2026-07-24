@@ -1,4 +1,5 @@
 import os
+import sys
 
 class LogManager:
     def __init__(self, base_dir=None, max_size_mb=5): # Lowered to 10MB
@@ -25,24 +26,23 @@ class LogManager:
                         if size > self.max_size:
                             print(f"[Syndicate] Capping {os.path.relpath(file_path, self.base_dir)} ({size // 1024}KB)")
                             self._truncate_file(file_path)
-                    except: pass
+                    except OSError as e:
+                        print(f"[Syndicate] Cannot cap {file_path}: {e}", file=sys.stderr)
 
     def _truncate_file(self, file_path):
-        try:
-            # For 10MB cap, we keep the last 2MB of logs
-            keep_size = 1 * 1024 * 1024 
-            with open(file_path, 'r', errors='ignore') as f:
-                f.seek(0, os.SEEK_END)
-                end_pos = f.tell()
-                f.seek(max(0, end_pos - keep_size))
-                recent_data = f.read()
-                
-            with open(file_path, 'w') as f:
-                f.write("--- LOG ROTATED (MAX 5MB) ---\n")
-                f.write(recent_data)
-        except:
-            with open(file_path, 'w') as f:
-                f.write("--- LOG CLEARED ---\n")
+        # A read failure used to fall through to blanking the file, so a
+        # transient error destroyed the very logs it could not read. Keep
+        # the log intact and let the caller report the failure instead.
+        keep_size = 1 * 1024 * 1024
+        with open(file_path, 'r', errors='ignore') as f:
+            f.seek(0, os.SEEK_END)
+            end_pos = f.tell()
+            f.seek(max(0, end_pos - keep_size))
+            recent_data = f.read()
+
+        with open(file_path, 'w') as f:
+            f.write("--- LOG ROTATED (MAX 5MB) ---\n")
+            f.write(recent_data)
 
 if __name__ == '__main__':
     manager = LogManager()

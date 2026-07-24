@@ -4,6 +4,7 @@
  * Upgraded from daytime snapshot to continuous forensic monitoring
  */
 
+#include "daemon_common.h"
 #include "ipc_globals.h"
 #include "backend_exec.h"
 #include "gaveld_emit.h"
@@ -23,6 +24,8 @@
 
 
 #define DAEMON_NAME     "granitord"
+#define GRANITORD_RESULTS \
+    "/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/granitord.json"
 #define VERSION         "2.0"
 #define POLL_SEC        30
 #define SCORE_WARN      60
@@ -124,6 +127,37 @@ static void sha256_file(const char *path, char *out) {
     free(result);
 }
 
+/* ── /proc integer read ─────────────────────────────────────────────────────
+ * fopen() succeeding says nothing about the read: SELinux denies these
+ * procfs reads at read() time on some kernels, and an unchecked fscanf()
+ * then leaves the caller's -1 initialiser in place. That sentinel is
+ * indistinguishable from a genuine -1 (perf_event_paranoid) and gets
+ * scored as a permissive kernel. Returns 1 only on a real read; sets
+ * *denied when the failure was a permission error.
+ */
+static int read_proc_long(const char *path, long *out, int *denied) {
+    errno = 0;
+    FILE *f = fopen(path, "r");
+    if (!f) {
+        if (denied && (errno == EACCES || errno == EPERM)) *denied = 1;
+        return 0;
+    }
+
+    long v = 0;
+    errno = 0;
+    int got = fscanf(f, "%ld", &v);
+    int read_errno = errno;
+    fclose(f);
+
+    if (got != 1) {
+        if (denied && (read_errno == EACCES || read_errno == EPERM)) *denied = 1;
+        return 0;
+    }
+
+    *out = v;
+    return 1;
+}
+
 /* ── Baseline management ──────────────────────────────────────────────────── */
 static void establish_baseline(void) {
     fprintf(stderr, "[GRANITOR] Establishing security baseline...\n");
@@ -141,17 +175,19 @@ static void establish_baseline(void) {
     };
 
     for (int i = 0; params[i] && baseline_count < MAX_BASELINE; i++) {
-        FILE *f = fopen(params[i], "r");
-        if (f) {
-            long v = -1;
-            fscanf(f, "%ld", &v);
-            fclose(f);
-            param_baseline_t *p = &baseline_params[baseline_count];
-            strcpy(p->param, params[i]);
-            p->value = v;
-            p->first_seen = time(NULL);
-            baseline_count++;
+        long v = 0;
+        if (!read_proc_long(params[i], &v, NULL)) {
+            /* Baselining an unreadable param would record a phantom value
+             * that every later poll reports as drift. */
+            fprintf(stderr, "[GRANITOR] baseline skipped (unreadable): %s\n",
+                    params[i]);
+            continue;
         }
+        param_baseline_t *p = &baseline_params[baseline_count];
+        strcpy(p->param, params[i]);
+        p->value = v;
+        p->first_seen = time(NULL);
+        baseline_count++;
     }
 
     /* Boot image hash if accessible */
@@ -191,11 +227,9 @@ static void detect_param_drift(char *drift_json, size_t drift_size) {
     drift_json[0] = 0;
     for (int i = 0; i < baseline_count; i++) {
         param_baseline_t *b = &baseline_params[i];
-        FILE *f = fopen(b->param, "r");
-        if (!f) continue;
-        long current = -1;
-        fscanf(f, "%ld", &current);
-        fclose(f);
+        long current = 0;
+        /* A read failure is not drift -- only compare confirmed reads. */
+        if (!read_proc_long(b->param, &current, NULL)) continue;
         if (current != b->value) {
             char entry[512];
             snprintf(entry, sizeof(entry),
@@ -602,11 +636,8 @@ static void write_json(
     strip_trailing_comma(m);
     strip_trailing_comma(vu);
 
-    FILE *out = fopen("/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/granitord.json", "w");
-    if (!out) {
-        fprintf(stderr, "[GRANITOR] ERROR: cannot write JSON\n");
-        return;
-    }
+    FILE *out = results_open(DAEMON_NAME, GRANITORD_RESULTS);
+    if (!out) return;
 
     fprintf(out,
         "{\n"
@@ -666,7 +697,7 @@ static void write_json(
         d, a, f, p, m, threat_indicator);
 
     fflush(out);
-    fclose(out);
+    results_close(DAEMON_NAME, GRANITORD_RESULTS, out);
 }
 
 /* ── Main poll ─────────────────────────────────────────────────────────────── */
@@ -752,35 +783,18 @@ static void poll_security(void) {
     long kptr = -1, dmesg = -1, perf = -1, aslr = -1, hardlinks = -1, symlinks = -1;
     int kparam_eacces = 0;
 
-    errno = 0;
-    FILE *f = fopen("/proc/sys/kernel/kptr_restrict", "r");
-    if (f) { fscanf(f, "%ld", &kptr); fclose(f); }
-    else if (errno == EACCES) kparam_eacces = 1;
-
-    errno = 0;
-    f = fopen("/proc/sys/kernel/dmesg_restrict", "r");
-    if (f) { fscanf(f, "%ld", &dmesg); fclose(f); }
-    else if (errno == EACCES) kparam_eacces = 1;
-
-    errno = 0;
-    f = fopen("/proc/sys/kernel/perf_event_paranoid", "r");
-    if (f) { fscanf(f, "%ld", &perf); fclose(f); }
-    else if (errno == EACCES) kparam_eacces = 1;
-
-    errno = 0;
-    f = fopen("/proc/sys/kernel/randomize_va_space", "r");
-    if (f) { fscanf(f, "%ld", &aslr); fclose(f); }
-    else if (errno == EACCES) kparam_eacces = 1;
-
-    errno = 0;
-    f = fopen("/proc/sys/fs/protected_hardlinks", "r");
-    if (f) { fscanf(f, "%ld", &hardlinks); fclose(f); }
-    else if (errno == EACCES) kparam_eacces = 1;
-
-    errno = 0;
-    f = fopen("/proc/sys/fs/protected_symlinks", "r");
-    if (f) { fscanf(f, "%ld", &symlinks); fclose(f); }
-    else if (errno == EACCES) kparam_eacces = 1;
+    int ok_kptr      = read_proc_long("/proc/sys/kernel/kptr_restrict",
+                                      &kptr, &kparam_eacces);
+    int ok_dmesg     = read_proc_long("/proc/sys/kernel/dmesg_restrict",
+                                      &dmesg, &kparam_eacces);
+    int ok_perf      = read_proc_long("/proc/sys/kernel/perf_event_paranoid",
+                                      &perf, &kparam_eacces);
+    int ok_aslr      = read_proc_long("/proc/sys/kernel/randomize_va_space",
+                                      &aslr, &kparam_eacces);
+    int ok_hardlinks = read_proc_long("/proc/sys/fs/protected_hardlinks",
+                                      &hardlinks, &kparam_eacces);
+    int ok_symlinks  = read_proc_long("/proc/sys/fs/protected_symlinks",
+                                      &symlinks, &kparam_eacces);
 
     int selinux_blocks_kernel_params = kparam_eacces && enforcing;
 
@@ -792,12 +806,14 @@ static void poll_security(void) {
          * Don't apply the below penalties, which assume a successful
          * read that came back permissive. */
     } else {
-        if (kptr < 1) score -= 2;
-        if (dmesg < 1) score -= 2;
-        if (perf == -1) score -= 3;
-        if (aslr < 2) score -= 3;
-        if (!hardlinks) score -= 1;
-        if (!symlinks) score -= 1;
+        /* Penalise only values actually read: an unread param is unknown,
+         * not permissive. */
+        if (ok_kptr      && kptr  < 1)   score -= 2;
+        if (ok_dmesg     && dmesg < 1)   score -= 2;
+        if (ok_perf      && perf == -1)  score -= 3;
+        if (ok_aslr      && aslr  < 2)   score -= 3;
+        if (ok_hardlinks && !hardlinks)  score -= 1;
+        if (ok_symlinks  && !symlinks)   score -= 1;
     }
 
     printf("[GRANITOR]  Kernel: kptr=%ld dmesg=%ld perf=%ld aslr=%ld hardlinks=%ld symlinks=%ld\n",
