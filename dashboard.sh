@@ -11,7 +11,7 @@ BLUE='\033[0;34m'; CYAN='\033[0;36m'; MAGENTA='\033[0;35m'
 WHITE='\033[1;37m'; BOLD='\033[1m'; NC='\033[0m'
 
 # Paths
-LIB="lib/miuiserperuser_common.sh"
+LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/miuiserperuser_common.sh"
 PERUSE_CONTROL="tools/peruse_control.sh"
 DAEMON_HUNTER="bin/daemonhunter.sh"
 RAM_SLAMMER="bin/ram_slammer.sh"
@@ -22,27 +22,7 @@ PID_DIR="pipes"
 LOG_DIR="logs"
 DATA_DIR="data"
 
-# Source common functions if available
-if [[ -f "$LIB" ]]; then
-    source "$LIB"
-else
-    db_log_action() { :; }
-    db_log_tool_start() { :; }
-    db_log_tool_end() { :; }
-fi
-
-# ------------------------------------------------------------
-#  Helper: run shell command via Shizuku/ADB
-# ------------------------------------------------------------
-run_shell() {
-    if [[ -x "$HOME/.shizuku/rish" ]]; then
-        "$HOME/.shizuku/rish" -c "$*" 2>/dev/null
-    elif command -v adb >/dev/null 2>&1; then
-        adb shell "$@" 2>/dev/null
-    else
-        return 1
-    fi
-}
+[[ -f "$LIB" ]] && source "$LIB"
 
 # ------------------------------------------------------------
 #  Connection status

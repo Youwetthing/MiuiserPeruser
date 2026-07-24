@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../lib/miuiserperuser_common.sh"
 RISH="$HOME/Rish/rish"
 ADB_CMD="adb -s 127.0.0.1:5555 shell"
 export RISH_APPLICATION_ID=com.termux

@@ -19,15 +19,6 @@ source "$(dirname "$0")/lib/tool_backend.sh"
 
 
 export PATH="$PATH:$HOME/.shizuku:$PREFIX/bin"
-source lib/miuiserperuser_common.sh 2>/dev/null || {
-    run_shell() {
-        if [[ -x "$HOME/rish" ]]; then
-            "$HOME/rish" -c "$*" 2>/dev/null
-        elif command -v adb >/dev/null 2>&1; then
-            adb shell "$@" 2>/dev/null
-        fi
-    }
-}
 
 # Colors
 BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'

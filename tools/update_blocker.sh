@@ -5,8 +5,6 @@ source "$(dirname "$0")/lib/tool_backend.sh"
 #  MIUI Update Blocker — Prevent Forced OTAs
 # -------------------------------------------------------------------
 export PATH="$PATH:$HOME/.shizuku:$PREFIX/bin"
-source lib/miuiserperuser_common.sh 2>/dev/null || true
-db_log_tool_start() { :; }
 
 # Colors
 BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
@@ -17,15 +15,6 @@ C_GRAY='\033[38;5;245m'
 # ------------------------------------------------------------
 #  Shell Dispatcher
 # ------------------------------------------------------------
-run_shell() {
-    if [[ -x "$HOME/rish" ]]; then
-        "$HOME/rish" -c "$*" 2>/dev/null
-    elif command -v adb >/dev/null 2>&1; then
-        adb shell "$@" 2>/dev/null
-    else
-        return 1
-    fi
-}
 
 # ------------------------------------------------------------
 #  OTA-related packages and services
@@ -212,5 +201,4 @@ while true; do
     esac
 done
 
-db_log_tool_end() { :; }
 echo -e "\n${C_CYAN}Session ended.${RESET}"
