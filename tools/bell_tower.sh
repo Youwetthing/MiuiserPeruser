@@ -126,7 +126,7 @@ led_display() {
 }
 
 # ── Dividers ──────────────────────────────────────────────────────────────────
-clock_rule() { echo -e "${CHROME}$(printf '%*s' "$COLS" | tr ' ' '-')${RESET}"; }
+clock_rule() { echo -e "${CHROME}$(printf '%*s' "$COLS" '' | tr ' ' '-')${RESET}"; }
 tick_rule() {
     local line="" i=0
     while [ $i -lt $COLS ]; do

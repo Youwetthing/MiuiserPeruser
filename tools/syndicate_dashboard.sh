@@ -63,7 +63,7 @@ while true; do
     # Single-column display (No wrapping on 48-char width)
     idx=1
     for d in "${DAEMONS[@]}"; do
-        if [[ " $ENABLED " =~ " $d " ]]; then
+        if [[ " $ENABLED " =~ ${d} ]]; then
             printf " \033[33m%2d\033[0m %-16s \033[32m[ON]\033[0m\n" "$idx" "$d"
         else
             printf " \033[33m%2d\033[0m %-16s \033[31m[OFF]\033[0m\n" "$idx" "$d"
@@ -77,13 +77,13 @@ while true; do
     echo ""
     echo -n -e " \033[36m> \033[0m"
 
-    read -n1 input
+    read -r -n1 input
 
     # ── Toggle Daemon ──────────────────────────────────────────────────────────
     if [[ "$input" =~ ^[0-9]+$ ]] && [ "$input" -ge 1 ] && [ "$input" -le 12 ]; then
         target="${DAEMONS[$((input-1))]}"
         
-        if [[ " $ENABLED " =~ " $target " ]]; then
+        if [[ " $ENABLED " =~ ${d} ]]; then
             # Remove from list
             ENABLED=$(echo "$ENABLED" | sed "s/\b$target\b//g" | xargs)
             echo -e "\n\033[31m⛔ $target disabled.\033[0m"

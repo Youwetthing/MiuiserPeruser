@@ -52,4 +52,4 @@ case "$choice" in
 esac
 
 printf "\n  ${DIM}Press any key...${RST}"
-read -n1
+read -r -n1

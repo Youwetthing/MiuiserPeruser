@@ -201,7 +201,7 @@ while true; do
     echo -e "${C_CYAN}[3] Refresh status${RESET}"
     echo -e "[q] Quit"
     echo ""
-    read -p "Choice: " choice
+    read -r -p "Choice: " choice
     
     case $choice in
         1) block_ota ;;

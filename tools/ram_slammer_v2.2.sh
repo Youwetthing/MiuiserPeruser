@@ -227,7 +227,7 @@ show_live_scan() {
                 [ -n "$spkg" ] && PREV_MEM["$spkg"]="$smem"
             done < "$RAM_STATE"
         fi
-        > "$RAM_STATE"
+: > "$RAM_STATE"
 
         # Get memory data — try multiple parsers
         local memdata=""
@@ -297,7 +297,7 @@ show_live_scan() {
             fi
 
             echo "$pkg $mem_kb" >> "$RAM_STATE"
-            TARGETS[$idx]="$pkg"
+            TARGETS[idx]="$pkg"
             idx=$((idx+1))
         done <<< "$memdata"
 
