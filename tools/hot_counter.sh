@@ -206,7 +206,7 @@ menu() {
     echo -e "  ${R3}[5]${RESET} Force leatherheadd rescan"
     echo -e "  ${DIM}[q]${RESET} Quit"
     echo ""
-    read -p "$(echo -e "${R2}Choice: ${RESET}")" choice
+    read -r -p "$(echo -e "${R2}Choice: ${RESET}")" choice
 
     case "$choice" in
         1) header; show_last_scan ;;

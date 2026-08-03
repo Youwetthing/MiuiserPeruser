@@ -123,7 +123,7 @@ while true; do
     echo "4) Sorted UID view"
     echo "0) Exit"
 
-    read -p "Choice: " c
+    read -r -p "Choice: " c
 
     case "$c" in
         1) process_view ;;

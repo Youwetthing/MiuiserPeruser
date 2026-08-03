@@ -235,7 +235,7 @@ menu() {
     echo -e "  ${P2}[6]${RESET} Force rocksteadyd rescan"
     echo -e "  ${DIM}[q]${RESET} Quit"
     echo ""
-    read -p "$(echo -e "${P2}Choice: ${RESET}")" choice
+    read -r -p "$(echo -e "${P2}Choice: ${RESET}")" choice
 
     case "$choice" in
         1) header; show_last_scan ;;

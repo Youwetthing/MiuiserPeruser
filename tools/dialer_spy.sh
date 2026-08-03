@@ -29,7 +29,8 @@ get_incoming_number() {
 
 get_null_bytes() {
     # Check if nulld caught transmission during call
-    local f="$BASE/Registry/daemon_results/nulld.json"
+    local f
+    f="$BASE/Registry/daemon_results/nulld.json"
     [ -f "$f" ] && jq -r '.traffic.idle_tx_delta // 0' "$f" 2>/dev/null || echo 0
 }
 
@@ -87,14 +88,17 @@ dump_historical() {
     printf "${CYN}Recent call termination events:${RST}\n"
     echo "$raw" | grep -E "callTerminationReason|endTime" | while IFS= read -r line; do
         if echo "$line" | grep -q "endTime"; then
-            local epoch_ms=$(echo "$line" | grep -oE '[0-9]{13}')
+            local epoch_ms
+            epoch_ms=$(echo "$line" | grep -oE '[0-9]{13}')
             if [ -n "$epoch_ms" ]; then
-                local ts_human=$(date -d "@$((epoch_ms/1000))" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)
+                local ts_human
+                ts_human=$(date -d "@$((epoch_ms/1000))" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)
                 printf "  ${DIM}End: %s${RST}\n" "${ts_human:-$epoch_ms}"
             fi
         fi
         if echo "$line" | grep -q "callTerminationReason"; then
-            local reason=$(echo "$line" | grep -oE 'Code: \([^)]+\)' | head -1)
+            local reason
+            reason=$(echo "$line" | grep -oE 'Code: \([^)]+\)' | head -1)
             printf "  ${WHT}Reason: %s${RST}\n" "$reason"
         fi
     done

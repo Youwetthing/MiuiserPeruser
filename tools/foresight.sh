@@ -30,11 +30,11 @@ run_cmd() { $ADB shell "$*" 2>/dev/null; }
 
 # ── Brat dividers ─────────────────────────────────────────────────────────────
 brat_rule() {
-    echo -e "${BRAT}$(printf '%*s' "$COLS" | tr ' ' '*')${RESET}"
+    echo -e "${BRAT}$(printf '%*s' "$COLS" '' | tr ' ' '*')${RESET}"
 }
 
 thin_rule() {
-    echo -e "${BRAT3}$(printf '%*s' "$COLS" | tr ' ' '-')${RESET}"
+    echo -e "${BRAT3}$(printf '%*s' "$COLS" '' | tr ' ' '-')${RESET}"
 }
 
 brat_block() {
@@ -42,9 +42,9 @@ brat_block() {
     local inner=$(( COLS - 2 ))
     local pad=$(( (inner - ${#text}) / 2 )); [ $pad -lt 0 ] && pad=0
     local rpad=$(( inner - pad - ${#text} )); [ $rpad -lt 0 ] && rpad=0
-    echo -e "${BRATBG}${BLACK}${BOLD}$(printf '%*s' "$COLS" | tr ' ' ' ')${RESET}"
+    echo -e "${BRATBG}${BLACK}${BOLD}$(printf '%*s' "$COLS" '' | tr ' ' ' ')${RESET}"
     printf "${BRATBG}${BLACK}${BOLD} %${pad}s%s%${rpad}s ${RESET}\n" "" "$text" ""
-    echo -e "${BRATBG}${BLACK}${BOLD}$(printf '%*s' "$COLS" | tr ' ' ' ')${RESET}"
+    echo -e "${BRATBG}${BLACK}${BOLD}$(printf '%*s' "$COLS" '' | tr ' ' ' ')${RESET}"
 }
 
 # ── Header ────────────────────────────────────────────────────────────────────

@@ -111,7 +111,7 @@ show_codes() {
     done
     echo ""
     echo -e "${C_GRAY}To use: Open Phone app, paste or type the code, and press Call.${RESET}"
-    read -n 1 -s -p "Press any key to return..."
+    read -r -n 1 -s -p "Press any key to return..."
 }
 
 sentry_panel() {
@@ -127,7 +127,7 @@ sentry_panel() {
         echo -e "${C_GREEN}[10] Sensors OFF   [11] Sensors ON   [12] Restrict Background Data${RESET}"
         echo -e "${C_CYAN}[13] Airplane ON   [14] Airplane OFF   [15] Toggle Airplane${RESET}"
         echo "[q] Back"
-        read -p "Choice: " c
+        read -r -p "Choice: " c
         case $c in
             1) run_shell "settings put global adb_enabled 0"; echo "✅ ADB USB disabled"; sleep 1 ;;
             2) run_shell "settings put global adb_enabled 1"; echo "✅ ADB USB enabled"; sleep 1 ;;
@@ -178,7 +178,7 @@ debug_panel() {
         echo -e "${C_YELLOW}[t3] Disable Game Turbo           [t4] Disable Memory Extension${RESET}"
         echo ""
         echo -e "[q] Back"
-        read -p "Choice: " c
+        read -r -p "Choice: " c
         case $c in
             a1) run_shell "pm list packages" | sed 's/package://' | grep -E "com\.(miui|xiaomi)" | while read p; do run_shell "cmd appops set $p 26 ignore"; done; echo "✅ Camera revoked"; sleep 1 ;;
             a2) run_shell "pm list packages" | sed 's/package://' | grep -E "com\.(miui|xiaomi)" | while read p; do run_shell "cmd appops set $p 27 ignore"; done; echo "✅ Mic revoked"; sleep 1 ;;
@@ -186,7 +186,7 @@ debug_panel() {
             a4) for op in 26 27 1 4; do run_shell "pm list packages" | sed 's/package://' | grep -E "com\.(miui|xiaomi)" | while read p; do run_shell "cmd appops set $p $op ignore"; done; done; echo "✅ All revoked"; sleep 2 ;;
             b1) run_shell "dumpsys deviceidle whitelist +com.termux"; echo "✅ Termux whitelisted"; sleep 1 ;;
             b2) run_shell "dumpsys deviceidle whitelist +moe.shizuku.privileged.api"; echo "✅ Shizuku whitelisted"; sleep 1 ;;
-            b3) run_shell "dumpsys deviceidle whitelist" | grep -E "termux|shizuku"; read -n1 -s ;;
+            b3) run_shell "dumpsys deviceidle whitelist" | grep -E "termux|shizuku"; read -r -n1 -s ;;
             b4) run_shell "pm disable-user --user 0 com.miui.powerkeeper"; echo "✅ Powerkeeper disabled"; sleep 1 ;;
             b5) run_shell "pm enable com.miui.powerkeeper"; echo "✅ Powerkeeper enabled"; sleep 1 ;;
             d1) smart_battery_stats ;;
@@ -241,7 +241,7 @@ while true; do
     echo -e "${C_CYAN}[18] 🛡️ Sentry Panel${RESET}"
     echo -e "${C_CYAN}[q] Quit${RESET}"
     echo ""
-    read -p "Choice: " choice
+    read -r -p "Choice: " choice
     case $choice in
         1) launch_intent "${SETTINGS_INTENTS["Developer Options"]}" ;;
         2) launch_intent "${SETTINGS_INTENTS["Battery Usage"]}" ;;

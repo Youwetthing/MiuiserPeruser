@@ -48,7 +48,7 @@ ss_out=$(adb_run "ss -tnp 2>/dev/null")
 
 printf "${BOLD}${WHT}── ACTIVE CONNECTIONS ─────────────────────────────${RST}\n\n"
 printf "${DIM}%-20s %-25s %-15s %-10s %s${RST}\n" "REMOTE IP" "PORT" "UID" "PACKAGE" "FLAG"
-printf "${DIM}%s${RST}\n" "$(printf '%80s' | tr ' ' '-')"
+printf "${DIM}%s${RST}\n" "$(printf '%80s' '' | tr ' ' '-')"
 
 # Parse /proc/net/tcp6 
 echo "$raw" | tail -n +2 | while IFS= read -r line; do
@@ -116,4 +116,4 @@ adb_run "dumpsys netstats | grep 'uid=.*package='" | while IFS= read -r line; do
 done
 
 printf "\n${CYN}Press any key to exit...${RST}\n"
-read -n1
+read -r -n1

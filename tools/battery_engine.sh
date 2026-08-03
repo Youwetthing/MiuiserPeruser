@@ -63,7 +63,7 @@ esac
 # -----------------------------
 
 case "$PLATFORM" in
-  mt67*|mt6768|mt6785)
+  mt6768|mt6785|mt67*)
     TIER="MEDIA_TECH_MIDRANGE"
     HEAT_WEIGHT=13   # fixed-point (x10) to avoid float issues
     ;;

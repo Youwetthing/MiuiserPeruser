@@ -40,17 +40,17 @@ fetch_dump() {
 # ── Helpers ───────────────────────────────────────────────────────────────────
 run_cmd() { adb -s 127.0.0.1:5555 shell "$*" 2>/dev/null; }
 
-divider() { echo -e "${1}$(printf '%*s' "$COLS" | tr ' ' "${2:--}")${RESET}"; }
+divider() { echo -e "${1}$(printf '%*s' "$COLS" '' | tr ' ' "${2:--}")${RESET}"; }
 
 box_top() {
     local title=$1 color=$2
     local inner=$(( W - 2 ))
     local pad=$(( (inner - ${#title}) / 2 )); [ $pad -lt 0 ] && pad=0
-    echo -e "${color}+$(printf '%*s' "$inner" | tr ' ' '-')+${RESET}"
+    echo -e "${color}+$(printf '%*s' "$inner" '' | tr ' ' '-')+${RESET}"
     printf "${color}|${RESET}%${pad}s${BOLD}${WHITE}%s${RESET}%$(( inner - pad - ${#title} ))s${color}|${RESET}\n" "" "$title" ""
-    echo -e "${color}+$(printf '%*s' "$inner" | tr ' ' '-')+${RESET}"
+    echo -e "${color}+$(printf '%*s' "$inner" '' | tr ' ' '-')+${RESET}"
 }
-box_bot() { echo -e "${1}+$(printf '%*s' "$(( W - 2 ))" | tr ' ' '-')+${RESET}"; }
+box_bot() { echo -e "${1}+$(printf '%*s' "$(( W - 2 ))" '' | tr ' ' '-')+${RESET}"; }
 box_row() {
     local color=$1 content=$2 plain=$3
     local inner=$(( W - 2 ))

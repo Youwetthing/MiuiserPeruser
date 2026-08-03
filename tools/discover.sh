@@ -42,10 +42,10 @@ run_shell() {
 #  Connection Test
 # ------------------------------------------------------------
 clear
-echo -e "${C_BLUE}${BOX_TL_THICK}$(printf '%*s' 76 | tr ' ' "${BOX_H}")${BOX_TR_THICK}${RESET}"
+echo -e "${C_BLUE}${BOX_TL_THICK}$(printf '%*s' 76 '' | tr ' ' "${BOX_H}")${BOX_TR_THICK}${RESET}"
 echo -e "${C_BLUE}${BOX_V}${RESET} ${BOLD}${C_WHITE}🔍 DISCOVER — Privacy Auditor${RESET}"
 echo -e "${C_BLUE}${BOX_V}${RESET} ${DIM}${C_GRAY}The Double D's — Discover threats, Destroyer enforces${RESET}"
-echo -e "${C_BLUE}${BOX_BL_THICK}$(printf '%*s' 76 | tr ' ' "${BOX_H}")${BOX_BR_THICK}${RESET}"
+echo -e "${C_BLUE}${BOX_BL_THICK}$(printf '%*s' 76 '' | tr ' ' "${BOX_H}")${BOX_BR_THICK}${RESET}"
 echo ""
 
 echo -e "${C_CYAN}📡 Connecting to device...${RESET}"
@@ -69,7 +69,7 @@ echo -e "${C_PURPLE}${BOX_V}${RESET}   [2] Scan only Xiaomi/MIUI apps (com.miui.
 echo -e "${C_PURPLE}${BOX_V}${RESET}   [3] Scan running apps only (faster)                                 ${C_PURPLE}${BOX_V}${RESET}"
 echo -e "${C_PURPLE}└───────────────────────────────────────────────────────────────────────────┘${RESET}"
 echo ""
-read -p "Choose scan mode [1-3]: " scan_mode
+read -r -p "Choose scan mode [1-3]: " scan_mode
 
 case $scan_mode in
     1) package_filter="." ;;
@@ -165,10 +165,10 @@ echo ""
 #  Display Results (Worst Offenders First)
 # ------------------------------------------------------------
 clear
-echo -e "${C_BLUE}${BOX_TL_THICK}$(printf '%*s' 76 | tr ' ' "${BOX_H}")${BOX_TR_THICK}${RESET}"
+echo -e "${C_BLUE}${BOX_TL_THICK}$(printf '%*s' 76 '' | tr ' ' "${BOX_H}")${BOX_TR_THICK}${RESET}"
 echo -e "${C_BLUE}${BOX_V}${RESET} ${BOLD}${C_WHITE}🔍 DISCOVER — Privacy Audit Results${RESET}"
 echo -e "${C_BLUE}${BOX_V}${RESET} ${DIM}${C_GRAY}Worst offenders (lowest privacy score = most invasive)${RESET}"
-echo -e "${C_BLUE}${BOX_BL_THICK}$(printf '%*s' 76 | tr ' ' "${BOX_H}")${BOX_BR_THICK}${RESET}"
+echo -e "${C_BLUE}${BOX_BL_THICK}$(printf '%*s' 76 '' | tr ' ' "${BOX_H}")${BOX_BR_THICK}${RESET}"
 echo ""
 
 # Sort by score (lowest first) and show top 15
@@ -194,7 +194,7 @@ echo "  [1] Add ALL suspicious/critical packages to Destroyer brain"
 echo "  [2] Add SELECTED packages to Destroyer brain"
 echo "  [3] Exit (do nothing)"
 echo ""
-read -p "Choice [1-3]: " choice
+read -r -p "Choice [1-3]: " choice
 
 BRAIN="data/daemonhunter_brain.txt"
 touch "$BRAIN"
@@ -218,7 +218,7 @@ case $choice in
         ;;
     2)
         echo -e "${C_GRAY}Enter package name to add (copy from above):${RESET}"
-        read -p "Package: " pkg
+        read -r -p "Package: " pkg
         echo -n "Action [s=starve / d=deep_starve]: "
         read -r act
         if [[ "$act" == "d" ]]; then action="deep_starve"; else action="starve"; fi
@@ -235,4 +235,4 @@ rm -f "$TMP_DIR"/*.txt
 db_log_tool_end "Discover" "0"
 
 echo ""
-read -n 1 -s -p "Press any key to return..."
+read -r -n 1 -s -p "Press any key to return..."
