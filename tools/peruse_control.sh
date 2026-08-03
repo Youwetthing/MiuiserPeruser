@@ -152,9 +152,9 @@ interactive_teacher() {
     term_width=$(tput cols 2>/dev/null || echo 80)
     (( term_width < 60 )) && term_width=80
 
-    echo -e "${CYAN}$(printf '=%.0s' $(seq 1 $term_width))${NC}"
+    echo -e "${CYAN}$(printf '=%.0s' $(seq 1 "$term_width"))${NC}"
     echo -e "${CYAN}   📖 INTERACTIVE TEACHER — Learn Before You Burn${NC}"
-    echo -e "${CYAN}$(printf '=%.0s' $(seq 1 $term_width))${NC}"
+    echo -e "${CYAN}$(printf '=%.0s' $(seq 1 "$term_width"))${NC}"
     echo ""
 
     # Scan installed packages
@@ -162,15 +162,15 @@ interactive_teacher() {
     local pkg_list
     if ! get_installed_pkg_list pkg_list; then
         echo -e "\n${RED}Error: Could not retrieve package list. Check Shizuku/ADB connection.${NC}"
-        read -n 1 -s -p "Press any key to return to main menu..."
+        read -r -n 1 -s -p "Press any key to return to main menu..."
         return 1
     fi
     total_installed=${#pkg_list[@]}
     echo " done. Found ${total_installed} MIUI packages."
 
-    if [[ $total_installed -eq 0 ]]; then
+    if [[ "$total_installed" -eq 0 ]]; then
         echo -e "${RED}No known MIUI packages found on this device. Exiting.${NC}"
-        read -n 1 -s -p "Press any key to return to main menu..."
+        read -r -n 1 -s -p "Press any key to return to main menu..."
         return 1
     fi
 
@@ -184,7 +184,7 @@ interactive_teacher() {
         echo "  ${YELLOW}2${NC}) Reset and retake training (clear completion)"
         echo "  ${RED}3${NC}) Cancel and return to menu"
         echo ""
-        read -p "Choice [1-3]: " hall_pass_choice
+        read -r -p "Choice [1-3]: " hall_pass_choice
         case $hall_pass_choice in
             1) REVIEW_MODE=1 ;;
             2) rm -f "$COMPLETION_MARKER" "$PROGRESS_FILE"; REVIEW_MODE=0 ;;
@@ -226,9 +226,9 @@ interactive_teacher() {
     if [[ $REVIEW_MODE -eq 1 ]]; then
         echo -e "${CYAN}📋 REVIEW MODE — No actions will be taken.${NC}"
         echo ""
-        read -n 1 -s -p "Press any key to begin review..."
+        read -r -n 1 -s -p "Press any key to begin review..."
     else
-        read -n 1 -s -p "Press any key to begin training..."
+        read -r -n 1 -s -p "Press any key to begin training..."
     fi
 
     while true; do
@@ -261,9 +261,9 @@ interactive_teacher() {
         progress_bar+="] $(( (index+1)*100/total ))%"
 
         # Header with progress
-        echo -e "${CYAN}$(printf '=%.0s' $(seq 1 $term_width))${NC}"
-        printf "${CYAN}   Package %d of %d   %s${NC}\n" $((index+1)) $total "$progress_bar"
-        echo -e "${CYAN}$(printf '=%.0s' $(seq 1 $term_width))${NC}"
+        echo -e "${CYAN}$(printf '=%.0s' $(seq 1 "$term_width"))${NC}"
+        printf "${CYAN}   Package %d of %d   %s${NC}\n" $((index+1)) "$total" "$progress_bar"
+        echo -e "${CYAN}$(printf '=%.0s' $(seq 1 "$term_width"))${NC}"
         echo ""
 
         # Package info box
@@ -401,9 +401,9 @@ interactive_teacher() {
             rm -f "$PROGRESS_FILE"
             touch "$COMPLETION_MARKER"
             clear
-            echo -e "${GREEN}$(printf '=%.0s' $(seq 1 $term_width))${NC}"
+            echo -e "${GREEN}$(printf '=%.0s' $(seq 1 "$term_width"))${NC}"
             echo -e "${GREEN}   🎉 TRAINING COMPLETE!${NC}"
-            echo -e "${GREEN}$(printf '=%.0s' $(seq 1 $term_width))${NC}"
+            echo -e "${GREEN}$(printf '=%.0s' $(seq 1 "$term_width"))${NC}"
             echo ""
             echo -e "You've reviewed all ${total} packages."
             echo -e "RAM Slammer is now ${GREEN}UNLOCKED${NC}."
@@ -415,7 +415,7 @@ interactive_teacher() {
                 done
             fi
             echo ""
-            read -n 1 -s -p "Press any key to return to main menu..."
+            read -r -n 1 -s -p "Press any key to return to main menu..."
             break
         fi
     done
@@ -458,7 +458,7 @@ while true; do
     echo "3) 🔄 Reset training progress (hall pass)"
     echo "q) Quit"
     echo ""
-    read -p "Choice: " choice
+    read -r -p "Choice: " choice
     case $choice in
         1) interactive_teacher ;;
         2) echo "Debloat Safety Net — under construction"; sleep 2 ;;
