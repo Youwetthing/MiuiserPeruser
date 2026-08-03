@@ -34,19 +34,22 @@ DATE=$(date "+%A %B %d, %Y")
 TIME=$(date "+%H:%M")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-rule()  { echo -e "${INK}$(printf '%*s' "$COLS" | tr ' ' '-')${RESET}"; }
-drule() { echo -e "${BOLD}${BLACK}$(printf '%*s' "$COLS" | tr ' ' '=')${RESET}"; }
-hrule() { echo -e "${BOLD}${BLACK}$(printf '%*s' "$COLS" | tr ' ' '#')${RESET}"; }
+rule()  { echo -e "${INK}$(printf '%*s' "$COLS" '' | tr ' ' '-')${RESET}"; }
+drule() { echo -e "${BOLD}${BLACK}$(printf '%*s' "$COLS" '' | tr ' ' '=')${RESET}"; }
+hrule() { echo -e "${BOLD}${BLACK}$(printf '%*s' "$COLS" '' | tr ' ' '#')${RESET}"; }
 
 # Print a colour block headline
 block_head() {
     local bg=$1 fg=$2 text=$3
-    local inner=$(( W - 2 ))
-    local pad=$(( (inner - ${#text}) / 2 )); [ $pad -lt 0 ] && pad=0
-    local rpad=$(( inner - pad - ${#text} )); [ $rpad -lt 0 ] && rpad=0
-    echo -e "${bg}${fg}${BOLD}$(printf '%*s' "$((W))" | tr ' ' ' ')${RESET}"
+    local inner
+    inner=$(( W - 2 ))
+    local pad
+    pad=$(( (inner - ${#text}) / 2 )); [ $pad -lt 0 ] && pad=0
+    local rpad
+    rpad=$(( inner - pad - ${#text} )); [ $rpad -lt 0 ] && rpad=0
+    echo -e "${bg}${fg}${BOLD}$(printf '%*s' "$((W))" '' | tr ' ' ' ')${RESET}"
     printf "${bg}${fg}${BOLD} %${pad}s%s%${rpad}s ${RESET}\n" "" "$text" ""
-    echo -e "${bg}${fg}${BOLD}$(printf '%*s' "$((W))" | tr ' ' ' ')${RESET}"
+    echo -e "${bg}${fg}${BOLD}$(printf '%*s' "$((W))" '' | tr ' ' ' ')${RESET}"
 }
 
 # ── Masthead ──────────────────────────────────────────────────────────────────
@@ -72,7 +75,8 @@ add_finding() {
 
 # ── Parsers ───────────────────────────────────────────────────────────────────
 parse_burned() {
-    local f="$RESULTS/burned.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/burned.json"; [ ! -f "$f" ] && return
     local privacy_list score
     privacy_list=$(jq -r '.privacy_list // ""' "$f" 2>/dev/null)
     score=$(jq -r '.privacy_signal_count // 0' "$f" 2>/dev/null)
@@ -109,7 +113,8 @@ parse_burned() {
 }
 
 parse_metalheadd() {
-    local f="$RESULTS/metalheadd.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/metalheadd.json"; [ ! -f "$f" ] && return
     local sensitive score grade
     sensitive=$(jq -r '.sensitive_active // 0' "$f" 2>/dev/null)
     score=$(jq -r '.sensor_score // 100' "$f" 2>/dev/null)
@@ -127,7 +132,8 @@ parse_metalheadd() {
 }
 
 parse_shredderd() {
-    local f="$RESULTS/shredderd.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/shredderd.json"; [ ! -f "$f" ] && return
     local score grade drift confirmed selinux
     score=$(jq -r '.integrity.score // .integrity_score // 100' "$f" 2>/dev/null)
     grade=$(jq -r '.integrity.grade // .grade // "CLEAN"' "$f" 2>/dev/null)
@@ -140,7 +146,8 @@ parse_shredderd() {
 }
 
 parse_rahzerd() {
-    local f="$RESULTS/rahzerd.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/rahzerd.json"; [ ! -f "$f" ] && return
     local wifi mobile dns tcp4 tcp6 rat roaming div
 
     wifi=$(jq -r '.wifi.connected // -1' "$f" 2>/dev/null)
@@ -162,7 +169,8 @@ parse_rahzerd() {
 }
 
 parse_overlordd() {
-    local f="$RESULTS/overlordd.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/overlordd.json"; [ ! -f "$f" ] && return
     local threat patterns
 
     threat=$(jq -r '.threat_level // "NOMINAL"' "$f" 2>/dev/null)
@@ -187,7 +195,8 @@ parse_overlordd() {
 }
 
 parse_granitord() {
-    local f="$RESULTS/granitord.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/granitord.json"; [ ! -f "$f" ] && return
     local score grade selinux vboot root drift_detected
     score=$(jq -r '.posture.score // 100' "$f" 2>/dev/null)
     grade=$(jq -r '.posture.grade // "SECURE"' "$f" 2>/dev/null)
@@ -204,7 +213,8 @@ parse_granitord() {
 }
 
 parse_ratkingd() {
-    local f="$RESULTS/ratkingd.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/ratkingd.json"; [ ! -f "$f" ] && return
     local total zombies hidden orphans mem_low pressure
     total=$(jq -r '.processes.total // 0' "$f" 2>/dev/null)
     zombies=$(jq -r '.processes.zombies // 0' "$f" 2>/dev/null)
@@ -221,7 +231,8 @@ parse_ratkingd() {
 }
 
 parse_tigerclawd() {
-    local f="$RESULTS/tigerclawd.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/tigerclawd.json"; [ ! -f "$f" ] && return
     local score drift suspicious selinux codename ver
 
     score=$(jq -r '.trust_score // 100' "$f" 2>/dev/null)
@@ -248,7 +259,8 @@ parse_tigerclawd() {
 }
 
 parse_leatherheadd() {
-    local f="$RESULTS/leatherheadd.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/leatherheadd.json"; [ ! -f "$f" ] && return
     local score grade throttled
     score=$(jq -r '.thermal_score // 100' "$f" 2>/dev/null)
     grade=$(jq -r '.grade // "NOMINAL"' "$f" 2>/dev/null)
@@ -266,7 +278,8 @@ parse_leatherheadd() {
 }
 
 parse_rocksteadyd() {
-    local f="$RESULTS/rocksteadyd.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/rocksteadyd.json"; [ ! -f "$f" ] && return
     local score grade throttled
     score=$(jq -r '.cpu_score // 100' "$f" 2>/dev/null)
     grade=$(jq -r '.grade // "HEALTHY"' "$f" 2>/dev/null)
@@ -279,7 +292,8 @@ parse_rocksteadyd() {
 }
 
 parse_bebopd() {
-    local f="$RESULTS/bebopd.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/bebopd.json"; [ ! -f "$f" ] && return
     local drain
     drain=$(jq -r '.drain_mah_per_hour // 0' "$f" 2>/dev/null)
     local drain_int=${drain%.*}
@@ -290,7 +304,8 @@ parse_bebopd() {
 }
 
 parse_fugitoidd() {
-    local f="$RESULTS/fugitoidd.json"; [ ! -f "$f" ] && return
+    local f
+    f="$RESULTS/fugitoidd.json"; [ ! -f "$f" ] && return
     local crashes anrs ooms
     crashes=$(jq -r '.crashes // .crash_count // 0' "$f" 2>/dev/null)
     anrs=$(jq -r '.anrs // .anr_count // 0' "$f" 2>/dev/null)
@@ -336,7 +351,8 @@ render_findings() {
         return
     fi
 
-    local sep="|||"
+    local sep
+    sep="|||"
 
     # URGENT
     for entry in "${FINDINGS[@]}"; do
@@ -401,12 +417,16 @@ render_findings() {
 render_status() {
     block_head "$BGBLUE" "$WHITE" "BUREAU STATUS — DAEMON HEALTH"
     echo ""
-    local infra="gaveld splinterd krangd turtlecomd"
-    local monitors="nulld"
-    local daemons="burned granitord leatherheadd metalheadd rahzerd ratkingd rocksteadyd shredderd tigerclawd bebopd fugitoidd overlordd"
+    local infra
+    infra="gaveld splinterd krangd turtlecomd"
+    local monitors
+    monitors="nulld"
+    local daemons
+    daemons="burned granitord leatherheadd metalheadd rahzerd ratkingd rocksteadyd shredderd tigerclawd bebopd fugitoidd overlordd"
     printf "\n  ${BOLD}${CYN}SYNDICATE FLEET${RST}\n"
     for d in $daemons; do
-        local result="$RESULTS/${d}.json"
+        local result
+        result="$RESULTS/${d}.json"
         local running ts
         pgrep -x "$d" > /dev/null 2>&1 && running="${CYAN}● LIVE  ${RESET}" || running="${GREY}○ idle  ${RESET}"
         if [ -f "$result" ]; then
@@ -419,17 +439,24 @@ render_status() {
     echo ""
     printf "  ${BOLD}${CYN}BACKGROUND MONITORS${RST}\n"
     for d in $monitors; do
-        local pid_file="$BASE/pipes/pids/${d}.pid"
-        local status="stopped"
-        local extra=""
+        local pid_file
+        pid_file="$BASE/pipes/pids/${d}.pid"
+        local status
+        status="stopped"
+        local extra
+        extra=""
         if [ -f "$pid_file" ]; then
-            local pid=$(cat "$pid_file" 2>/dev/null)
+            local pid
+            pid=$(cat "$pid_file" 2>/dev/null)
             kill -0 "$pid" 2>/dev/null && status="running" || status="stopped"
         fi
-        local f="$RESULTS/${d}.json"
+        local f
+        f="$RESULTS/${d}.json"
         if [ -f "$f" ]; then
-            local spikes=$(jq -r '.total_spike_events // 0' "$f" 2>/dev/null)
-            local screen=$(jq -r '.screen // "?"' "$f" 2>/dev/null)
+            local spikes
+            spikes=$(jq -r '.total_spike_events // 0' "$f" 2>/dev/null)
+            local screen
+            screen=$(jq -r '.screen // "?"' "$f" 2>/dev/null)
             extra="screen=${screen} spikes=${spikes}"
         fi
         printf " ${CYN}○ monitor ${WHT}%-12s${RST} ${DIM}%s %s${RST}\n" "$d" "$status" "$extra"
@@ -437,10 +464,13 @@ render_status() {
     echo ""
     printf "  ${BOLD}${CYN}INFRASTRUCTURE${RST}\n"
     for d in $infra; do
-        local pid_file="$BASE/pipes/pids/${d}.pid"
-        local status="stopped"
+        local pid_file
+        pid_file="$BASE/pipes/pids/${d}.pid"
+        local status
+        status="stopped"
         if [ -f "$pid_file" ]; then
-            local pid=$(cat "$pid_file" 2>/dev/null)
+            local pid
+            pid=$(cat "$pid_file" 2>/dev/null)
             kill -0 "$pid" 2>/dev/null && status="running (pid $pid)" || status="stopped"
         fi
         printf " ${CYN}○ infra  ${WHT}%-16s${RST} ${DIM}%s${RST}\n" "$d" "$status"
@@ -478,10 +508,13 @@ launch_tool() {
     read -r -p "$(echo -e " ${CYAN}Choice: ${RESET}")" pick
     [ "$pick" = "q" ] && return
 
-    local idx=$((pick - 1))
-    local selected="${tools_list[$idx]}"
+    local idx
+    idx=$((pick - 1))
+    local selected
+    selected="${tools_list[$idx]}"
     [ -z "$selected" ] && return
     local toolname; toolname=$(echo "$selected" | cut -d'|' -f1)
+    # shellcheck disable=SC2015
     [ -f "$TOOLS/$toolname" ] && bash "$TOOLS/$toolname" || { echo -e " ${RED}Tool not found: $toolname${RESET}"; sleep 2; }
 }
 

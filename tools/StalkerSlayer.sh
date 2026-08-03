@@ -8,21 +8,33 @@ set -uo pipefail
 IFS=$'\n\t'
 
 # --- Configuration ---
-readonly BASE_DIR="${HOME}/MiuiserPeruser"
-readonly LOG_DIR="${BASE_DIR}/log_cabin/telemetry"
-readonly LOCK_DIR="${HOME}/.StalkerSlayer.lock"
-readonly RISH_PATH="${HOME}/Rish/rish"
-readonly KILLER_PID_FILE="${BASE_DIR}/.killer.pid"
+readonly BASE_DIR
+BASE_DIR="${HOME}/MiuiserPeruser"
+readonly LOG_DIR
+LOG_DIR="${BASE_DIR}/log_cabin/telemetry"
+readonly LOCK_DIR
+LOCK_DIR="${HOME}/.StalkerSlayer.lock"
+readonly RISH_PATH
+RISH_PATH="${HOME}/Rish/rish"
+readonly KILLER_PID_FILE
+KILLER_PID_FILE="${BASE_DIR}/.killer.pid"
 
 # Colors (using tput for reliability)
 if [[ -t 1 ]]; then
-    readonly BOLD=$(tput bold 2>/dev/null || echo '')
-    readonly GREEN=$(tput setaf 2 2>/dev/null || echo '')
-    readonly RED=$(tput setaf 1 2>/dev/null || echo '')
-    readonly YELLOW=$(tput setaf 3 2>/dev/null || echo '')
-    readonly BLUE=$(tput setaf 4 2>/dev/null || echo '')
-    readonly CYAN=$(tput setaf 6 2>/dev/null || echo '')
-    readonly RESET=$(tput sgr0 2>/dev/null || echo '')
+    readonly BOLD
+    BOLD=$(tput bold 2>/dev/null || echo '')
+    readonly GREEN
+    GREEN=$(tput setaf 2 2>/dev/null || echo '')
+    readonly RED
+    RED=$(tput setaf 1 2>/dev/null || echo '')
+    readonly YELLOW
+    YELLOW=$(tput setaf 3 2>/dev/null || echo '')
+    readonly BLUE
+    BLUE=$(tput setaf 4 2>/dev/null || echo '')
+    readonly CYAN
+    CYAN=$(tput setaf 6 2>/dev/null || echo '')
+    readonly RESET
+    RESET=$(tput sgr0 2>/dev/null || echo '')
 else
     readonly BOLD=''; readonly GREEN=''; readonly RED=''
     readonly YELLOW=''; readonly BLUE=''; readonly CYAN=''; readonly RESET=''
@@ -46,7 +58,8 @@ readonly PACKAGES=(
 
 # --- Helpers ---
 exec_priv() {
-    local cmd="$1"
+    local cmd
+    cmd="$1"
     if [[ -x "$RISH_PATH" ]]; then
         "$RISH_PATH" -c "$cmd" 2>/dev/null
     elif command -v adb &>/dev/null && adb devices | grep -q 'device$'; then
@@ -74,13 +87,13 @@ print_info()    { echo -e "${BLUE}ℹ $1${RESET}"; }
 
 pause() {
     echo ""
-    read -n 1 -s -r -p "Press any key to continue..."
+    read -r -n 1 -s -p "Press any key to continue..."
     echo ""
 }
 
 confirm() {
     local answer
-    read -p "$1 [y/N]: " answer
+    read -r -p "$1 [y/N]: " answer
     [[ "$answer" =~ ^[Yy]$ ]]
 }
 
@@ -123,7 +136,8 @@ start_killer() {
 
 stop_killer() {
     if [[ -f "$KILLER_PID_FILE" ]]; then
-        local pid=$(cat "$KILLER_PID_FILE")
+        local pid
+        pid=$(cat "$KILLER_PID_FILE")
         if kill -0 "$pid" 2>/dev/null; then
             kill "$pid"
             print_success "Stopped killer (PID $pid)"
@@ -141,7 +155,8 @@ run_status() {
     clear
     print_header
     
-    local shell_type=$(check_shell)
+    local shell_type
+    shell_type=$(check_shell)
     if [[ "$shell_type" == "none" ]]; then
         print_error "No rish or adb available"
         pause
@@ -153,7 +168,8 @@ run_status() {
     echo -e "\n${BOLD}Running telemetry processes:${RESET}"
     local running=0
     for pkg in "${PACKAGES[@]}"; do
-        local pid=$(exec_priv "pidof $pkg" | awk '{print $1}')
+        local pid
+        pid=$(exec_priv "pidof $pkg" | awk '{print $1}')
         if [[ -n "$pid" ]]; then
             echo "  ${YELLOW}▶${RESET} $pkg (PID $pid)"
             ((running++))
@@ -167,9 +183,12 @@ run_status() {
     echo -e "\n${BOLD}AppOps restrictions:${RESET}"
     local all_good=0
     for pkg in "${PACKAGES[@]}"; do
-        local bg=$(exec_priv "appops get $pkg RUN_IN_BACKGROUND" | grep -o 'ignore\|allow\|default' | head -1)
-        local wl=$(exec_priv "appops get $pkg WAKE_LOCK" | grep -o 'ignore\|allow\|default' | head -1)
-        local fg=$(exec_priv "appops get $pkg START_FOREGROUND" | grep -o 'ignore\|allow\|default' | head -1)
+        local bg
+        bg=$(exec_priv "appops get $pkg RUN_IN_BACKGROUND" | grep -o 'ignore\|allow\|default' | head -1)
+        local wl
+        wl=$(exec_priv "appops get $pkg WAKE_LOCK" | grep -o 'ignore\|allow\|default' | head -1)
+        local fg
+        fg=$(exec_priv "appops get $pkg START_FOREGROUND" | grep -o 'ignore\|allow\|default' | head -1)
         [[ -z "$bg" ]] && bg="default"
         [[ -z "$wl" ]] && wl="default"
         [[ -z "$fg" ]] && fg="default"
@@ -194,7 +213,8 @@ run_scan() {
     clear
     print_header
     
-    local shell_type=$(check_shell)
+    local shell_type
+    shell_type=$(check_shell)
     if [[ "$shell_type" == "none" ]]; then
         print_error "No rish or adb available"
         pause
@@ -202,13 +222,15 @@ run_scan() {
     fi
     
     mkdir -p "$LOG_DIR"
-    local report="${LOG_DIR}/scan_$(date +%Y%m%d_%H%M%S).txt"
+    local report
+    report="${LOG_DIR}/scan_$(date +%Y%m%d_%H%M%S).txt"
     echo "=== SCAN REPORT $(date) ===" > "$report"
     
     echo -e "${BOLD}Active telemetry processes:${RESET}"
     local active=0
     for pkg in "${PACKAGES[@]}"; do
-        local pid=$(exec_priv "pidof $pkg" | awk '{print $1}')
+        local pid
+        pid=$(exec_priv "pidof $pkg" | awk '{print $1}')
         if [[ -n "$pid" ]]; then
             echo "  ${YELLOW}▶${RESET} $pkg (PID $pid)"
             echo "PROCESS: $pkg PID=$pid" >> "$report"
@@ -230,7 +252,8 @@ run_slay() {
     clear
     print_header
     
-    local shell_type=$(check_shell)
+    local shell_type
+    shell_type=$(check_shell)
     if [[ "$shell_type" == "none" ]]; then
         print_error "No rish or adb available"
         pause
@@ -316,7 +339,8 @@ show_help() {
 
 # --- Mikey findings from last superhero scan ---
 show_mikey_findings() {
-    local json="${HOME}/MiuiserPeruser/data/last_scan.json"
+    local json
+    json="${HOME}/MiuiserPeruser/data/last_scan.json"
     echo -e "\n${BOLD}${CYAN}=== MIKEY Telemetry Findings ===${RESET}"
     if [ ! -f "$json" ]; then
         echo -e "${YELLOW}  No scan data. Run: superhero --standard${RESET}"
@@ -347,7 +371,8 @@ PY
 }
 
 slay_mikey_findings() {
-    local json="${HOME}/MiuiserPeruser/data/last_scan.json"
+    local json
+    json="${HOME}/MiuiserPeruser/data/last_scan.json"
     echo -e "\n${BOLD}${RED}=== Slaying MIKEY Findings ===${RESET}"
     if [ ! -f "$json" ]; then
         echo -e "${YELLOW}  No scan data.${RESET}"; return
@@ -402,7 +427,8 @@ PY
 
 
 slay_mikey_findings() {
-    local json="${HOME}/MiuiserPeruser/data/last_scan.json"
+    local json
+    json="${HOME}/MiuiserPeruser/data/last_scan.json"
     echo -e "\n${BOLD}${RED}=== Slaying MIKEY Findings ===${RESET}"
     if [ ! -f "$json" ]; then
         echo -e "${YELLOW}  No scan data.${RESET}"; return
@@ -469,8 +495,10 @@ show_menu() {
 ADB="/data/data/com.termux/files/home/.cargo/bin/adb_cli"
 
 dns_status() {
-    local mode=$($ADB tcp 127.0.0.1:5555 shell "settings get global private_dns_mode" 2>/dev/null | tr -d '\r')
-    local host=$($ADB tcp 127.0.0.1:5555 shell "settings get global private_dns_specifier" 2>/dev/null | tr -d '\r')
+    local mode
+    mode=$($ADB tcp 127.0.0.1:5555 shell "settings get global private_dns_mode" 2>/dev/null | tr -d '\r')
+    local host
+    host=$($ADB tcp 127.0.0.1:5555 shell "settings get global private_dns_specifier" 2>/dev/null | tr -d '\r')
     echo "  DNS mode: $mode"
     echo "  DNS host: $host"
     if echo "$host" | grep -q "adguard"; then
@@ -526,7 +554,7 @@ main() {
         print_error "Another instance is running"
         exit 1
     fi
-    trap "rmdir '$LOCK_DIR' 2>/dev/null; exit" EXIT
+    trap 'rmdir "$LOCK_DIR" 2>/dev/null; exit' EXIT
 
     if [[ $# -gt 0 ]]; then
         case "${1:-}" in
@@ -570,14 +598,16 @@ run_powerkeeper_recon() {
     print_header
     echo -e "${BOLD}${CYAN}=== PowerKeeper Recon ===${RESET}\n"
 
-    local shell_type=$(check_shell)
+    local shell_type
+    shell_type=$(check_shell)
     if [[ "$shell_type" == "none" ]]; then
         print_error "No rish or adb available"
         pause
         return
     fi
 
-    local pid=$(exec_priv "pgrep -x powerkeeper" | tr -d '\n')
+    local pid
+    pid=$(exec_priv "pgrep -x powerkeeper" | tr -d '\n')
     if [[ -z "$pid" ]]; then
         print_warning "powerkeeper process not found"
         pause
@@ -586,10 +616,14 @@ run_powerkeeper_recon() {
 
     print_success "powerkeeper PID: $pid"
 
-    local threads=$(exec_priv "cat /proc/$pid/status" | grep Threads)
-    local oom=$(exec_priv "cat /proc/$pid/oom_score_adj")
-    local caps=$(exec_priv "cat /proc/$pid/status" | grep -E '^Cap')
-    local cgroup=$(exec_priv "cat /proc/$pid/cgroup" | tr '\n' ' ')
+    local threads
+    threads=$(exec_priv "cat /proc/$pid/status" | grep Threads)
+    local oom
+    oom=$(exec_priv "cat /proc/$pid/oom_score_adj")
+    local caps
+    caps=$(exec_priv "cat /proc/$pid/status" | grep -E '^Cap')
+    local cgroup
+    cgroup=$(exec_priv "cat /proc/$pid/cgroup" | tr '\n' ' ')
 
     echo "  $threads"
     echo "  OOM score adj: $oom"
@@ -598,7 +632,8 @@ run_powerkeeper_recon() {
 
     echo ""
     print_info "IPowerMillet binder service (miui.powerkeeper.PowerMillet):"
-    local dump=$(exec_priv "dumpsys activity service PowerKeeper" 2>/dev/null | head -20)
+    local dump
+    dump=$(exec_priv "dumpsys activity service PowerKeeper" 2>/dev/null | head -20)
     if [[ -n "$dump" ]]; then
         echo "$dump" | sed 's/^/  /'
     else
