@@ -28,3 +28,6 @@ endforeach()
 # shredderd needs OpenSSL for SHA256
 target_link_libraries(shredderd PRIVATE crypto)
 target_link_libraries(granitord PRIVATE crypto)
+
+# burned needs sqlite3 for xiaomi_partners.db (region-loaded partner signals)
+target_sources(burned PRIVATE ${CMAKE_SOURCE_DIR}/src/core/sqlite/sqlite3.c)

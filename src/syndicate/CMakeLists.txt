@@ -1,37 +1,33 @@
-set(SYNDICATE_SRC
-    backend/backend_exec.c
-    backend/syndicate_run.c
-    backend/capabilities.c
-    daemon_entry.c
-
-    ../daemon/daemon_common.c
-    ../daemon/daemon_core.c
-    ../daemon/daemon_modes.c
-    ../daemon/log.c
-    ../daemon/ipc.c
-    ../daemon/ipc_globals.c
-
-    ../daemon/bebopd.c
-    ../daemon/burned.c
-    ../daemon/fugitoidd.c
-    ../daemon/granitord.c
-    ../daemon/krangd.c
-    ../daemon/leatherheadd.c
-    ../daemon/metalheadd.c
-    ../daemon/ratkingd.c
-    ../daemon/rocksteadyd.c
-    ../daemon/shredderd.c
-    ../daemon/turtlecomd.c
-
-    ../core/splinterd.c
+set(DAEMON_COMMON
+    daemon_core.c
+    daemon_common.c
+    daemon_modes.c
+    ipc_globals.c
+    capabilities_extra.c
+    capabilities_pretty.c
+    ../core/log_safe.c
+    ../core/fugitoid_log_impl.c
+    backend_exec.c
+    local_exec.c          # <-- ADD THIS
 )
 
-# add_library(syndicate ...) removed 2026-07-10 — confirmed zero consumers via
-# `grep -rn "target_link_libraries.*syndicate" --include="CMakeLists.txt" .`
-# across the whole repo. It bundled a second copy of every daemon .c file
-# (granitord, bebopd, ratkingd, shredderd, splinterd, etc.) into a static
-# library nothing ever linked against — pure wasted compile time on every
-# full rebuild. Daemons build correctly as their own executables via
-# src/daemon/CMakeLists.txt; this was dead weight, not infrastructure.
-# SYNDICATE_SRC left defined above in case anyone wants to revive it
-# deliberately with a real consumer in mind.
+set(DAEMON_INCLUDES
+    ${CMAKE_SOURCE_DIR}/src/daemon
+    ${CMAKE_SOURCE_DIR}/src/core/include
+    ${CMAKE_SOURCE_DIR}/src/gaveld
+    ${CMAKE_SOURCE_DIR}/src/core
+    ${CMAKE_SOURCE_DIR}/syndicate/daemon
+)
+
+foreach(DAEMON bebopd burned fugitoidd granitord krangd leatherheadd metalheadd nulld overlordd ratkingd rocksteadyd shredderd tigerclawd turtlecomd)
+    add_executable(${DAEMON} ${DAEMON}.c ${DAEMON_COMMON})
+    target_include_directories(${DAEMON} PRIVATE ${DAEMON_INCLUDES})
+    set_target_properties(${DAEMON} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
+endforeach()
+
+# shredderd needs OpenSSL for SHA256
+target_link_libraries(shredderd PRIVATE crypto)
+target_link_libraries(granitord PRIVATE crypto)
+
+# burned needs sqlite3 for xiaomi_partners.db (region-loaded partner signals)
+target_link_libraries(burned PRIVATE sqlite3)

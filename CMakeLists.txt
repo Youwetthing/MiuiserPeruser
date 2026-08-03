@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 project(MiuiserPeruser C)
 
-add_subdirectory(src/syndicate)
+# add_subdirectory(src/syndicate)  # stale/divergent prototype tree, not built
 add_subdirectory(src/daemon)
 add_subdirectory(src/core)
 add_subdirectory(src/superhero)
