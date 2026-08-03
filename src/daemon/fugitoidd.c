@@ -25,6 +25,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdbool.h>
+#include <errno.h>
+#include <stdarg.h>
 
 #define DAEMON_NAME   "fugitoidd"
 #define DEFAULT_INTERVAL 20
@@ -37,6 +39,49 @@
 #define STATE_FILE   MP_BASE_DIR "/Registry/daemon_state.json"
 #define RESULTS_DIR  MP_BASE_DIR "/Registry/daemon_results"
 #define RESULTS_FILE RESULTS_DIR "/" DAEMON_NAME ".json"
+
+/* ── Logging (burned/shredderd-style: stderr always, optional file dest) ── */
+
+static FILE *g_fugitoid_log_fp = NULL;
+
+static void fugitoidlog_init(void)
+{
+    const char *path = getenv("FUGITOID_LOG_PATH");
+    if (path && *path) {
+        g_fugitoid_log_fp = fopen(path, "a");
+        if (!g_fugitoid_log_fp) {
+            fprintf(stderr, "[FUGITOID] WARN: cannot open log file %s: %s\n",
+                    path, strerror(errno));
+        }
+    }
+}
+
+/* NOTE: uses a separate va_start/va_end per output destination.
+ * Reusing one va_list across two vfprintf() calls is undefined
+ * behavior — this bit krangd once already; don't repeat it here. */
+static void fugitoidlog(const char *level, const char *fmt, ...)
+{
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "[%s][FUGITOID/%s] ", ts, level);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
+
+    if (g_fugitoid_log_fp) {
+        va_list ap2;
+        va_start(ap2, fmt);
+        fprintf(g_fugitoid_log_fp, "[%s][FUGITOID/%s] ", ts, level);
+        vfprintf(g_fugitoid_log_fp, fmt, ap2);
+        fprintf(g_fugitoid_log_fp, "\n");
+        va_end(ap2);
+        fflush(g_fugitoid_log_fp);
+    }
+}
 
 static char g_prev_app[128] = {0};
 
@@ -97,6 +142,19 @@ static int count_substr(const char *hay, const char *needle)
     return c;
 }
 
+/* Neutralize chars that would break JSON string values or the APRIL
+ * pipe-delimited protocol if they ever slip through from raw shell
+ * output (same bug class fixed in granitord.c). */
+static void sanitize_field(char *s)
+{
+    if (!s) return;
+    for (; *s; s++) {
+        unsigned char c = (unsigned char)*s;
+        if (c < 0x20 || c == '"' || c == '|' || c == '\\')
+            *s = '_';
+    }
+}
+
 /* ── Results writer ───────────────────────────────────────────────────── */
 
 static void write_results(int scan_num, int crashes, int anrs,
@@ -130,8 +188,7 @@ static void poll(int scan_num)
     time_t t = time(NULL);
     strftime(ts, sizeof(ts), "%H:%M:%S", localtime(&t));
 
-    printf("\n[FUGITOID] ── System Bridge #%d  %s ─────────────────────\n",
-           scan_num, ts);
+    fugitoidlog("INFO", "── System Bridge #%d  %s ─────────────────────", scan_num, ts);
 
     /* ── Single rish call: foreground + logcat ────────────────────────── */
     char logcmd[64];
@@ -177,6 +234,7 @@ static void poll(int scan_num)
                     char *slash = strchr(tmp, '/');
                     if (slash) *slash = '\0';
                     if (tmp[0]) strncpy(fg_app, tmp, sizeof(fg_app) - 1);
+                    sanitize_field(fg_app);
                 }
             }
         }
@@ -184,12 +242,12 @@ static void poll(int scan_num)
         /* Restore log section pointer */
         if (log_sec) log_sec += 7;
 
-        printf("[FUGITOID]  Foreground : %s\n", fg_app);
+        fugitoidlog("INFO", "Foreground : %s", fg_app);
 
         /* App switch detection */
         if (strcmp(fg_app, "unknown") != 0 &&
             strcmp(fg_app, g_prev_app) != 0 && g_prev_app[0]) {
-            printf("[FUGITOID]  App switch : %s → %s\n", g_prev_app, fg_app);
+            fugitoidlog("INFO", "App switch : %s -> %s", g_prev_app, fg_app);
             char ev[256];
             snprintf(ev, sizeof(ev), "from=%.48s to=%.48s", g_prev_app, fg_app);
             gaveld_emit(DAEMON_NAME, "APP_SWITCH_ANOMALY", 0.0, ev);
@@ -210,9 +268,8 @@ static void poll(int scan_num)
                     + count_substr(log, "mem-pressure-event");
         int wdogs   = count_substr(log, "watchdog");
 
-        printf("[FUGITOID]  Logcat     : crashes=%-3d  ANR=%-3d  "
-               "OOM=%-3d  watchdog=%d\n",
-               crashes, anrs, ooms, wdogs);
+        fugitoidlog("INFO", "Logcat     : crashes=%-3d  ANR=%-3d  OOM=%-3d  watchdog=%d",
+                    crashes, anrs, ooms, wdogs);
 
         if (anrs > 0) {
             char target[64] = "unknown";
@@ -224,11 +281,12 @@ static void poll(int scan_num)
                     target[i++] = *p2++;
                 target[i] = '\0';
             }
+            sanitize_field(target);
             char ev[256];
             snprintf(ev, sizeof(ev), "count=%d target=%.48s", anrs, target);
             gaveld_emit(DAEMON_NAME, "ANR_DETECTED", 0.0, ev);
             splinterd_emit("anr_detected", ev);
-            printf("[FUGITOID]  ⚠  ANR: %s\n", target);
+            fugitoidlog("WARN", "ANR: %s", target);
         }
 
         if (crashes > 0) {
@@ -244,11 +302,12 @@ static void poll(int scan_num)
                     target[i] = '\0';
                 }
             }
+            sanitize_field(target);
             char ev[256];
             snprintf(ev, sizeof(ev), "count=%d process=%.48s", crashes, target);
             gaveld_emit(DAEMON_NAME, "CRASH_DETECTED", 0.0, ev);
             splinterd_emit("crash_detected", ev);
-            printf("[FUGITOID]  ⚠  CRASH: %s\n", target);
+            fugitoidlog("WARN", "CRASH: %s", target);
         }
 
         if (ooms > 0) {
@@ -256,13 +315,13 @@ static void poll(int scan_num)
             snprintf(ev, sizeof(ev), "oom_events=%d", ooms);
             gaveld_emit(DAEMON_NAME, "OOM_KILL_EVENT", 0.0, ev);
             splinterd_emit("oom_kill", ev);
-            printf("[FUGITOID]  ⚠  OOM kill: %d event(s)\n", ooms);
+            fugitoidlog("WARN", "OOM kill: %d event(s)", ooms);
         }
 
         write_results(scan_num, crashes, anrs, ooms, fg_app);
         free(raw);
     } else {
-        printf("[FUGITOID]  rish unavailable — limited mode\n");
+        fugitoidlog("WARN", "rish unavailable — limited mode");
     }
 
     /* ── Memory headline from /proc (no rish needed) ──────────────────── */
@@ -275,29 +334,29 @@ static void poll(int scan_num)
                 { avail_mb = v / 1024; break; }
         fclose(mf);
     }
-    printf("[FUGITOID]  MemFree    : %ldMB available\n", avail_mb);
+    fugitoidlog("INFO", "MemFree    : %ldMB available", avail_mb);
 }
 
 /* ── Main ─────────────────────────────────────────────────────────────── */
 
 int main(void)
 {
-    setenv("BEXEC_NO_RISH", "1", 1);
     bexec_init();
+    fugitoidlog_init();
 
     if (!is_enabled()) {
-        printf("[FUGITOID] disabled via syndicatectl — exiting\n");
+        fugitoidlog("INFO", "disabled via syndicatectl — exiting");
         return 0;
     }
 
-    printf("[FUGITOID] Foreground Activity & System Event Monitor: ONLINE\n");
+    fugitoidlog("INFO", "Foreground Activity & System Event Monitor: ONLINE");
     int interval  = get_interval();
     int max_scans = get_max_scans();
     int scan_num  = 0;
 
     for (;;) {
         if (!is_enabled()) {
-            printf("[FUGITOID] disabled — stopping\n");
+            fugitoidlog("INFO", "disabled — stopping");
             break;
         }
 
@@ -308,11 +367,11 @@ int main(void)
             poll(scan_num);
     
         if (max_scans > 0 && scan_num >= max_scans) {
-            printf("[FUGITOID] reached scan_count=%d — exiting\n", max_scans);
+            fugitoidlog("INFO", "reached scan_count=%d — exiting", max_scans);
             break;
         }
 
-        printf("[FUGITOID] Next poll in %ds\n", interval);
+        fugitoidlog("INFO", "Next poll in %ds", interval);
         sleep(interval);
     }
 
