@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <math.h>
+#include <stdarg.h>
 
 #define DAEMON_NAME     "ratkingd"
 #define VERSION         "2.0"
@@ -81,6 +82,79 @@ static int g_baseline_ready = 0;
 
 /* ── JSON output path ─────────────────────────────────────────────────────── */
 #define RESULTS_FILE "/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/ratkingd.json"
+
+/* ── Unified logging ──────────────────────────────────────────────────────
+ * Format: [ISO8601][RATKINGD/LEVEL] message. Always writes to stderr; also
+ * writes to a log file if RATKING_LOG_PATH is set. Separate va_start/va_end
+ * per output destination -- reusing one va_list across two vfprintf() calls
+ * is undefined behavior. */
+static FILE *g_ratking_log_fp = NULL;
+
+static void ratkinglog_init(void) {
+    const char *path = getenv("RATKING_LOG_PATH");
+    if (path && *path) {
+        g_ratking_log_fp = fopen(path, "a");
+        if (!g_ratking_log_fp) {
+            fprintf(stderr, "[RATKINGD] WARN: cannot open log file %s: %s\n",
+                    path, strerror(errno));
+        }
+    }
+}
+
+static void ratkinglog(const char *level, const char *fmt, ...) {
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "[%s][RATKINGD/%s] ", ts, level);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
+
+    if (g_ratking_log_fp) {
+        va_list ap2;
+        va_start(ap2, fmt);
+        fprintf(g_ratking_log_fp, "[%s][RATKINGD/%s] ", ts, level);
+        vfprintf(g_ratking_log_fp, fmt, ap2);
+        fprintf(g_ratking_log_fp, "\n");
+        va_end(ap2);
+        fflush(g_ratking_log_fp);
+    }
+}
+
+/* JSON-escape a free-text string (process names from /proc, cgroup content)
+ * before splicing into hand-built JSON -- none of that text is trustworthy
+ * input, and an embedded quote/backslash/newline would silently corrupt the
+ * JSON output (same class of bug fixed via json_escape() in fugitoidd.c
+ * and metalheadd.c this arc). */
+static void json_escape(const char *in, char *out, size_t out_size) {
+    if (!in || out_size == 0) { if (out_size) out[0] = '\0'; return; }
+    size_t j = 0;
+    for (size_t i = 0; in[i] != '\0' && j + 1 < out_size; i++) {
+        unsigned char c = (unsigned char)in[i];
+        if (c == '"' || c == '\\') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\';
+            out[j++] = (char)c;
+        } else if (c == '\n') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\'; out[j++] = 'n';
+        } else if (c == '\r') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\'; out[j++] = 'r';
+        } else if (c == '\t') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\'; out[j++] = 't';
+        } else if (c < 0x20) {
+            continue;  /* drop other control chars */
+        } else {
+            out[j++] = (char)c;
+        }
+    }
+    out[j] = '\0';
+}
 
 /* ── rish helper ───────────────────────────────────────────────────────────── */
 static char *rish_read(const char *cmd, char *buf, size_t bufsize) {
@@ -277,41 +351,21 @@ static void read_meminfo(long *total_kb, long *avail_kb) {
     fclose(f);
 }
 
-/* ── Hidden process detection (PID gap analysis) ─────────────────────────── */
-static int detect_hidden_processes(void) {
-    int max_pid = 0;
-    DIR *d = opendir("/proc");
-    if (!d) return 0;
-    struct dirent *ent;
-    while ((ent = readdir(d)) != NULL) {
-        int is_pid = 1;
-        for (char *c = ent->d_name; *c; c++)
-            if (*c < '0' || *c > '9') { is_pid = 0; break; }
-        if (is_pid) {
-            int pid = atoi(ent->d_name);
-            if (pid > max_pid) max_pid = pid;
-        }
-    }
-    closedir(d);
-
-    /* Check for gaps in expected range — hidden processes remove /proc entries */
-    int expected_count = max_pid;
-    int actual_count = 0;
-    d = opendir("/proc");
-    if (d) {
-        while ((ent = readdir(d)) != NULL) {
-            int is_pid = 1;
-            for (char *c = ent->d_name; *c; c++)
-                if (*c < '0' || *c > '9') { is_pid = 0; break; }
-            if (is_pid) actual_count++;
-        }
-        closedir(d);
-    }
-
-    /* Significant gap suggests hidden processes */
-    int gap = expected_count - actual_count;
-    return gap > 5 ? gap : 0;  /* Allow normal PID reuse noise */
-}
+/* REMOVED 2026-07-28: detect_hidden_processes() computed
+ * gap = max_pid - actual /proc entry count and treated any gap > 5 as
+ * evidence of hidden processes. This is invalid, not just miscalibrated:
+ * PIDs aren't dense (the kernel increments a running counter up to
+ * pid_max, reusing old numbers as processes exit), so a high max_pid
+ * just reflects total process churn since boot, not expected live-process
+ * count. Confirmed live: the gap grew from 31678 to 32714 across ~15 polls
+ * while actual process count held steady at 6-7, firing HIDDEN_PROCESS on
+ * every single poll, permanently, on a completely normal device. The
+ * underlying idea (detecting /proc-hiding rootkits) is legitimate but
+ * needs a second independent enumeration method (e.g. diffing against
+ * /proc/sched_debug) to compare against the /proc listing -- comparing
+ * against max_pid was never a valid implementation of that idea. Removed
+ * rather than threshold-tuned, since the gap value itself is meaningless
+ * regardless of cutoff. */
 
 /* ── ProcessManager kill correlation ─────────────────────────────────────── */
 static int g_pm_kill_count_prev = -1;
@@ -389,13 +443,17 @@ static int check_self_protection(char *out_json, size_t out_size) {
     char cgroup[256] = "";
     f = fopen("/proc/self/cgroup", "r");
     if (f) { fgets(cgroup, sizeof(cgroup), f); fclose(f); }
+    cgroup[strcspn(cgroup, "\n")] = '\0';
 
     int unprotected = (oom_adj > -900);
 
+    char esc_cgroup[400];
+    json_escape(cgroup, esc_cgroup, sizeof(esc_cgroup));
+
     out_json[0] = 0;
     snprintf(out_json, out_size,
-        "{\"type\":\"self_protection\",\"oom_score_adj\":%d,\"cgroup\":\"%.100s\",\"unprotected\":%s}",
-        oom_adj, cgroup, unprotected ? "true" : "false");
+        "{\"type\":\"self_protection\",\"oom_score_adj\":%d,\"cgroup\":\"%.300s\",\"unprotected\":%s}",
+        oom_adj, esc_cgroup, unprotected ? "true" : "false");
 
     return unprotected;
 }
@@ -408,7 +466,7 @@ static void strip_trailing_comma(char *s) {
 
 static void write_json(
     const char *ts, int temp, int hog_pct,
-    int total_procs, int zombies, int orphans, int flash, int hidden_gap,
+    int total_procs, int zombies, int orphans, int flash,
     const char *top_cpu_json, const char *top_mem_json,
     const char *anomalies_json, const char *pressure_json,
     const char *network_json)
@@ -447,8 +505,7 @@ static void write_json(
         "    \"total\": %d,\n"
         "    \"zombies\": %d,\n"
         "    \"orphans\": %d,\n"
-        "    \"flash_processes\": %d,\n"
-        "    \"hidden_gap\": %d\n"
+        "    \"flash_processes\": %d\n"
         "  },\n\n"
         "  \"top_cpu\": [%s],\n\n"
         "  \"top_memory\": [%s],\n\n"
@@ -459,7 +516,7 @@ static void write_json(
         VERSION, ts, POLL_SEC,
         g_baseline_ready ? "true" : "false", g_learn_polls, g_nbaseline,
         temp, hog_pct,
-        total_procs, zombies, orphans, flash, hidden_gap,
+        total_procs, zombies, orphans, flash,
         tc, tm, an, pr, nw);
 
     fflush(f);
@@ -549,9 +606,6 @@ static void poll_procs(void) {
     }
     closedir(d);
 
-    /* Hidden process detection */
-    int hidden_gap = detect_hidden_processes();
-
     char pm_json[512], periodic_json[512], millet_json[512], selfprot_json[512];
     int pm_storm = check_pm_kill_storm(pm_json, sizeof(pm_json));
     int periodic_rearmed = check_periodic_rearm(periodic_json, sizeof(periodic_json));
@@ -606,10 +660,12 @@ static void poll_procs(void) {
         /* Top CPU JSON */
         int anomaly_cpu = is_anomaly_cpu(sorted_cpu[i].name, sorted_cpu[i].cpu_pct);
         baseline_t *b = find_baseline(sorted_cpu[i].name);
+        char esc_name[80];
+        json_escape(sorted_cpu[i].name, esc_name, sizeof(esc_name));
         char entry[512];
         snprintf(entry, sizeof(entry),
             "{\"pid\":%d,\"name\":\"%s\",\"cpu_pct\":%d,\"baseline_mean\":%.1f,\"anomaly\":%s},",
-            sorted_cpu[i].pid, sorted_cpu[i].name, sorted_cpu[i].cpu_pct,
+            sorted_cpu[i].pid, esc_name, sorted_cpu[i].cpu_pct,
             b ? b->cpu_mean : 0.0,
             anomaly_cpu ? "true" : "false");
         strncat(top_cpu_json, entry, sizeof(top_cpu_json) - 1);
@@ -619,7 +675,7 @@ static void poll_procs(void) {
             snprintf(entry, sizeof(entry),
                 "{\"type\":\"%s\",\"pid\":%d,\"name\":\"%s\",\"cpu_pct\":%d,\"rss_mb\":%.1f,\"confidence\":%d,\"thermal\":\"%s\"},",
                 anomaly_cpu ? "cpu_spike" : "rss_spike",
-                sorted_cpu[i].pid, sorted_cpu[i].name,
+                sorted_cpu[i].pid, esc_name,
                 sorted_cpu[i].cpu_pct, sorted_cpu[i].vmrss_kb / 1024.0,
                 90, temp > 60 ? "HOT" : temp > 45 ? "WARM" : "COOL");
             strncat(anomalies_json, entry, sizeof(anomalies_json) - 1);
@@ -633,10 +689,12 @@ static void poll_procs(void) {
     for (int i = 0; i < g_nprocs && shown < TOP_N; i++) {
         if (sorted_mem[i].vmrss_kb <= 0) break;
         int anomaly_rss = is_anomaly_rss(sorted_mem[i].name, sorted_mem[i].vmrss_kb);
+        char esc_name[80];
+        json_escape(sorted_mem[i].name, esc_name, sizeof(esc_name));
         char entry[512];
         snprintf(entry, sizeof(entry),
             "{\"pid\":%d,\"name\":\"%s\",\"rss_mb\":%.1f,\"anomaly\":%s},",
-            sorted_mem[i].pid, sorted_mem[i].name,
+            sorted_mem[i].pid, esc_name,
             sorted_mem[i].vmrss_kb / 1024.0,
             anomaly_rss ? "true" : "false");
         strncat(top_mem_json, entry, sizeof(top_mem_json) - 1);
@@ -646,10 +704,12 @@ static void poll_procs(void) {
     /* Network correlation */
     for (int i = 0; i < g_nprocs; i++) {
         if (g_procs[i].cpu_pct > 20 && (g_procs[i].tx_kb > 1024 || g_procs[i].rx_kb > 1024)) {
+            char esc_name[80];
+            json_escape(g_procs[i].name, esc_name, sizeof(esc_name));
             char entry[512];
             snprintf(entry, sizeof(entry),
                 "{\"pid\":%d,\"name\":\"%s\",\"cpu_pct\":%d,\"tx_kb\":%ld,\"rx_kb\":%ld,\"correlation\":\"high\"},",
-                g_procs[i].pid, g_procs[i].name, g_procs[i].cpu_pct,
+                g_procs[i].pid, esc_name, g_procs[i].cpu_pct,
                 g_procs[i].tx_kb, g_procs[i].rx_kb);
             strncat(network_json, entry, sizeof(network_json) - 1);
         }
@@ -673,9 +733,11 @@ static void poll_procs(void) {
             }
         }
         char pr[512];
+        char esc_attrib[80];
+        json_escape(attributed, esc_attrib, sizeof(esc_attrib));
         snprintf(pr, sizeof(pr),
             "{\"memory_low\":true,\"avail_mb\":%ld,\"attributed_to\":\"%s (+%.1fMB in last poll)\"}",
-            avail_mb, attributed, max_delta / 1024.0);
+            avail_mb, esc_attrib, max_delta / 1024.0);
         strncpy(pressure_json, pr, sizeof(pressure_json) - 1);
         pressure_json[sizeof(pressure_json) - 1] = 0;
 
@@ -685,7 +747,7 @@ static void poll_procs(void) {
     /* APRIL events */
     if (zombie_count > 0) {
         char ev[256];
-        snprintf(ev, sizeof(ev), "zombie_count=%d hidden_gap=%d", zombie_count, hidden_gap);
+        snprintf(ev, sizeof(ev), "zombie_count=%d", zombie_count);
         gaveld_emit(DAEMON_NAME, "ZOMBIE_DETECTED", 0.0, ev);
     }
     if (sorted_cpu[0].cpu_pct >= hog_pct) {
@@ -693,11 +755,6 @@ static void poll_procs(void) {
         snprintf(ev, sizeof(ev), "pid=%d name=%s cpu_pct=%d temp=%d",
                  sorted_cpu[0].pid, sorted_cpu[0].name, sorted_cpu[0].cpu_pct, temp);
         gaveld_emit(DAEMON_NAME, "CPU_HOG", 0.0, ev);
-    }
-    if (hidden_gap > 0) {
-        char ev[256];
-        snprintf(ev, sizeof(ev), "hidden_gap=%d", hidden_gap);
-        gaveld_emit(DAEMON_NAME, "HIDDEN_PROCESS", 0.0, ev);
     }
     if (flash_count > 0) {
         char ev[256];
@@ -711,15 +768,13 @@ static void poll_procs(void) {
     strftime(ts, sizeof(ts), "%H:%M:%S", localtime(&t));
 
     printf("\n[RATKING] ── %s ── temp=%d°C hog_pct=%d%% ──\n", ts, temp, hog_pct);
-    printf("[RATKING]  Procs: %d  Zombies: %d  Orphans: %d  Flash: %d  Hidden: %d\n",
-           g_nprocs, zombie_count, orphan_count, flash_count, hidden_gap);
+    printf("[RATKING]  Procs: %d  Zombies: %d  Orphans: %d  Flash: %d\n",
+           g_nprocs, zombie_count, orphan_count, flash_count);
     printf("[RATKING]  Memory: %ldMB free  Baseline: %s (%d/%d polls)\n",
            avail_mb, g_baseline_ready ? "ready" : "learning", g_learn_polls, LEARN_POLLS);
 
     if (strlen(anomalies_json) > 0)
         printf("[RATKING]  ANOMALIES detected\n");
-    if (hidden_gap > 0)
-        printf("[RATKING]  *** HIDDEN GAP: %d processes may be hidden ***\n", hidden_gap);
     if (flash_count > 0)
         printf("[RATKING]  *** FLASH: %d short-lived high-CPU processes ***\n", flash_count);
 
@@ -727,28 +782,29 @@ static void poll_procs(void) {
 
     /* Write JSON */
     write_json(ts, temp, hog_pct, g_nprocs, zombie_count, orphan_count,
-               flash_count, hidden_gap, top_cpu_json, top_mem_json,
+               flash_count, top_cpu_json, top_mem_json,
                anomalies_json, pressure_json, network_json);
 
     g_learn_polls++;
     if (g_learn_polls >= LEARN_POLLS && !g_baseline_ready) {
         g_baseline_ready = 1;
-        fprintf(stderr, "[RATKING] Baseline ready: %d process types tracked\n", g_nbaseline);
+        ratkinglog("INFO", "Baseline ready: %d process types tracked", g_nbaseline);
     }
 }
 
 /* ── Main ─────────────────────────────────────────────────────────────────── */
 int main(void) {
     if (!daemon_core_init(DAEMON_NAME)) return 1;
-    printf("[RATKING] v%s Process & Behavioral Anomaly Hunter: ONLINE\n", VERSION);
-    printf("[RATKING] Learning baseline for %d polls...\n", LEARN_POLLS);
-    fflush(stdout);
+    ratkinglog_init();
+    ratkinglog("INFO", "v%s Process & Behavioral Anomaly Hunter: ONLINE", VERSION);
+    ratkinglog("INFO", "Learning baseline for %d polls...", LEARN_POLLS);
 
     for (;;) {
         poll_procs();
         sleep(POLL_SEC);
     }
 
+    if (g_ratking_log_fp) fclose(g_ratking_log_fp);
     daemon_core_shutdown();
     return 0;
 }
