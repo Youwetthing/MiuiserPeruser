@@ -114,28 +114,28 @@ parse_connections() {
     local file="$2"
     local state_filter="$3"
     
-    run_shell "cat $file" 2>/dev/null | while read line; do
+    run_shell "cat $file" 2>/dev/null | while read -r line; do
         [[ "$line" =~ ^[[:space:]]*[0-9]+: ]] || continue
         
-        local uid=$(echo "$line" | awk '{print $8}')
+        local uid; uid=$(echo "$line" | awk '{print $8}')
         [[ -z "$uid" || "$uid" == "0" ]] && continue
         
-        local remote=$(echo "$line" | awk '{print $3}')
-        local remote_hex=$(echo "$remote" | cut -d: -f1)
-        local port_hex=$(echo "$remote" | cut -d: -f2)
+        local remote; remote=$(echo "$line" | awk '{print $3}')
+        local remote_hex; remote_hex=$(echo "$remote" | cut -d: -f1)
+        local port_hex; port_hex=$(echo "$remote" | cut -d: -f2)
         [[ "$remote_hex" =~ ^[0-9A-Fa-f]{8}$ ]] || continue
         
-        local ip=$(printf "%d.%d.%d.%d" \
-            0x${remote_hex:6:2} 0x${remote_hex:4:2} \
-            0x${remote_hex:2:2} 0x${remote_hex:0:2})
+        local ip; ip=$(printf "%d.%d.%d.%d" \
+            "0x${remote_hex:6:2}" "0x${remote_hex:4:2}" \
+            "0x${remote_hex:2:2}" "0x${remote_hex:0:2}")
         local port=$((0x$port_hex))
         
         [[ "$ip" == "0.0.0.0" || "$ip" == "127.0.0.1" ]] && continue
         
-        local name=$(lookup_name "$uid")
+        local name; name=$(lookup_name "$uid")
         
         # State decoding (simplified)
-        local state_hex=$(echo "$line" | awk '{print $4}')
+        local state_hex; state_hex=$(echo "$line" | awk '{print $4}')
         local state=""
         case $state_hex in
             01) state="ESTABLISHED" ;;
@@ -179,7 +179,7 @@ echo "  [4] UDP only"
 echo "  [5] Rebuild UID map (force refresh)"
 echo "  [q] Quit"
 echo ""
-read -p "Choice: " choice
+read -r -p "Choice: " choice
 
 case $choice in
     1)
@@ -228,4 +228,4 @@ case $choice in
 esac
 
 echo ""
-read -n 1 -s -p "Press any key to return..."
+read -r -n 1 -s -p "Press any key to return..."

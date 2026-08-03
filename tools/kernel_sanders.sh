@@ -15,20 +15,28 @@ VULN_DIR="/sys/devices/system/cpu/vulnerabilities"
 
 # ── Variant detection ─────────────────────────────────────────────────────────
 detect_variant() {
+    # shellcheck disable=SC2016
     VARIANT_DEVICE=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "getprop ro.product.marketname 2>/dev/null" | tr -d '
 ')
+    # shellcheck disable=SC2016
     [ -z "$VARIANT_DEVICE" ] && VARIANT_DEVICE=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "getprop ro.product.name 2>/dev/null" | tr -d '
 ')
+    # shellcheck disable=SC2016
     VARIANT_PLATFORM=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "getprop ro.board.platform 2>/dev/null" | tr -d '
 ')
+    # shellcheck disable=SC2016
     VARIANT_REGION=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "getprop ro.miui.region 2>/dev/null" | tr -d '
 ')
+    # shellcheck disable=SC2016
     VARIANT_BUILD=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "getprop ro.build.type 2>/dev/null" | tr -d '
 ')
+    # shellcheck disable=SC2016
     VARIANT_PATCH=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "getprop ro.build.version.security_patch 2>/dev/null" | tr -d '
 ')
+    # shellcheck disable=SC2016
     VARIANT_ANDROID=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "getprop ro.build.version.release 2>/dev/null" | tr -d '
 ')
+    # shellcheck disable=SC2016
     VARIANT_BRAND=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "getprop ro.product.brand 2>/dev/null" | tr -d '
 ')
 
@@ -51,7 +59,7 @@ detect_variant() {
     case "${VARIANT_BRAND,,}" in
         *poco*) VARIANT_TIER="poco" ;;
         *redmi*) VARIANT_TIER="redmi" ;;
-        *mi*|*xiaomi*) VARIANT_TIER="mi" ;;
+        *mi*) VARIANT_TIER="mi" ;;
         *) VARIANT_TIER="unknown" ;;
     esac
 }
@@ -251,6 +259,7 @@ show_cpu_vulns() {
         return
     fi
 
+    # shellcheck disable=SC2016
         RISH_APPLICATION_ID=com.termux ~/Rish/rish -c         'for f in /sys/devices/system/cpu/vulnerabilities/*; do printf "%s\t%s\n" "$(basename $f)" "$(cat $f)"; done'         2>/dev/null | while IFS=$'\t' read -r name status; do
         explain="${EXPLAIN[$name]:-Unknown vulnerability}"
 
@@ -279,6 +288,7 @@ show_cpu_vulns() {
 # ── eBPF audit ────────────────────────────────────────────────────────────────
 
 rish_read() {
+    # shellcheck disable=SC2016
     RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat $1 2>/dev/null" 2>/dev/null | tr -d '\n'
 }
 
@@ -356,6 +366,7 @@ show_ebpf() {
 "
 
     # kallsyms
+    # shellcheck disable=SC2016
     kall=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c 'grep -c sys_call_table /proc/kallsyms' 2>/dev/null | tr -d '\n')
     [ "${kall:-0}" -gt 0 ] 2>/dev/null &&         printf "${RD}  [HI] sys_call_table exposed in /proc/kallsyms — rootkit target${RESET}
 
@@ -384,6 +395,7 @@ show_ebpf() {
     esac
 
     # debugfs
+    # shellcheck disable=SC2016
     dbgfs=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c 'mount | grep -c debugfs' 2>/dev/null | tr -d '\n')
     [ "${dbgfs:-0}" -gt 0 ] 2>/dev/null &&         printf "${BO}  [HI] debugfs mounted — exposes kernel internals${RESET}
 
@@ -392,6 +404,7 @@ show_ebpf() {
 "
 
     # Security patch level
+    # shellcheck disable=SC2016
     patch=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "getprop ro.build.version.security_patch 2>/dev/null")
     printf "${CR}  [i] Security patch level: ${patch}${RESET}
 
@@ -402,6 +415,7 @@ show_ebpf() {
 show_modules() {
     printf "${BOLD}${HG}  [MODULES] Loaded Kernel Modules${RESET}\n"
     divider
+    # shellcheck disable=SC2016
     mods=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/modules 2>/dev/null | awk '{print \$1}' | sort")
     count=$(echo "$mods" | wc -l)
     printf "${CR}  $count modules loaded${RESET}\n\n"
@@ -432,6 +446,7 @@ show_modules() {
 show_selinux() {
     printf "${BOLD}${HG}  [SELINUX] Enforcement Status${RESET}\n"
     divider
+    # shellcheck disable=SC2016
     se=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "getenforce 2>/dev/null")
     case "$se" in
         Enforcing)  printf "${GR}  [OK] SELinux: Enforcing${RESET}\n\n" ;;
@@ -656,6 +671,7 @@ menu
 show_millet() {
     printf "${BOLD}${HG}  [MILLET] Xiaomi Binder Monitoring Modules${RESET}\n"
     divider
+    # shellcheck disable=SC2016
     mods=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/modules 2>/dev/null | grep -E 'millet|binder_gki'")
     if [ -z "$mods" ]; then
         printf "${WA}  [i] No millet/binder_gki modules found (or read blocked)${RESET}\n\n"
@@ -683,10 +699,13 @@ show_millet() {
 show_fbo() {
     printf "${BOLD}${HG}  [FBO] File-Based Optimization Service${RESET}\n"
     divider
+    # shellcheck disable=SC2016
     svc=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "service list 2>/dev/null | grep fbo")
     [ -n "$svc" ] && printf "${GR}  [OK] ${svc}${RESET}\n" || printf "${WA}  [?] fbo service not found in service list${RESET}\n"
 
+    # shellcheck disable=SC2016
     ulist=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "settings get secure FBO_UPLOAD_LIST 2>/dev/null")
+    # shellcheck disable=SC2016
     utime=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "settings get secure FBO_UPLOAD_TIME 2>/dev/null")
     printf "${WH}  FBO_UPLOAD_LIST: ${CR}${ulist:-null}${RESET}\n"
     printf "${WH}  FBO_UPLOAD_TIME: ${CR}${utime:-null}${RESET}\n"
@@ -697,6 +716,7 @@ show_fbo() {
 show_processmanager() {
     printf "${BOLD}${HG}  [PROCESSMANAGER] Kill Strategy & Counters${RESET}\n"
     divider
+    # shellcheck disable=SC2016
     dump=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "dumpsys activity service ProcessManager 2>/dev/null")
     if [ -z "$dump" ]; then
         printf "${WA}  [?] No ProcessManager dump available${RESET}\n\n"
@@ -717,12 +737,14 @@ show_processmanager() {
 show_lmkd() {
     printf "${BOLD}${HG}  [LMKD] Low Memory Killer Daemon${RESET}\n"
     divider
+    # shellcheck disable=SC2016
     pid=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "pgrep -x lmkd" 2>/dev/null | tr -d '\n')
     if [ -z "$pid" ]; then
         printf "${WA}  [?] lmkd not found${RESET}\n\n"
         return
     fi
     printf "${WH}  PID: ${CR}${pid}${RESET}\n"
+    # shellcheck disable=SC2016
     caps=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/$pid/status 2>/dev/null | grep CapEff")
     printf "${WH}  ${caps}${RESET}\n"
     printf "${WA}  [i] CAP_KILL present — netlink proto 15 spoofability unverified${RESET}\n\n"
@@ -732,13 +754,17 @@ show_lmkd() {
 show_powerkeeper() {
     printf "${BOLD}${HG}  [POWERKEEPER] Soft Target Recon${RESET}\n"
     divider
+    # shellcheck disable=SC2016
     pid=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "pgrep -x powerkeeper" 2>/dev/null | tr -d '\n')
     if [ -z "$pid" ]; then
         printf "${WA}  [?] powerkeeper not found${RESET}\n\n"
         return
     fi
+    # shellcheck disable=SC2016
     threads=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/$pid/status 2>/dev/null | grep Threads")
+    # shellcheck disable=SC2016
     caps=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/$pid/status 2>/dev/null | grep -E '^Cap'")
+    # shellcheck disable=SC2016
     oom=$(RISH_APPLICATION_ID=com.termux ~/Rish/rish -c "cat /proc/$pid/oom_score_adj 2>/dev/null")
     printf "${WH}  PID: ${CR}${pid}${RESET}\n"
     printf "${WH}  ${threads}${RESET}\n"
