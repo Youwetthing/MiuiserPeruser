@@ -132,3 +132,4 @@ Registry/daemon_results/*.json
 data/*_baseline.json
 Registry/daemon_state.json
 bin/mode
+data/syndicate_config.json
