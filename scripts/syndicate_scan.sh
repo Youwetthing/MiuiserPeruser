@@ -760,6 +760,57 @@ live_view() {
     trap - INT
 }
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TOGGLE DAEMONS — enable/disable which daemons participate in scans
+# ═══════════════════════════════════════════════════════════════════════════════
+toggle_daemons_menu() {
+    local list=()
+    for d in $ALL_DAEMONS; do list+=("$d"); done
+    local total=${#list[@]}
+
+    while true; do
+        clear
+        printf "${BOLD}${WHT}"
+        printf "╔══════════════════════════════════════════════════════════════════════╗\n"
+        printf "║  TOGGLE DAEMONS                                                       ║\n"
+        printf "╚══════════════════════════════════════════════════════════════════════╝\n"
+        printf "${RST}\n"
+
+        for i in "${!list[@]}"; do
+            local d="${list[$i]}"
+            local mark="${RED}✘ off${RST}"
+            for e in $ENABLED; do [ "$e" = "$d" ] && mark="${GRN}✔ on ${RST}"; done
+            printf "  ${WHT}%2d)${RST} %-14s %b\n" "$((i+1))" "${DAEMON_NAME[$d]:-$d}" "$mark"
+        done
+
+        printf "\n  ${DIM}Enter a number to toggle · [a] all on · [z] all off · [s] save & exit${RST}\n"
+        printf "  Choice: "
+        read -r key
+
+        case "$key" in
+            a|A) ENABLED="$ALL_DAEMONS" ;;
+            z|Z) ENABLED="" ;;
+            s|S) save_config; return ;;
+            ''|*[!0-9]*) : ;;
+            *)
+                if [ "$key" -ge 1 ] 2>/dev/null && [ "$key" -le "$total" ]; then
+                    local d="${list[$((key-1))]}"
+                    local found=0 newlist=""
+                    for e in $ENABLED; do
+                        if [ "$e" = "$d" ]; then found=1; else newlist="$newlist $e"; fi
+                    done
+                    if [ $found -eq 1 ]; then
+                        ENABLED="$(echo "$newlist" | xargs)"
+                    else
+                        ENABLED="$(echo "$ENABLED $d" | xargs)"
+                    fi
+                fi
+                ;;
+        esac
+    done
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN MENU
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -781,6 +832,7 @@ main() {
         printf "  ${CYN}[4]${RST} ${WHT}Loop N fast scans${RST}     ${DIM}(parallel batch repeated)${RST}\n"
         printf "  ${CYN}[5]${RST} ${WHT}View Results${RST}          ${DIM}(paged per-daemon, prev/next)${RST}\n"
         printf "  ${CYN}[6]${RST} ${WHT}Live View${RST}             ${DIM}(dashboard, updates every 3s)${RST}\n"
+        printf "  ${CYN}[7]${RST} ${WHT}Toggle Daemons${RST}        ${DIM}(enable/disable which daemons run)${RST}\n"
         printf "  ${CYN}[q]${RST} ${WHT}Quit${RST}\n\n"
         printf "  ${CYN}Choice: ${RST}"
         read -r choice
@@ -814,6 +866,9 @@ main() {
                 ;;
             6)
                 live_view
+                ;;
+            7)
+                toggle_daemons_menu
                 ;;
             q|Q)
                 clear
