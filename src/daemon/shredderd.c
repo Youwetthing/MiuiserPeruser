@@ -1,19 +1,44 @@
 /*
- * shredderd v2.2 — Kernel Integrity & Drift Detection Daemon
+ * shredderd v2.3 — Kernel Integrity & Drift Detection Daemon
  * Target: Android 15 / Linux 6.6.89 / MT6768 / SELinux enforcing
  *
- * Fixes from v2.1:
- *   - Hardened module count read (3-retry against bexec() transient empty)
- *   - Fixed ps command (column-safe -o USER,CMD)
- *   - Fixed suspicious module check (proc/modules not lsmod)
- *   - Drift null guard (skip on empty module list)
- *   - Filesystem integrity: pivoted from dmesg (blocked) to /proc/mounts
- *   - AVC denials: acknowledged permanently unavailable (-1 sentinel)
- *   - Kernel hardening: stopped probing blocked proc sys kernel, use uptime
- *   - Duplicate variable declarations eliminated
- *   - Orphaned reboot code block fixed
- *   - sample_module correctly handled (informational, not scored)
- *   - All JSON trailing commas handled
+ * Fixes from v2.2:
+ *   - Batched probe layer. poll_integrity() previously fired ~20
+ *     individual bexec() calls per poll for small facts (su paths x5,
+ *     magisk, ksu, vb_state, vb_mode, getenforce, debugfs, root procs,
+ *     adb state, build tags/type/fp, suspicious module grep, lsmod,
+ *     kernel version, vmstat, loadavg, btime, nmi, uptime, 3x mount
+ *     checks, dmesg tail). Same root cause already fixed in tigerclawd.
+ *     All now issued as FOUR combined bexec() calls per poll (FAST/
+ *     MODULES/KERNEL/HEAVY), echo-delimited and parsed locally via
+ *     probe_section(), each independently budget-checked before firing.
+ *   - nmod's 3-retry loop, detect_drift()'s full module-list read,
+ *     establish_baseline()'s full module-list read, and
+ *     check_kernel_config()'s cached zcat/regex read are all
+ *     intentionally NOT folded into the batch: nmod's retry needs to
+ *     fire conditionally with a 2s backoff between attempts (doesn't
+ *     fold into a single call); the drift/baseline full-list reads are
+ *     comparatively large and only needed conditionally; kernel_config
+ *     is parsed once and cached (kernel_config_parsed) for the life of
+ *     the process, so re-fetching it every poll inside the batch would
+ *     tax every single poll for a value only the first poll needs.
+ *   - probe_copy(tag, buf, bufsize) mirrors rish_read()'s signature and
+ *     copies a probe section straight into the CALLER's own buffer,
+ *     rather than returning a pointer into a single shared scratch
+ *     buffer (the design tigerclawd uses). poll_integrity() here holds
+ *     several probe values concurrently (vb_state, vb_mode, selinux,
+ *     magisk_res, ksu_res, dfs, rp are all still alive together at
+ *     write_json() time) -- a shared scratch buffer would silently
+ *     corrupt earlier reads the moment a later probe_section() call
+ *     runs, so each call site gets its own storage immediately instead.
+ *   - Bonus fix found during this rewrite, unrelated to batching:
+ *     check_filesystem_integrity() previously read system_dm/vendor_dm/
+ *     system_rw via three sequential rish_read() calls into the SAME
+ *     shared `char buf[4096]` -- since rish_read() writes into and
+ *     returns that same buffer, all three pointers aliased one another,
+ *     so by evaluation time all three checks were actually comparing
+ *     against whatever the LAST call (system_rw) had written. Each now
+ *     gets its own separate buffer.
  */
 
 #include "ipc_globals.h"
@@ -31,7 +56,7 @@
 #include <stdbool.h>
 
 #define DAEMON_NAME     "shredderd"
-#define VERSION         "2.2"
+#define VERSION         "2.3"
 #define POLL_SEC        30
 #define RESULTS_FILE    "/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/shredderd.json"
 #define BASELINE_FILE   "/data/data/com.termux/files/home/MiuiserPeruser/data/shredderd_baseline.json"
@@ -99,6 +124,150 @@ static void sha256_file(const char *path, char *out) {
     out[64] = 0;
 }
 
+/* ── Batched probe layer ──────────────────────────────────────────────────
+ * See v2.3 changelog above. Sections are pulled via probe_copy(), which
+ * copies into the caller's own buffer immediately -- g_probe_buf itself
+ * is never returned directly, so section read order never matters and
+ * concurrent held values never collide (see changelog note on why this
+ * differs from tigerclawd's shared-scratch probe_section()).
+ * ───────────────────────────────────────────────────────────────────────── */
+#define SD_PROBE_BUF_SIZE 131072
+static char g_probe_buf[SD_PROBE_BUF_SIZE] = "";
+static int  g_probe_loaded = 0;
+
+#define SD_PROBE_CMD_BUDGET 1450
+
+/* Fixed 2026-07-20: this was the SAME destructive-truncation bug already
+ * found and fixed in tigerclawd's probe_section() earlier this session --
+ * null-terminating directly inside g_probe_buf, which permanently
+ * truncates it the moment any tag is read, destroying every tag still
+ * downstream regardless of whether it's been read yet. Re-copied the old
+ * pattern into this file by mistake instead of the fixed one. Confirmed
+ * live: SUCHECK being read first truncated everything after it, so every
+ * other tag in this poll was silently reading empty -- masked because
+ * magisk/ksu/su's "empty" and "correctly absent" look identical, and
+ * because get_selinux_state()'s own standalone fallback happened to paper
+ * over GETENFORCE being empty too. Fix: copy into a scratch buffer
+ * instead of mutating g_probe_buf, exactly as tigerclawd now does. */
+#define SD_SECTION_SCRATCH_SIZE 65536
+static char g_section_scratch[SD_SECTION_SCRATCH_SIZE];
+
+static char *probe_section_raw(const char *tag) {
+    if (!g_probe_loaded) return NULL;
+    char marker[64];
+    snprintf(marker, sizeof(marker), "==%s==", tag);
+    char *start = strstr(g_probe_buf, marker);
+    if (!start) return NULL;
+    start += strlen(marker);
+    while (*start == '\r' || *start == '\n') start++;
+    /* Empty section (command produced zero output): skipping the echo's
+     * own trailing newline lands directly on the NEXT tag's opening "==".
+     * Without this check, the search below would scan past it for the
+     * following boundary and silently return the next section's entire
+     * content as if it belonged to this one -- confirmed live 2026-07-20:
+     * SUSPMOD (genuinely empty) absorbed all of LSMOD's output this way,
+     * producing a false suspicious-module hit since add_reason() only
+     * checks for non-empty, not actual match content. */
+    if (start[0] == '=' && start[1] == '=') {
+        g_section_scratch[0] = '\0';
+        return g_section_scratch;
+    }
+    char *end = strstr(start, "\n==");
+    size_t len = end ? (size_t)(end - start) : strlen(start);
+    if (len >= SD_SECTION_SCRATCH_SIZE) len = SD_SECTION_SCRATCH_SIZE - 1;
+    memcpy(g_section_scratch, start, len);
+    g_section_scratch[len] = '\0';
+    size_t pos = len;
+    while (pos > 0 && (g_section_scratch[pos-1] == '\n' || g_section_scratch[pos-1] == '\r'))
+        g_section_scratch[--pos] = '\0';
+    return g_section_scratch;
+}
+
+/* Mirrors rish_read()'s signature -- copies the found section straight
+ * into the caller's buffer instead of returning a pointer into shared
+ * storage. Safe to call any number of times in any order per poll. */
+static char *probe_copy(const char *tag, char *buf, size_t bufsize) {
+    char *v = probe_section_raw(tag);
+    if (!v) { buf[0] = 0; return buf; }
+    strncpy(buf, v, bufsize - 1);
+    buf[bufsize - 1] = 0;
+    return buf;
+}
+
+static int append_probe_chunk(const char *tag, const char *cmd) {
+    size_t cmdlen = strlen(cmd);
+    if (cmdlen > SD_PROBE_CMD_BUDGET) {
+        char errmsg[160];
+        snprintf(errmsg, sizeof(errmsg),
+            "probe chunk %s %zu bytes exceeds %d-byte budget, refusing (would silently truncate)",
+            tag, cmdlen, SD_PROBE_CMD_BUDGET);
+        fprintf(stderr, "[SHREDDER] ERROR: %s\n", errmsg);
+        return -1;
+    }
+
+    char *raw = bexec(cmd);
+    if (!raw) return -1;
+
+    size_t curlen = strlen(g_probe_buf);
+    size_t rawlen = strlen(raw);
+    size_t space = sizeof(g_probe_buf) - curlen - 1;
+    if (rawlen > space) {
+        fprintf(stderr,
+            "[SHREDDER] ERROR: probe chunk %s response %zu bytes exceeds remaining buffer space %zu, truncating\n",
+            tag, rawlen, space);
+        rawlen = space;
+    }
+    memcpy(g_probe_buf + curlen, raw, rawlen);
+    g_probe_buf[curlen + rawlen] = '\0';
+    free(raw);
+    return 0;
+}
+
+static void load_probe_data(void) {
+    g_probe_loaded = 0;
+    g_probe_buf[0] = '\0';
+
+    static const char *cmd_fast =
+        "echo ==SUCHECK==; test -e /sbin/su -o -e /system/bin/su -o -e /system/xbin/su -o -e /su/bin/su -o -e /magisk/.core/bin/su && echo yes;"
+        "echo ==MAGISK==; test -d /data/adb/magisk && echo yes;"
+        "echo ==KSU==; test -e /sys/kernel/ksu && echo yes;"
+        "echo ==VBSTATE==; getprop ro.boot.verifiedbootstate 2>/dev/null;"
+        "echo ==VBMODE==; getprop ro.boot.flash.locked 2>/dev/null;"
+        "echo ==GETENFORCE==; getenforce 2>/dev/null;"
+        "echo ==DEBUGFS==; mount 2>/dev/null | grep -c debugfs;"
+        "echo ==ROOTPROCS==; ps -A -o USER,CMD 2>/dev/null | grep -c '^root';"
+        "echo ==ADBD==; getprop init.svc.adbd 2>/dev/null;"
+        "echo ==USBCFG==; getprop persist.sys.usb.config 2>/dev/null;"
+        "echo ==BUILDTAGS==; getprop ro.build.tags 2>/dev/null;"
+        "echo ==BUILDTYPE==; getprop ro.build.type 2>/dev/null;"
+        "echo ==BUILDFP==; getprop ro.build.fingerprint 2>/dev/null;";
+
+    static const char *cmd_modules =
+        "echo ==SUSPMOD==; cat /proc/modules 2>/dev/null | awk '{print $1}' | grep -iE 'frida|hook|inject|rootkit|backdoor' | head -1;"
+        "echo ==LSMOD==; lsmod 2>/dev/null;";
+
+    static const char *cmd_kernel =
+        "echo ==PROCVERSION==; cat /proc/version 2>/dev/null;"
+        "echo ==VMSTAT==; cat /proc/vmstat 2>/dev/null | grep -E '^oom_kill|^allocstall|^pgsteal_kswapd';"
+        "echo ==LOADAVG==; cat /proc/loadavg 2>/dev/null | awk '{print $1}';"
+        "echo ==BTIME==; cat /proc/stat 2>/dev/null | grep '^btime';"
+        "echo ==NMI==; cat /proc/interrupts 2>/dev/null | grep -i nmi | wc -l;"
+        "echo ==UPTIME==; cat /proc/uptime 2>/dev/null | awk '{print $1}';";
+
+    static const char *cmd_heavy =
+        "echo ==SYSDM==; cat /proc/mounts 2>/dev/null | grep ' /system ' | grep -c '^/dev/block/dm-';"
+        "echo ==VENDORDM==; cat /proc/mounts 2>/dev/null | grep ' /vendor ' | grep -c '^/dev/block/dm-';"
+        "echo ==SYSRW==; cat /proc/mounts 2>/dev/null | grep ' /system ' | grep -v ' ro ' | wc -l;"
+        "echo ==DMESG==; dmesg 2>/dev/null | tail -20 | grep -E 'module|Oops|avc|verity' | head -5;";
+
+    if (append_probe_chunk("FAST", cmd_fast) != 0) return;
+    if (append_probe_chunk("MODULES", cmd_modules) != 0) return;
+    if (append_probe_chunk("KERNEL", cmd_kernel) != 0) return;
+    if (append_probe_chunk("HEAVY", cmd_heavy) != 0) return;
+
+    g_probe_loaded = 1;
+}
+
 static void load_baseline(void) {
     FILE *f = fopen(BASELINE_FILE, "r");
     if (!f) return;
@@ -136,6 +305,8 @@ static void save_baseline(void) {
     fclose(f);
 }
 
+/* Standalone -- not batched. Rare (once per fresh install), and needs
+ * the full module list rather than just the count. */
 static void establish_baseline(void) {
     fprintf(stderr, "[SHREDDER] Establishing baseline...\n");
     baseline_mod_count = 0;
@@ -174,6 +345,8 @@ static mod_baseline_t* find_in_baseline(const char *name) {
     return NULL;
 }
 
+/* Standalone -- not batched. Only fires when nmod's delta already
+ * suggests drift; needs the full module list, not just the count. */
 static int detect_drift(int current_nmod, char *new_json, size_t new_size,
                         char *removed_json, size_t rem_size) {
     new_json[0] = 0;
@@ -248,9 +421,13 @@ static int detect_drift(int current_nmod, char *new_json, size_t new_size,
     return delta;
 }
 
+/* Reads GETENFORCE from the FAST probe chunk. Fallback chain (ro.boot.selinux
+ * property, then /sys/fs/selinux/enforce) stays standalone -- only fires if
+ * the batched read was empty/blocked, same conditional-fallback pattern used
+ * elsewhere in this fleet. */
 static void get_selinux_state(char *out, size_t outsize) {
     char buf[256];
-    char *se = rish_read("getenforce 2>/dev/null", buf, sizeof(buf));
+    char *se = probe_copy("GETENFORCE", buf, sizeof(buf));
     if (se && strlen(se) > 0 && !contains(se, "Permission denied")) {
         strncpy(out, se, outsize - 1);
         out[outsize - 1] = 0;
@@ -291,13 +468,15 @@ static void add_reason(char *buf, size_t bufsize, const char *reason, int points
         strncat(buf, entry, bufsize - len - 1);
 }
 
+/* Bonus fix (see v2.3 changelog): each read now gets its own buffer.
+ * Previously all three aliased the same `char buf[4096]`. */
 static void check_filesystem_integrity(char *fs_json, size_t fs_size) {
     fs_json[0] = 0;
-    char buf[4096];
+    char sysdm_buf[64], vendordm_buf[64], sysrw_buf[64];
 
-    char *system_dm = rish_read("cat /proc/mounts 2>/dev/null | grep ' /system ' | grep -c '^/dev/block/dm-'", buf, sizeof(buf));
-    char *vendor_dm = rish_read("cat /proc/mounts 2>/dev/null | grep ' /vendor ' | grep -c '^/dev/block/dm-'", buf, sizeof(buf));
-    char *system_rw = rish_read("cat /proc/mounts 2>/dev/null | grep ' /system ' | grep -v ' ro ' | wc -l", buf, sizeof(buf));
+    char *system_dm = probe_copy("SYSDM", sysdm_buf, sizeof(sysdm_buf));
+    char *vendor_dm = probe_copy("VENDORDM", vendordm_buf, sizeof(vendordm_buf));
+    char *system_rw = probe_copy("SYSRW", sysrw_buf, sizeof(sysrw_buf));
 
     int system_on_dm = (system_dm && strcmp(system_dm, "1") == 0);
     int vendor_on_dm = (vendor_dm && strcmp(vendor_dm, "1") == 0);
@@ -314,6 +493,11 @@ static void check_filesystem_integrity(char *fs_json, size_t fs_size) {
     }
 }
 
+/* Standalone -- not batched, and deliberately so. Cached after first
+ * successful parse (kernel_config_parsed); re-issuing this inside the
+ * per-poll batch would pay for the ~570-byte regex command and its
+ * response every 30s forever, for a value only the very first poll
+ * actually needs. */
 static void check_kernel_config(char *json, size_t json_size) {
     if (kernel_config_parsed) {
         strncpy(json, kernel_config_cache, json_size - 1);
@@ -409,7 +593,7 @@ static void check_kernel_config(char *json, size_t json_size) {
 
 static void check_vm_trends(char *json, size_t json_size) {
     char buf[1024];
-    char *vmstat = rish_read("cat /proc/vmstat 2>/dev/null | grep -E '^oom_kill|^allocstall|^pgsteal_kswapd'", buf, sizeof(buf));
+    char *vmstat = probe_copy("VMSTAT", buf, sizeof(buf));
 
     unsigned long oom_kill = 0, allocstall = 0, pgsteal = 0;
     if (vmstat && strlen(vmstat) > 0) {
@@ -446,7 +630,7 @@ static void check_vm_trends(char *json, size_t json_size) {
 
 static void check_load_pressure(char *json, size_t json_size) {
     char buf[128];
-    char *load = rish_read("cat /proc/loadavg 2>/dev/null | awk '{print $1}'", buf, sizeof(buf));
+    char *load = probe_copy("LOADAVG", buf, sizeof(buf));
     double load_1min = (load && strlen(load) > 0) ? atof(load) : -1.0;
 
     double delta = (last_load_1min > 0) ? (load_1min - last_load_1min) : 0.0;
@@ -463,7 +647,7 @@ static void check_load_pressure(char *json, size_t json_size) {
 
 static int check_reboot(void) {
     char buf[256];
-    char *stat = rish_read("cat /proc/stat 2>/dev/null | grep '^btime'", buf, sizeof(buf));
+    char *stat = probe_copy("BTIME", buf, sizeof(buf));
     double btime = 0.0;
     if (stat && sscanf(stat, "btime %lf", &btime) == 1) {
         if (last_btime > 0.0 && btime != last_btime) {
@@ -477,7 +661,7 @@ static int check_reboot(void) {
 
 static void check_nmi_watchdog(char *json, size_t json_size) {
     char buf[256];
-    char *nmi = rish_read("cat /proc/interrupts 2>/dev/null | grep -i nmi | wc -l", buf, sizeof(buf));
+    char *nmi = probe_copy("NMI", buf, sizeof(buf));
     int nmi_present = (nmi && strcmp(nmi, "0") != 0);
 
     snprintf(json, json_size,
@@ -492,8 +676,7 @@ static void check_module_surface(char *json, size_t json_size, int nmod,
     char untracked_buf[1024] = "";
 
     char lbuf[16384];
-    char *lsmod_out = rish_read("lsmod 2>/dev/null", lbuf, sizeof(lbuf));
-    int lsmod_count = 0;
+    char *lsmod_out = probe_copy("LSMOD", lbuf, sizeof(lbuf));
     int permanent_count = 0;
     int sample_module_found = 0;
     if (lsmod_out && strlen(lsmod_out) > 0) {
@@ -503,7 +686,6 @@ static void check_module_surface(char *json, size_t json_size, int nmod,
             char name[64] = "";
             sscanf(line, "%63s", name);
             if (strlen(name) > 0) {
-                lsmod_count++;
                 if (strcmp(name, "sample_module") == 0) sample_module_found = 1;
 
                 if (baseline_established && !find_in_baseline(name)) {
@@ -534,7 +716,7 @@ static void check_module_surface(char *json, size_t json_size, int nmod,
 
 static void check_kernel_hardening_gaps(char *json, size_t json_size) {
     char buf[256];
-    char *uptime = rish_read("cat /proc/uptime 2>/dev/null | awk '{print $1}'", buf, sizeof(buf));
+    char *uptime = probe_copy("UPTIME", buf, sizeof(buf));
     double uptime_sec = (uptime && strlen(uptime) > 0) ? atof(uptime) : -1.0;
 
     snprintf(json, json_size,
@@ -545,7 +727,7 @@ static void check_kernel_hardening_gaps(char *json, size_t json_size) {
 
 static void check_kernel_build(char *json, size_t json_size) {
     char buf[1024];
-    char *ver = rish_read("cat /proc/version 2>/dev/null", buf, sizeof(buf));
+    char *ver = probe_copy("PROCVERSION", buf, sizeof(buf));
     char kernel_ver[64] = "unknown";
     char build_info[64] = "unknown";
     char clang_ver[32] = "unknown";
@@ -578,19 +760,19 @@ static void check_kernel_build(char *json, size_t json_size) {
 
 static void check_build_integrity(char *json, size_t json_size, int *out_inconsistent) {
     char buf[256];
-    char *tags = rish_read("getprop ro.build.tags 2>/dev/null", buf, sizeof(buf));
+    char *tags = probe_copy("BUILDTAGS", buf, sizeof(buf));
     char tags_copy[64];
     strncpy(tags_copy, (tags && strlen(tags) > 0) ? tags : "unknown", sizeof(tags_copy) - 1);
     tags_copy[sizeof(tags_copy) - 1] = 0;
 
     char buf2[256];
-    char *type = rish_read("getprop ro.build.type 2>/dev/null", buf2, sizeof(buf2));
+    char *type = probe_copy("BUILDTYPE", buf2, sizeof(buf2));
     char type_copy[32];
     strncpy(type_copy, (type && strlen(type) > 0) ? type : "unknown", sizeof(type_copy) - 1);
     type_copy[sizeof(type_copy) - 1] = 0;
 
     char buf3[512];
-    char *fp = rish_read("getprop ro.build.fingerprint 2>/dev/null", buf3, sizeof(buf3));
+    char *fp = probe_copy("BUILDFP", buf3, sizeof(buf3));
     char fp_copy[300];
     strncpy(fp_copy, (fp && strlen(fp) > 0) ? fp : "unknown", sizeof(fp_copy) - 1);
     fp_copy[sizeof(fp_copy) - 1] = 0;
@@ -613,9 +795,9 @@ static int check_avc_denials(void) {
 
 static void check_adb_state(char *json, size_t json_size) {
     char buf[128];
-    char *adbd = rish_read("getprop init.svc.adbd 2>/dev/null", buf, sizeof(buf));
+    char *adbd = probe_copy("ADBD", buf, sizeof(buf));
     char buf2[128];
-    char *usbcfg = rish_read("getprop persist.sys.usb.config 2>/dev/null", buf2, sizeof(buf2));
+    char *usbcfg = probe_copy("USBCFG", buf2, sizeof(buf2));
 
     snprintf(json, json_size,
         "{\"adbd_running\":%s,\"usb_config\":\"%.63s\","
@@ -780,34 +962,33 @@ static void poll_integrity(void) {
     char raw_reads_json[1024] = "";
     char buf[8192];
 
-    int su_found = 0;
-    const char *su_paths[] = {
-        "/sbin/su","/system/bin/su","/system/xbin/su",
-        "/su/bin/su","/magisk/.core/bin/su", NULL
-    };
-    for (int i = 0; su_paths[i]; i++) {
-        char cmd[128];
-        snprintf(cmd, sizeof(cmd), "test -e %s && echo yes", su_paths[i]);
-        char *res = rish_read(cmd, buf, sizeof(buf));
-        if (contains(res, "yes")) { su_found = 1; break; }
-    }
+    /* ── One combined bexec() round-trip (4 chunks) for this poll's raw
+     *    reads. nmod's retry loop below stays standalone (conditional
+     *    backoff doesn't fold into a single call). ── */
+    load_probe_data();
+
+    char su_buf[16];
+    char *su_res = probe_copy("SUCHECK", su_buf, sizeof(su_buf));
+    int su_found = contains(su_res, "yes");
 
     char magisk_buf[32];
-    char *magisk_res = rish_read("test -d /data/adb/magisk && echo yes", magisk_buf, sizeof(magisk_buf));
+    char *magisk_res = probe_copy("MAGISK", magisk_buf, sizeof(magisk_buf));
     int magisk = contains(magisk_res, "yes");
     char ksu_buf[32];
-    char *ksu_res = rish_read("test -e /sys/kernel/ksu && echo yes", ksu_buf, sizeof(ksu_buf));
+    char *ksu_res = probe_copy("KSU", ksu_buf, sizeof(ksu_buf));
     int kernelsu = contains(ksu_res, "yes");
 
     char vb_state_buf[128], vb_mode_buf[128];
-    char *vb_state = rish_read("getprop ro.boot.verifiedbootstate", vb_state_buf, sizeof(vb_state_buf));
-    char *vb_mode  = rish_read("getprop ro.boot.flash.locked", vb_mode_buf, sizeof(vb_mode_buf));
+    char *vb_state = probe_copy("VBSTATE", vb_state_buf, sizeof(vb_state_buf));
+    char *vb_mode  = probe_copy("VBMODE", vb_mode_buf, sizeof(vb_mode_buf));
     int vb_ok = contains(vb_state, "green") || contains(vb_state, "yellow");
     if (!vb_ok) {
         add_reason(score_reasons, sizeof(score_reasons), "verified_boot_state not green/yellow", 10);
         score -= 10;
     }
 
+    /* Standalone -- conditional retry with 2s backoff doesn't fold into
+     * the batch. See v2.3 changelog. */
     int nmod = 0;
     for (int retry = 0; retry < 3; retry++) {
         char *mods = rish_read("cat /proc/modules 2>/dev/null | wc -l", buf, sizeof(buf));
@@ -824,7 +1005,8 @@ static void poll_integrity(void) {
     }
 
     char suspicious_mod[64] = "";
-    char *susp = rish_read("cat /proc/modules 2>/dev/null | awk '{print $1}' | grep -iE 'frida|hook|inject|rootkit|backdoor' | head -1", buf, sizeof(buf));
+    char susp_buf[256];
+    char *susp = probe_copy("SUSPMOD", susp_buf, sizeof(susp_buf));
     if (susp && strlen(susp) > 0) strncpy(suspicious_mod, susp, sizeof(suspicious_mod) - 1);
     if (suspicious_mod[0]) {
         add_reason(score_reasons, sizeof(score_reasons), "suspicious module name matched frida/hook/inject/rootkit/backdoor pattern", 20);
@@ -832,7 +1014,7 @@ static void poll_integrity(void) {
     }
 
     char dfs_buf[32];
-    char *dfs = rish_read("mount 2>/dev/null | grep -c debugfs", dfs_buf, sizeof(dfs_buf));
+    char *dfs = probe_copy("DEBUGFS", dfs_buf, sizeof(dfs_buf));
     int debugfs = contains(dfs, "1");
     if (debugfs) {
         add_reason(score_reasons, sizeof(score_reasons), "debugfs mounted", 5);
@@ -840,7 +1022,7 @@ static void poll_integrity(void) {
     }
 
     char rp_buf[32];
-    char *rp = rish_read("ps -A -o USER,CMD 2>/dev/null | grep -c '^root'", rp_buf, sizeof(rp_buf));
+    char *rp = probe_copy("ROOTPROCS", rp_buf, sizeof(rp_buf));
     int root_procs = (rp && strlen(rp) > 0) ? atoi(rp) : 0;
 
     char selinux[32];
@@ -867,7 +1049,8 @@ static void poll_integrity(void) {
     }
 
     char kernel_events[4096] = "";
-    char *dmesg_recent = rish_read("dmesg 2>/dev/null | tail -20 | grep -E 'module|Oops|avc|verity' | head -5", buf, sizeof(buf));
+    char dmesg_buf[4096];
+    char *dmesg_recent = probe_copy("DMESG", dmesg_buf, sizeof(dmesg_buf));
     if (dmesg_recent && strlen(dmesg_recent) > 0) {
         char *line = strtok(dmesg_recent, "\n");
         while (line) {
@@ -958,7 +1141,6 @@ static void poll_integrity(void) {
     }
 
     int avc_denials = check_avc_denials();
-
     char adb_state_json[512] = "";
     check_adb_state(adb_state_json, sizeof(adb_state_json));
 
