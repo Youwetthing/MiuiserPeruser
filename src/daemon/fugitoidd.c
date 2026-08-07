@@ -190,18 +190,25 @@ static void poll(int scan_num)
 
     fugitoidlog("INFO", "── System Bridge #%d  %s ─────────────────────", scan_num, ts);
 
-    /* ── Single rish call: foreground + logcat ────────────────────────── */
-    char logcmd[64];
-    snprintf(logcmd, sizeof(logcmd),
-             "logcat -d -t %d *:W 2>/dev/null", LOGCAT_LINES);
-
-    char combined[1024];
+    /* ── Single rish call: foreground + main/crash/ANR logcat (4-way split) ──
+     * Crash/ANR now pulled from dedicated buffers instead of the noisy main
+     * *:W tail -- a crash entry visible on one poll was previously observed
+     * to fall out of a fresh *:W pull one poll later, displaced by unrelated
+     * warning spam, causing crash-target extraction to return "unknown"
+     * despite crashes being correctly counted. */
+    char combined[2048];
     snprintf(combined, sizeof(combined),
              "echo ==FG==;"
              "dumpsys activity activities 2>/dev/null"
              " | grep -E 'topResumedActivity|mResumedActivity' | head -2;"
-             "echo ==LOG==;"
-             "%s", logcmd);
+             "echo ==MAIN==;"
+             "logcat -d -t %d *:W 2>/dev/null;"
+             "echo ==CRASH==;"
+             "logcat -d -b crash -t %d 2>/dev/null;"
+             "echo ==ANR==;"
+             "logcat -d -b system -t %d 2>/dev/null"
+             " | grep -iE 'ANR in|ANR Warning'",
+             LOGCAT_LINES, LOGCAT_LINES, LOGCAT_LINES);
 
     char *raw = bexec(combined);
 
@@ -209,14 +216,16 @@ static void poll(int scan_num)
     char fg_app[128] = "unknown";
 
     if (raw) {
-        char *fg_sec = strstr(raw, "==FG==");
-        char *log_sec = strstr(raw, "==LOG==");
+        char *fg_sec    = strstr(raw, "==FG==");
+        char *main_sec  = strstr(raw, "==MAIN==");
+        char *crash_sec = strstr(raw, "==CRASH==");
+        char *anr_sec   = strstr(raw, "==ANR==");
 
         if (fg_sec) {
             fg_sec += 6;
             /* Null-terminate fg section */
-            if (log_sec) {
-                char *e = strstr(fg_sec, "==LOG==");
+            if (main_sec) {
+                char *e = strstr(fg_sec, "==MAIN==");
                 if (e) *e = '\0';
             }
 
@@ -239,8 +248,25 @@ static void poll(int scan_num)
             }
         }
 
-        /* Restore log section pointer */
-        if (log_sec) log_sec += 7;
+        /* Advance section pointers past their tags, and null-terminate
+         * each section at the start of the next tag so parsing doesn't
+         * bleed across buffers (same anchored-before-nulling pattern used
+         * in shredderd's probe_section splitting). */
+        if (main_sec) {
+            main_sec += 8;
+            if (crash_sec) {
+                char *e = strstr(main_sec, "==CRASH==");
+                if (e) *e = '\0';
+            }
+        }
+        if (crash_sec) {
+            crash_sec += 9;
+            if (anr_sec) {
+                char *e = strstr(crash_sec, "==ANR==");
+                if (e) *e = '\0';
+            }
+        }
+        if (anr_sec) anr_sec += 7;
 
         fugitoidlog("INFO", "Foreground : %s", fg_app);
 
@@ -256,24 +282,27 @@ static void poll(int scan_num)
         if (strcmp(fg_app, "unknown") != 0)
             strncpy(g_prev_app, fg_app, sizeof(g_prev_app) - 1);
 
-        /* ── Logcat analysis ──────────────────────────────────────────── */
-        const char *log = log_sec ? log_sec : "";
+        /* ── Logcat analysis (crash/ANR from dedicated buffers, OOM/watchdog
+         * stay on the main *:W tail) ────────────────────────────────────── */
+        const char *main_log  = main_sec  ? main_sec  : "";
+        const char *crash_log = crash_sec ? crash_sec : "";
+        const char *anr_log   = anr_sec   ? anr_sec   : "";
 
-        int crashes = count_substr(log, "FATAL EXCEPTION")
-                    + count_substr(log, "crashed service");
-        int anrs    = count_substr(log, "ANR in")
-                    + count_substr(log, "ANR Warning");
-        int ooms    = count_substr(log, "lowmemorykiller")
-                    + count_substr(log, "OOM killer")
-                    + count_substr(log, "mem-pressure-event");
-        int wdogs   = count_substr(log, "watchdog");
+        int crashes = count_substr(crash_log, "FATAL EXCEPTION")
+                    + count_substr(main_log, "crashed service");
+        int anrs    = count_substr(anr_log, "ANR in")
+                    + count_substr(anr_log, "ANR Warning");
+        int ooms    = count_substr(main_log, "lowmemorykiller")
+                    + count_substr(main_log, "OOM killer")
+                    + count_substr(main_log, "mem-pressure-event");
+        int wdogs   = count_substr(main_log, "watchdog");
 
         fugitoidlog("INFO", "Logcat     : crashes=%-3d  ANR=%-3d  OOM=%-3d  watchdog=%d",
                     crashes, anrs, ooms, wdogs);
 
         if (anrs > 0) {
             char target[64] = "unknown";
-            const char *p2 = strstr(log, "ANR in ");
+            const char *p2 = strstr(anr_log, "ANR in ");
             if (p2) {
                 p2 += 7;
                 size_t i = 0;
@@ -291,7 +320,7 @@ static void poll(int scan_num)
 
         if (crashes > 0) {
             char target[64] = "unknown";
-            const char *p2 = strstr(log, "FATAL EXCEPTION:");
+            const char *p2 = strstr(crash_log, "FATAL EXCEPTION:");
             if (p2) {
                 p2 = strstr(p2, "Process: ");
                 if (p2) {
