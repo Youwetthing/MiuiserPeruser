@@ -38,6 +38,79 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdbool.h>
+#include <stdarg.h>
+#include <errno.h>
+
+/* ── Unified logging (fleet convention, matches fugitoidlog/metalheadlog) ── */
+static FILE *g_leather_log_fp = NULL;
+
+static void leatherlog_init(void)
+{
+    const char *path = getenv("LEATHERHEAD_LOG_PATH");
+    if (path && *path) {
+        g_leather_log_fp = fopen(path, "a");
+        if (!g_leather_log_fp) {
+            fprintf(stderr, "[LEATHER] WARN: cannot open log file %s: %s\n",
+                    path, strerror(errno));
+        }
+    }
+}
+
+/* NOTE: separate va_start/va_end per output destination -- reusing one
+ * va_list across two vfprintf() calls is undefined behavior (bit krangd
+ * once already, don't repeat it here). */
+static void leatherlog(const char *level, const char *fmt, ...)
+{
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "[%s][LEATHER/%s] ", ts, level);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
+
+    if (g_leather_log_fp) {
+        va_list ap2;
+        va_start(ap2, fmt);
+        fprintf(g_leather_log_fp, "[%s][LEATHER/%s] ", ts, level);
+        vfprintf(g_leather_log_fp, fmt, ap2);
+        fprintf(g_leather_log_fp, "\n");
+        va_end(ap2);
+        fflush(g_leather_log_fp);
+    }
+}
+
+/* JSON string escaping (same class of bug fixed via json_escape() in
+ * fugitoidd.c and metalheadd.c this arc). */
+static void json_escape(const char *in, char *out, size_t out_size) {
+    if (!in || out_size == 0) { if (out_size) out[0] = '\0'; return; }
+    size_t j = 0;
+    for (size_t i = 0; in[i] != '\0' && j + 1 < out_size; i++) {
+        unsigned char c = (unsigned char)in[i];
+        if (c == '"' || c == '\\') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\';
+            out[j++] = (char)c;
+        } else if (c == '\n') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\'; out[j++] = 'n';
+        } else if (c == '\r') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\'; out[j++] = 'r';
+        } else if (c == '\t') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\'; out[j++] = 't';
+        } else if (c < 0x20) {
+            continue;  /* drop other control chars */
+        } else {
+            out[j++] = (char)c;
+        }
+    }
+    out[j] = '\0';
+}
 
 #define DAEMON_NAME          "leatherheadd"
 #define DEFAULT_INTERVAL     30
@@ -347,7 +420,7 @@ static void poll(int scan_num)
     int ntemps = parse_thermalservice(dump, temps, MAX_TEMP_TYPES);
     int tstatus = parse_thermal_status(dump);
 
-    printf("[LEATHER]  %-10s  %8s  %8s  %8s  %s\n",
+    leatherlog("INFO", "%-10s  %8s  %8s  %8s  %s",
            "Sensor", "CacheddegC", "HALdegC", "Delta", "Status");
     printf("[LEATHER]  ??????????????????????????????????????????????????\n");
 
@@ -362,7 +435,7 @@ static void poll(int scan_num)
         const char *flag = "";
         if (delta_abs >= MISMATCH_THRESHOLD) flag = " ! MISMATCH";
 
-        printf("[LEATHER]  %-10s  %8.1f  %8.1f  %+7.1f%s\n",
+        leatherlog("INFO", "%-10s  %8.1f  %8.1f  %+7.1f%s",
                tp->name, tp->cached, tp->hal, tp->delta, flag);
 
         /* Track skin and battery */
@@ -393,9 +466,9 @@ static void poll(int scan_num)
         splinterd_emit("THERMAL_STATUS_NONZERO", ctx);
         score -= tstatus * 10;
         sigs++;
-        printf("[LEATHER]  Status     : !  Android thermal status = %d\n", tstatus);
+        leatherlog("WARN", "Status     : !  Android thermal status = %d", tstatus);
     } else {
-        printf("[LEATHER]  Status     : OK (0)\n");
+        leatherlog("INFO", "Status     : OK (0)");
     }
 
     /* Skin temp signals */
@@ -407,7 +480,7 @@ static void poll(int scan_num)
             splinterd_emit("THERMAL_CRITICAL", ctx);
             score -= 25;
             sigs++;
-            printf("[LEATHER]  Skin       : !!  CRITICAL %.1fdegC\n", skin_hal);
+            leatherlog("WARN", "Skin       : !!  CRITICAL %.1fdegC", skin_hal);
         } else if (skin_hal >= SKIN_WARN_C) {
             char ctx[48];
             snprintf(ctx, sizeof(ctx), "skin_temp=%.1f", skin_hal);
@@ -415,9 +488,9 @@ static void poll(int scan_num)
             splinterd_emit("THERMAL_WARN", ctx);
             score -= 12;
             sigs++;
-            printf("[LEATHER]  Skin       : !  WARM %.1fdegC\n", skin_hal);
+            leatherlog("WARN", "Skin       : !  WARM %.1fdegC", skin_hal);
         } else {
-            printf("[LEATHER]  Skin       : %.1fdegC ok\n", skin_hal);
+            leatherlog("INFO", "Skin       : %.1fdegC ok", skin_hal);
         }
     }
 
@@ -429,9 +502,9 @@ static void poll(int scan_num)
         splinterd_emit("BATTERY_TEMP_HIGH", ctx);
         score -= 15;
         sigs++;
-        printf("[LEATHER]  Battery    : !  %.1fdegC\n", battery_hal);
+        leatherlog("WARN", "Battery    : !  %.1fdegC", battery_hal);
     } else if (battery_hal > 0) {
-        printf("[LEATHER]  Battery    : %.1fdegC ok\n", battery_hal);
+        leatherlog("INFO", "Battery    : %.1fdegC ok", battery_hal);
     }
 
     if (dump) free(dump);
@@ -440,8 +513,8 @@ static void poll(int scan_num)
     cpu_core_t cores[MAX_CPU_CORES];
     int ncores = enumerate_cpus(cores, MAX_CPU_CORES);
 
-    printf("\n[LEATHER]  CPU Cores (%d found)\n", ncores);
-    printf("[LEATHER]  %-5s  %-10s  %-10s  %-10s  %-12s  %s\n",
+    leatherlog("INFO", "CPU Cores (%d found)", ncores);
+    leatherlog("INFO", "%-5s  %-10s  %-10s  %-10s  %-12s  %s",
            "Core", "Cur MHz", "Max MHz", "Min MHz", "Governor", "State");
     printf("[LEATHER]  ?????????????????????????????????????????????????\n");
 
@@ -454,7 +527,7 @@ static void poll(int scan_num)
         if (c->throttled) throttled_count++;
         if (c->max_khz > 0 && c->cur_khz >= c->max_khz) maxed_count++;
 
-        printf("[LEATHER]  cpu%-2d  %-10ld  %-10ld  %-10ld  %-12s  %s\n",
+        leatherlog("INFO", "cpu%-2d  %-10ld  %-10ld  %-10ld  %-12s  %s",
                c->core,
                c->cur_khz / 1000,
                c->max_khz / 1000,
@@ -472,7 +545,7 @@ static void poll(int scan_num)
         splinterd_emit("CPU_THROTTLING", ctx);
         score -= 8 * throttled_count;
         sigs++;
-        printf("[LEATHER]  !  %d/%d cores throttled\n", throttled_count, ncores);
+        leatherlog("WARN", "!  %d/%d cores throttled", throttled_count, ncores);
     }
 
     /* All cores maxed */
@@ -483,7 +556,7 @@ static void poll(int scan_num)
         splinterd_emit("ALL_CORES_MAXED", ctx);
         score -= 15;
         sigs++;
-        printf("[LEATHER]  !  All %d cores at max frequency\n", ncores);
+        leatherlog("WARN", "!  All %d cores at max frequency", ncores);
     }
 
     if (score < 0) score = 0;
@@ -493,7 +566,7 @@ static void poll(int scan_num)
                       : score >= 45 ? "HOT"
                       : "CRITICAL";
 
-    printf("\n[LEATHER]  Thermal score : %d/100  [%s]  signals=%d\n",
+    leatherlog("INFO", "Thermal score : %d/100  [%s]  signals=%d",
            score, grade, sigs);
 
     write_results(score, scan_num, sigs, temps, ntemps,
@@ -505,15 +578,16 @@ static void poll(int scan_num)
 int main(void)
 {
     bexec_init();
+    leatherlog_init();
 
     if (!is_enabled()) {
-        printf("[LEATHER] disabled via syndicatectl -- exiting\n");
+        leatherlog("INFO", "disabled via syndicatectl -- exiting");
         return 0;
     }
 
-    printf("[LEATHER] Thermal Truth & HAL Integrity Daemon: ONLINE\n");
-    printf("[LEATHER] HAL mismatch threshold: %.1fdegC\n", MISMATCH_THRESHOLD);
-    printf("[LEATHER] Skin warn=%.1fdegC  critical=%.1fdegC\n",
+    leatherlog("INFO", "Thermal Truth & HAL Integrity Daemon: ONLINE");
+    leatherlog("INFO", "HAL mismatch threshold: %.1fdegC", MISMATCH_THRESHOLD);
+    leatherlog("INFO", "Skin warn=%.1fdegC  critical=%.1fdegC",
            SKIN_WARN_C, SKIN_CRITICAL_C);
 
     int interval  = get_interval();
@@ -522,7 +596,7 @@ int main(void)
 
     for (;;) {
         if (!is_enabled()) {
-            printf("[LEATHER] disabled -- stopping\n");
+            leatherlog("INFO", "disabled -- stopping");
             break;
         }
 
@@ -533,11 +607,11 @@ int main(void)
         poll(scan_num);
 
         if (max_scans > 0 && scan_num >= max_scans) {
-            printf("[LEATHER] reached scan_count=%d -- exiting\n", max_scans);
+            leatherlog("INFO", "reached scan_count=%d -- exiting", max_scans);
             break;
         }
 
-        printf("[LEATHER] Next scan in %ds\n", interval);
+        leatherlog("INFO", "Next scan in %ds", interval);
         sleep(interval);
     }
 
