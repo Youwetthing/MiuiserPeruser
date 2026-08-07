@@ -4,7 +4,9 @@
  * Parses dumpsys sensorservice pipe-delimited format:
  * 0xHEX) NAME | vendor | ver: N | type: desc(NUM) | perm | flags
  *
- * Uses adb directly — dumpsys sensorservice is 150KB+, bexec buffer too small
+ * Routed through bexec_n() with an explicit 128KB buffer (dump is 150KB+
+ * raw before grep filtering — bexec()'s default 64KB cap would truncate
+ * it, so bexec_n() is called directly rather than bexec()).
  */
 
 #include "ipc_globals.h"
@@ -119,35 +121,23 @@ static bool is_sensitive_type(int id)
             id == 10 || id == 16 || id == 28 || id == 65536);
 }
 
-/* ── Fetch via adb directly ───────────────────────────────────────────── */
+/* ── Fetch via bexec_n() ──────────────────────────────────────────────── *
+ * 128KB explicit buffer — the raw dump runs 150KB+ before grep filtering
+ * (see file header). bexec() defaults to 64KB and would silently truncate;
+ * bexec_n() is called directly with an explicit cap instead.
+ */
+
+#define SENSOR_DUMP_BUFSZ (128 * 1024)
 
 static char *fetch_sensorservice(void)
 {
-    FILE *f = popen(
-        "adb -s 127.0.0.1:5555 shell "
-        "\"dumpsys sensorservice 2>/dev/null"
-        " | grep -E '0x[0-9a-fA-F]+\\\\)'\"",
-        "r");
-    if (!f) return NULL;
+    char *buf = bexec_n(
+        "dumpsys sensorservice 2>/dev/null | grep -E '0x[0-9a-fA-F]+\\)'",
+        SENSOR_DUMP_BUFSZ);
 
-    size_t cap = 16384, len = 0;
-    char *buf = malloc(cap);
-    if (!buf) { pclose(f); return NULL; }
-
-    char tmp[512];
-    while (fgets(tmp, sizeof(tmp), f)) {
-        size_t tl = strlen(tmp);
-        if (len + tl + 1 >= cap) {
-            cap *= 2;
-            char *nb = realloc(buf, cap);
-            if (!nb) break;
-            buf = nb;
-        }
-        memcpy(buf + len, tmp, tl);
-        len += tl;
+    if (!buf || buf[0] == '\0') {
+        printf("[METAL]  WARN: bexec_n() returned empty dump\n");
     }
-    buf[len] = '\0';
-    pclose(f);
     return buf;
 }
 
@@ -263,9 +253,28 @@ static void poll(int scan_num)
     g_nsensors = parse_sensors(dump);
 
     if (g_nsensors == 0) {
-        printf("[METAL]  No sensors parsed — ADB unavailable?\n");
+        printf("[METAL]  No sensors parsed — dump_len=%zu\n", dump ? strlen(dump) : 0);
         if (dump) free(dump);
-        write_results(score, scan_num, sigs, 0, 0, 0);
+        FILE *f = fopen(RESULTS_FILE, "w");
+        if (f) {
+            time_t t = time(NULL);
+            char ts[32];
+            strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+            fprintf(f,
+                "{\n"
+                "  \"daemon\": \"" DAEMON_NAME "\",\n"
+                "  \"timestamp\": \"%s\",\n"
+                "  \"scan_number\": %d,\n"
+                "  \"signals_fired\": 0,\n"
+                "  \"sensor_score\": null,\n"
+                "  \"grade\": \"NO_DATA\",\n"
+                "  \"total_sensors\": 0,\n"
+                "  \"sensitive_active\": 0,\n"
+                "  \"flood_sensors\": 0\n"
+                "}\n",
+                ts, scan_num);
+            fclose(f);
+        }
         return;
     }
 
