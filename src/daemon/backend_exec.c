@@ -557,11 +557,11 @@ char *bexec_n(const char *cmd, size_t max_bytes)
         return out;
 
     } else if (g_backend == BACKEND_ADB_CLI) {
-        fullsz = strlen(g_adb_cli_transport) + strlen(cmd) + 32;
+        fullsz = strlen(g_adb_cli_transport) + strlen(cmd) + 40;
         full   = malloc(fullsz);
         if (!full) { free(out); return NULL; }
         snprintf(full, fullsz,
-                 "%s %s 2>/dev/null", g_adb_cli_transport, cmd);
+                 "%s \"%s\" 2>/dev/null", g_adb_cli_transport, cmd);
 
     } else if (g_backend == BACKEND_ADB) {
         char *escaped = escape_for_adb(cmd);
