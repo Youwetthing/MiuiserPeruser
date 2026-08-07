@@ -49,9 +49,15 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <stdarg.h>
 #include <fcntl.h>
+
+static void slog(const char *level, const char *fmt, ...);
+static void splinterd_emit(const char *type, const char *payload);
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <openssl/sha.h>
 #include <stdbool.h>
 
@@ -201,7 +207,7 @@ static int append_probe_chunk(const char *tag, const char *cmd) {
         snprintf(errmsg, sizeof(errmsg),
             "probe chunk %s %zu bytes exceeds %d-byte budget, refusing (would silently truncate)",
             tag, cmdlen, SD_PROBE_CMD_BUDGET);
-        fprintf(stderr, "[SHREDDER] ERROR: %s\n", errmsg);
+        slog("ERROR", "%s", errmsg);
         return -1;
     }
 
@@ -212,8 +218,8 @@ static int append_probe_chunk(const char *tag, const char *cmd) {
     size_t rawlen = strlen(raw);
     size_t space = sizeof(g_probe_buf) - curlen - 1;
     if (rawlen > space) {
-        fprintf(stderr,
-            "[SHREDDER] ERROR: probe chunk %s response %zu bytes exceeds remaining buffer space %zu, truncating\n",
+        slog("ERROR",
+            "probe chunk %s response %zu bytes exceeds remaining buffer space %zu, truncating",
             tag, rawlen, space);
         rawlen = space;
     }
@@ -288,7 +294,7 @@ static void load_baseline(void) {
     }
     fclose(f);
     baseline_established = (baseline_mod_count > 0);
-    fprintf(stderr, "[SHREDDER] Baseline loaded: %d modules\n", baseline_mod_count);
+    slog("INFO", "Baseline loaded: %d modules", baseline_mod_count);
 }
 
 static void save_baseline(void) {
@@ -308,14 +314,14 @@ static void save_baseline(void) {
 /* Standalone -- not batched. Rare (once per fresh install), and needs
  * the full module list rather than just the count. */
 static void establish_baseline(void) {
-    fprintf(stderr, "[SHREDDER] Establishing baseline...\n");
+    slog("INFO", "Establishing baseline...");
     baseline_mod_count = 0;
 
     static char modbuf[65536];
     char *mods = rish_read("cat /proc/modules | awk '{print $1}'", modbuf, sizeof(modbuf));
 
     if (!mods || strlen(mods) == 0) {
-        fprintf(stderr, "[SHREDDER] Cannot read modules\n");
+        slog("ERROR", "Cannot read modules");
         return;
     }
 
@@ -335,7 +341,7 @@ static void establish_baseline(void) {
     }
     baseline_established = 1;
     save_baseline();
-    fprintf(stderr, "[SHREDDER] Baseline established: %d modules\n", baseline_mod_count);
+    slog("INFO", "Baseline established: %d modules", baseline_mod_count);
 }
 
 static mod_baseline_t* find_in_baseline(const char *name) {
@@ -368,7 +374,7 @@ static int detect_drift(int current_nmod, char *new_json, size_t new_size,
     last_nmod = current_nmod;
 
     if (drift_polls < DRIFT_CONFIRM) {
-        fprintf(stderr, "[SHREDDER] Drift detected (%d modules) but waiting confirmation (poll %d/%d)\n",
+        slog("WARN", "Drift detected (%d modules) but waiting confirmation (poll %d/%d)",
                 delta, drift_polls, DRIFT_CONFIRM);
         return 0;
     }
@@ -380,7 +386,7 @@ static int detect_drift(int current_nmod, char *new_json, size_t new_size,
     char buf[8192];
     char *mods = rish_read("cat /proc/modules 2>/dev/null | awk '{print $1}'", buf, sizeof(buf));
     if (!mods || strlen(mods) == 0) {
-        fprintf(stderr, "[SHREDDER] Drift check: module list empty, skipping\n");
+        slog("WARN", "Drift check: module list empty, skipping");
         return 0;
     }
     char *line = strtok(mods, "\n");
@@ -458,6 +464,50 @@ static void strip_trailing_comma(char *s) {
     if (len > 0 && s[len - 1] == ',') {
         s[len - 1] = 0;
     }
+}
+
+/* Neutralize chars that would break JSON string values if raw device
+ * output (dmesg lines, etc.) ever contains a quote/backslash/control
+ * char. Same helper as fugitoidd.c's sanitize_field(). */
+static void sanitize_field(char *s)
+{
+    if (!s) return;
+    for (; *s; s++) {
+        unsigned char c = (unsigned char)*s;
+        if (c < 0x20 || c == '"' || c == '|' || c == '\\')
+            *s = '_';
+    }
+}
+
+static void splinterd_emit(const char *type, const char *payload)
+{
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return;
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SPLINTER_SOCKET, sizeof(addr.sun_path) - 1);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+        char buf[512];
+        int n = snprintf(buf, sizeof(buf),
+                         "APRIL|" DAEMON_NAME "|%s|%s\n", type, payload);
+        if (n > 0) write(fd, buf, (size_t)n);
+    }
+    close(fd);
+}
+
+static void slog(const char *level, const char *fmt, ...)
+{
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "[%s][SHREDDER/%s] ", ts, level);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
 }
 
 static void add_reason(char *buf, size_t bufsize, const char *reason, int points) {
@@ -876,7 +926,7 @@ static void write_json(
 
     FILE *f = fopen(RESULTS_FILE, "w");
     if (!f) {
-        fprintf(stderr, "[SHREDDER] ERROR: cannot write %s\n", RESULTS_FILE);
+        slog("ERROR", "cannot write %s", RESULTS_FILE);
         return;
     }
 
@@ -952,7 +1002,7 @@ static void write_json(
 
     fflush(f);
     fclose(f);
-    fprintf(stderr, "[SHREDDER] JSON written: score=%d grade=%s drift_confirmed=%s\n",
+    slog("INFO", "JSON written: score=%d grade=%s drift_confirmed=%s",
         score, grade, confirmed_drift ? "YES" : "no");
 }
 
@@ -996,11 +1046,11 @@ static void poll_integrity(void) {
             nmod = atoi(mods);
             if (nmod > 0) break;
         }
-        fprintf(stderr, "[SHREDDER] Module count empty (attempt %d/3)\n", retry + 1);
+        slog("WARN", "Module count empty (attempt %d/3)", retry + 1);
         if (retry < 2) sleep(2);
     }
     if (nmod <= 0) {
-        fprintf(stderr, "[SHREDDER] FATAL: module count unreadable, skipping poll\n");
+        slog("ERROR", "FATAL: module count unreadable, skipping poll");
         return;
     }
 
@@ -1054,6 +1104,7 @@ static void poll_integrity(void) {
     if (dmesg_recent && strlen(dmesg_recent) > 0) {
         char *line = strtok(dmesg_recent, "\n");
         while (line) {
+            sanitize_field(line);
             char entry[512];
             snprintf(entry, sizeof(entry), "{\"type\":\"dmesg\",\"msg\":\"%s\"},", line);
             strncat(kernel_events, entry, sizeof(kernel_events) - 1);
@@ -1109,6 +1160,7 @@ static void poll_integrity(void) {
         add_reason(score_reasons, sizeof(score_reasons), "kernel reboot detected (btime changed)", 20);
         score -= 20;
         gaveld_emit(DAEMON_NAME, "REBOOT_DETECTED", 0.0, "Kernel reboot detected via btime change");
+        splinterd_emit("reboot_detected", "Kernel reboot detected via btime change");
     }
 
     if (contains(kernel_config_j, "\"lockdown_lsm\":false")) {
@@ -1175,8 +1227,11 @@ static void poll_integrity(void) {
 
     if (score < 50 || (confirmed_drift && drift_delta > 0)) {
         gaveld_emit(DAEMON_NAME, "KERNEL_THREAT", 0.0, threat_indicator);
-        if (confirmed_drift && drift_delta > 0)
+        splinterd_emit("kernel_threat", threat_indicator);
+        if (confirmed_drift && drift_delta > 0) {
             gaveld_emit(DAEMON_NAME, "NEW_KERNEL_MODULE", 0.0, new_mods);
+            splinterd_emit("new_kernel_module", new_mods);
+        }
     }
 
     write_json(ts, score, grade, su_found, magisk, kernelsu,
