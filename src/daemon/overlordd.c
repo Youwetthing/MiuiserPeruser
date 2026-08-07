@@ -46,6 +46,8 @@
 #include <math.h>
 #include <stdbool.h>
 #include <limits.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #include "ipc_globals.h"
 #include "gaveld_emit.h"
@@ -100,6 +102,25 @@ static void tlog(const char *lvl, const char *msg) {
     fflush(stderr);
 }
 
+/* ── Splinterd emit ───────────────────────────────────────────────────── */
+
+static void splinterd_emit(const char *type, const char *payload)
+{
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return;
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SPLINTER_SOCKET, sizeof(addr.sun_path) - 1);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+        char buf[512];
+        int n = snprintf(buf, sizeof(buf),
+                         "APRIL|overlordd|%s|%s\n", type, payload);
+        if (n > 0) write(fd, buf, (size_t)n);
+    }
+    close(fd);
+}
+
 static void add_pattern(const char *name, const char *sev,
                         const char *detail, const char *mitre,
                         double confidence) {
@@ -114,6 +135,7 @@ static void add_pattern(const char *name, const char *sev,
     snprintf(logmsg, sizeof(logmsg), "[%s] %s (conf=%.2f)", sev, name, confidence);
     tlog(sev, logmsg);
     gaveld_emit("overlordd", name, confidence, detail);
+    splinterd_emit("pattern_detected", detail);
 }
 
 /* ── JSON helpers ─────────────────────────────────────────────── */
