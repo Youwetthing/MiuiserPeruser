@@ -20,9 +20,65 @@
 #include <sys/stat.h>
 #include <openssl/sha.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 
 #define DAEMON_NAME     "granitord"
+
+/* In-place mutator: strips JSON-breaking chars from device-sourced strings
+ * before embedding in a %s snprintf field. Per-file local static -- copied
+ * verbatim from fugitoidd.c/shredderd.c, not shared via header (established
+ * fleet precedent). */
+static void sanitize_field(char *s) {
+    if (!s) return;
+    for (char *p = s; *p; p++) {
+        if (*p == '"' || *p == '\\' || *p == '|' || (unsigned char)*p < 0x20) {
+            *p = '_';
+        }
+    }
+}
+
+/* Forward declarations -- call sites appear before the definitions below
+ * in file order (same issue hit in shredderd.c's logging conversion). */
+static void slog(const char *level, const char *fmt, ...);
+static void splinterd_emit(const char *type, const char *payload);
+
+/* Timestamped, tagged logger. Copied verbatim from shredderd.c's slog() --
+ * per-file local static, not shared via header (established fleet
+ * precedent). Appends its own trailing newline; callers should not
+ * include one in fmt. */
+static void slog(const char *level, const char *fmt, ...)
+{
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "[%s][GRANITOR/%s] ", ts, level);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
+}
+
+/* Per-file local static socket-per-call sender to SPLINTER_SOCKET.
+ * Copied verbatim from shredderd.c -- APRIL|daemon|type|payload framing. */
+static void splinterd_emit(const char *type, const char *payload)
+{
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return;
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SPLINTER_SOCKET, sizeof(addr.sun_path) - 1);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+        char buf[512];
+        int n = snprintf(buf, sizeof(buf),
+                         "APRIL|" DAEMON_NAME "|%s|%s\n", type, payload);
+        if (n > 0) write(fd, buf, (size_t)n);
+    }
+    close(fd);
+}
 #define VERSION         "2.0"
 #define POLL_SEC        30
 #define SCORE_WARN      60
@@ -126,7 +182,7 @@ static void sha256_file(const char *path, char *out) {
 
 /* ── Baseline management ──────────────────────────────────────────────────── */
 static void establish_baseline(void) {
-    fprintf(stderr, "[GRANITOR] Establishing security baseline...\n");
+    slog("INFO", "Establishing security baseline...");
     baseline_count = 0;
 
     /* Kernel security parameters */
@@ -173,10 +229,10 @@ static void establish_baseline(void) {
     }
 
     baseline_established = 1;
-    fprintf(stderr, "[GRANITOR] Baseline: %d params, boot=%.12s..., vbmeta=%.12s...\n",
-            baseline_count,
-            baseline_boot_hash[0] ? baseline_boot_hash : "N/A",
-            baseline_vbmeta_hash[0] ? baseline_vbmeta_hash : "N/A");
+    slog("INFO", "Baseline: %d params, boot=%.12s..., vbmeta=%.12s...",
+         baseline_count,
+         baseline_boot_hash[0] ? baseline_boot_hash : "N/A",
+         baseline_vbmeta_hash[0] ? baseline_vbmeta_hash : "N/A");
 }
 
 static param_baseline_t* find_baseline_param(const char *path) {
@@ -235,6 +291,7 @@ static void check_hardware_attestation(char *attest_json, size_t attest_size) {
     /* Check for TEE/StrongBox availability */
     char *tee = rish_read("ls /dev/tee* 2>/dev/null | head -1", buf, sizeof(buf));
     if (tee && strlen(tee) > 0) {
+        sanitize_field(tee);
         char entry[256];
         snprintf(entry, sizeof(entry), "{\"type\":\"tee_present\",\"path\":\"%s\"},", tee);
         strncat(attest_json, entry, attest_size - 1);
@@ -251,6 +308,7 @@ static void audit_persistence(char *persist_json, size_t persist_size) {
     char *init_rc = rish_read("find /system/etc/init /vendor/etc/init -name '*.rc' -newer /system/build.prop 2>/dev/null | tr '\n' ' '",
                                buf, sizeof(buf));
     if (init_rc && strlen(init_rc) > 0) {
+        sanitize_field(init_rc);
         char entry[256];
         snprintf(entry, sizeof(entry), "{\"type\":\"init_rc_modified\",\"files\":\"%.100s\"},", init_rc);
         strncat(persist_json, entry, persist_size - 1);
@@ -259,6 +317,7 @@ static void audit_persistence(char *persist_json, size_t persist_size) {
     /* Check for post-fs-data hooks */
     char *postfs = rish_read("ls /data/adb/post-fs-data.d/ 2>/dev/null | tr '\n' ' '", buf, sizeof(buf));
     if (postfs && strlen(postfs) > 0) {
+        sanitize_field(postfs);
         char entry[256];
         snprintf(entry, sizeof(entry), "{\"type\":\"postfs_hooks\",\"files\":\"%.100s\"},", postfs);
         strncat(persist_json, entry, persist_size - 1);
@@ -288,6 +347,7 @@ static void check_mimd_cage(char *mimd_json, size_t mimd_size) {
     mimd_json[0] = 0;
     char buf[512];
     char *cgroup = rish_read("grep memory /proc/self/cgroup 2>/dev/null", buf, sizeof(buf));
+    if (cgroup) sanitize_field(cgroup);
 
     int cgroup_read_blocked = (cgroup && contains(cgroup, "Request timeout"));
     int caged = (!cgroup_read_blocked && cgroup && contains(cgroup, "mimd"));
@@ -306,6 +366,7 @@ static void check_mimd_cage(char *mimd_json, size_t mimd_size) {
      * strstr-based overlordd reader tolerated it silently. */
     char *frozen = rish_read("ls -d /sys/fs/cgroup/*frozen* /sys/fs/cgroup/*unfrozen* 2>/dev/null | tr '\n' ' '", buf, sizeof(buf));
     if (frozen && strlen(frozen) > 0) {
+        sanitize_field(frozen);
         char entry2[512];
         snprintf(entry2, sizeof(entry2),
             "{\"type\":\"mimd_freeze_cgroups_present\",\"paths\":\"%.200s\"},", frozen);
@@ -462,6 +523,7 @@ static void check_cpu_vulnerabilities(char *vuln_json, size_t vuln_size) {
          * is not a finding either way. */
         if (!line || strlen(line) == 0) continue;
         any_read = 1;
+        sanitize_field(line);
 
         /* Surface non-clean lines verbatim rather than collapsing to a
          * bool -- the mitigation text itself is the finding, e.g.
@@ -565,7 +627,7 @@ static void write_json(
 
     FILE *out = fopen("/data/data/com.termux/files/home/MiuiserPeruser/Registry/daemon_results/granitord.json", "w");
     if (!out) {
-        fprintf(stderr, "[GRANITOR] ERROR: cannot write JSON\n");
+        slog("ERROR", "cannot write JSON");
         return;
     }
 
@@ -638,7 +700,7 @@ static void poll_security(void) {
     time_t t = time(NULL);
     strftime(ts, sizeof(ts), "%H:%M:%S", localtime(&t));
 
-    printf("\n[GRANITOR] ── Security Posture %s ──\n", ts);
+    slog("INFO", "── Security Posture %s ──", ts);
 
     /* ── SELinux with fallback ─────────────────────────────────────────── */
     char selinux[32] = "unknown";
@@ -665,8 +727,8 @@ static void poll_security(void) {
 
     int enforcing = contains(selinux, "enforcing") || contains(selinux, "Enforcing");
     if (!selinux_read_blocked && !enforcing) score -= 25;
-    printf("[GRANITOR]  SELinux: %-12s %s\n", selinux,
-           selinux_read_blocked ? "READ BLOCKED" : (enforcing ? "ok" : "!!! PERMISSIVE"));
+    slog("INFO", "SELinux: %-12s %s", selinux,
+         selinux_read_blocked ? "READ BLOCKED" : (enforcing ? "ok" : "!!! PERMISSIVE"));
 
     /* ── Verified Boot ─────────────────────────────────────────────────── */
     char vb_state[32], vb_mode[32], flash_lock[16];
@@ -683,8 +745,8 @@ static void poll_security(void) {
     int fl_ok = (strcmp(flash_lock, "1") == 0);
     if (!vb_ok) score -= 15;
     if (!fl_ok) score -= 10;
-    printf("[GRANITOR]  Verified Boot: %s mode=%s flash=%s %s\n",
-           vb_state, vb_mode, flash_lock, (vb_ok && fl_ok) ? "ok" : "WARNING");
+    slog("INFO", "Verified Boot: %s mode=%s flash=%s %s",
+         vb_state, vb_mode, flash_lock, (vb_ok && fl_ok) ? "ok" : "WARNING");
 
     /* ── ro.secure / ro.debuggable ─────────────────────────────────────── */
     char ro_secure[8], ro_debug[8], ro_encrypt[32];
@@ -701,9 +763,9 @@ static void poll_security(void) {
     int debug_bad = (strcmp(ro_debug, "1") == 0);
     if (!secure_ok) score -= 10;
     if (debug_bad) score -= 10;
-    printf("[GRANITOR]  ro.secure=%s ro.debuggable=%s encryption=%s %s\n",
-           ro_secure, ro_debug, ro_encrypt,
-           (secure_ok && !debug_bad) ? "ok" : "WARNING");
+    slog("INFO", "ro.secure=%s ro.debuggable=%s encryption=%s %s",
+         ro_secure, ro_debug, ro_encrypt,
+         (secure_ok && !debug_bad) ? "ok" : "WARNING");
 
     /* ── Root indicators ─────────────────────────────────────────────── */
     int has_su = access("/system/bin/su", F_OK) == 0 ||
@@ -714,10 +776,10 @@ static void poll_security(void) {
                       access("/data/adb/modules", F_OK) == 0;
     int rooted = has_su || has_magisk;
     if (rooted) score -= 20;
-    printf("[GRANITOR]  Root: su=%s magisk=%s %s\n",
-           has_su ? "FOUND" : "none",
-           has_magisk ? "FOUND" : "none",
-           rooted ? "!!! ROOTED" : "ok");
+    slog("INFO", "Root: su=%s magisk=%s %s",
+         has_su ? "FOUND" : "none",
+         has_magisk ? "FOUND" : "none",
+         rooted ? "!!! ROOTED" : "ok");
 
     /* ── Kernel params ───────────────────────────────────────────────── */
     long kptr = -1, dmesg = -1, perf = -1, aslr = -1, hardlinks = -1, symlinks = -1;
@@ -771,8 +833,8 @@ static void poll_security(void) {
         if (!symlinks) score -= 1;
     }
 
-    printf("[GRANITOR]  Kernel: kptr=%ld dmesg=%ld perf=%ld aslr=%ld hardlinks=%ld symlinks=%ld\n",
-           kptr, dmesg, perf, aslr, hardlinks, symlinks);
+    slog("INFO", "Kernel: kptr=%ld dmesg=%ld perf=%ld aslr=%ld hardlinks=%ld symlinks=%ld",
+         kptr, dmesg, perf, aslr, hardlinks, symlinks);
 
     /* ── Deep dive: drift detection ──────────────────────────────────── */
     char drift_json[4096] = "";
@@ -818,24 +880,26 @@ static void poll_security(void) {
                       : score >= 50 ? "AT RISK"
                       : "COMPROMISED";
 
-    printf("[GRANITOR]  ── Score: %d/100 [%s] confidence=%d ──\n", score, grade, confidence);
+    slog("INFO", "── Score: %d/100 [%s] confidence=%d ──", score, grade, confidence);
     if (strlen(threat_json) > 0)
-        printf("[GRANITOR]  THREAT: %s\n", threat_json);
+        slog("INFO", "THREAT: %s", threat_json);
     if (strlen(drift_json) > 0)
-        printf("[GRANITOR]  DRIFT: %s\n", drift_json);
+        slog("INFO", "DRIFT: %s", drift_json);
     if (strlen(attest_json) > 0)
-        printf("[GRANITOR]  ATTEST: %s\n", attest_json);
+        slog("INFO", "ATTEST: %s", attest_json);
     if (strlen(persist_json) > 0)
-        printf("[GRANITOR]  PERSIST: %s\n", persist_json);
+        slog("INFO", "PERSIST: %s", persist_json);
     if (strlen(mimd_json) > 0)
-        printf("[GRANITOR]  MIMD: %s\n", mimd_json);
+        slog("INFO", "MIMD: %s", mimd_json);
     fflush(stdout);
 
     /* Emit to gaveld on critical findings */
     if (score < SCORE_CRITICAL || confidence >= 90) {
         gaveld_emit(DAEMON_NAME, "SECURITY_CRITICAL", (float)confidence / 100.0f, threat_json);
+        splinterd_emit("SECURITY_CRITICAL", threat_json);
     } else if (score < SCORE_WARN || confidence >= 75) {
         gaveld_emit(DAEMON_NAME, "SECURITY_WARN", (float)confidence / 100.0f, threat_json);
+        splinterd_emit("SECURITY_WARN", threat_json);
     }
 
     write_json(ts, score, grade, selinux, vb_state, vb_mode,
@@ -851,10 +915,10 @@ static void poll_security(void) {
 int main(void) {
     g_running = true;
     bexec_init();
-    printf("[GRANITOR] v%s Security Posture Deep Dive: ONLINE\n", VERSION);
-    printf("[GRANITOR] Establishing baseline...\n");
+    slog("INFO", "v%s Security Posture Deep Dive: ONLINE", VERSION);
+    slog("INFO", "Establishing baseline...");
     establish_baseline();
-    printf("[GRANITOR] Poll interval: %ds | CSI Mode: ACTIVE\n", POLL_SEC);
+    slog("INFO", "Poll interval: %ds | CSI Mode: ACTIVE", POLL_SEC);
     fflush(stdout);
 
     while (g_running) {
@@ -862,6 +926,6 @@ int main(void) {
         sleep(POLL_SEC);
     }
 
-    printf("[GRANITOR] Shutdown.\n");
+    slog("INFO", "Shutdown.");
     return 0;
 }
