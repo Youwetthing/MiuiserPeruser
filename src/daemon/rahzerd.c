@@ -56,10 +56,14 @@ static void rzlog(const char *lvl, const char *fmt, ...) {
     time_t t = time(NULL);
     strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
     va_list ap; va_start(ap, fmt);
-    if (g_debug || strcmp(lvl,"ERROR")==0 || strcmp(lvl,"WARN")==0) {
-        fprintf(stderr, "[%s][RAHZERD/%s] ", ts, lvl);
-        vfprintf(stderr, fmt, ap); fprintf(stderr,"\n"); fflush(stderr);
-    }
+    /* INFO now prints unconditionally, matching the rest of the fleet's
+     * logging wrappers (slog/fugitoidlog/leatherlog/tlog) -- none of them
+     * gate routine output behind a debug flag, they're loud by default
+     * and this was the one outlier, silent unless RAHZERD_DEBUG=1 was
+     * set. g_debug is kept (and RAHZERD_DEBUG still read at startup) in
+     * case a future verbosity tier below INFO is added later. */
+    fprintf(stderr, "[%s][RAHZERD/%s] ", ts, lvl);
+    vfprintf(stderr, fmt, ap); fprintf(stderr,"\n"); fflush(stderr);
     if (g_log_fp) {
         fprintf(g_log_fp, "[%s][RAHZERD/%s] ", ts, lvl);
         vfprintf(g_log_fp, fmt, ap); fprintf(g_log_fp,"\n"); fflush(g_log_fp);
@@ -241,21 +245,77 @@ rz_backend_t rz_detect_backend(void) {
 
 /* ── Layer 1: WiFi ─────────────────────────────────────────────── */
 
+/* In-place mutator: strips characters that would break the APRIL
+ * pipe-framing or a downstream JSON re-wrap. Per-file local static --
+ * copied verbatim from fugitoidd.c/shredderd.c/granitord.c/metalheadd.c,
+ * not shared via header (established fleet precedent). */
+static void sanitize_field(char *s) {
+    if (!s) return;
+    for (char *p = s; *p; p++) {
+        if (*p == '"' || *p == '\\' || *p == '|' || (unsigned char)*p < 0x20) {
+            *p = '_';
+        }
+    }
+}
+
+/* rz_extract_field() stops only at \n/\r -- unsuitable for the
+ * comma-delimited "key: value, key: value" shape of a raw dumpsys
+ * mWifiInfo line. This variant stops at the first comma too, and
+ * strips a wrapping pair of double quotes if present (SSID is quoted,
+ * BSSID/RSSI are not). Per-file local static, same convention as the
+ * other extraction helpers already in this file. */
+static char *rz_extract_field_csv(const char *hay, const char *key,
+                                   char *out, size_t outlen) {
+    if (!hay || !key || !out || outlen < 2) return NULL;
+    size_t klen = strlen(key);
+    const char *p = strstr(hay, key);
+    if (!p) return NULL;
+    const char *a = p + klen;
+    while (*a == '=' || *a == ':' || *a == ' ' || *a == '\t') a++;
+    int quoted = (*a == '"');
+    if (quoted) a++;
+    size_t i = 0;
+    while (a[i] && a[i] != ',' && a[i] != '\n' && a[i] != '\r' &&
+           !(quoted && a[i] == '"') && i < outlen - 1) {
+        out[i] = a[i];
+        i++;
+    }
+    while (i > 0 && (out[i-1] == ' ' || out[i-1] == '\t')) i--;
+    out[i] = '\0';
+    return (i > 0) ? out : NULL;
+}
+
 void rz_probe_wifi(rz_wifi_t *w) {
     memset(w, 0, sizeof(*w));
     w->connected = w->link_speed_mbps = w->frequency_mhz = -1;
     w->confidence = RZ_CONF_ABSENT;
 
-    /* Read from pre-baked state file */
-    FILE *f = fopen("/data/data/com.termux/files/home/MiuiserPeruser/pipes/state/rahzerd_wifi", "r");
-    if (f) {
-        char buf[8] = {0};
-        fgets(buf, sizeof(buf), f);
-        fclose(f);
-        buf[strcspn(buf, "\n\r")] = 0;
-        w->connected = (buf[0] == '1') ? 1 : 0;
-        w->backend    = RZ_BACKEND_SYSFS;
+    /* Parse from g_probe_data (mwifiinfo key, written by dump_rahzerd.sh
+     * from `dumpsys wifi | grep mWifiInfo | grep 'IsPrimary: 1'`).
+     * Previously read a dedicated rahzerd_wifi file that no producer
+     * wrote -- migrated onto the same prebaked-data path rz_probe_mobile()
+     * already uses. */
+    char *wi = rz_prebaked_get("mwifiinfo");
+    if (wi) {
+        sanitize_field(wi);
+        /* Line found and parsed successfully -- connected is now a real
+         * 0 or 1, not the -1 "couldn't determine" default. dump_rahzerd.sh
+         * captures the first mWifiInfo line even when disconnected (no
+         * IsPrimary: 1 line exists in that state), so an empty/DISCONNECTED
+         * line here is a legitimate 0, not a read failure. */
+        w->connected = rz_has(wi, "Supplicant state: COMPLETED") ? 1 : 0;
+        char tmp[64];
+        if (rz_extract_field_csv(wi, "SSID", tmp, sizeof(tmp)) &&
+            strcmp(tmp, "<unknown ssid>") != 0)
+            strncpy(w->ssid, tmp, sizeof(w->ssid)-1);
+        if (rz_extract_field_csv(wi, "BSSID", tmp, sizeof(tmp)) &&
+            strcmp(tmp, "<none>") != 0)
+            strncpy(w->bssid, tmp, sizeof(w->bssid)-1);
+        if (rz_extract_field_csv(wi, "RSSI", tmp, sizeof(tmp)))
+            w->rssi_dbm = atoi(tmp);
+        w->backend    = RZ_BACKEND_RISH;
         w->confidence = RZ_CONF_MEASURED;
+        free(wi);
     }
 
     /* TX/RX from sysfs via ip */
@@ -297,8 +357,10 @@ void rz_probe_mobile(rz_mobile_t *m) {
         if (strncmp(op, "null", 4) != 0) {
             int i = 0;
             while (op[i] && op[i] != ',' && op[i] != '}' && op[i] != '\n' &&
-                   i < (int)sizeof(m->operator_name)-1)
-                m->operator_name[i] = op[i++];
+                   i < (int)sizeof(m->operator_name)-1) {
+                m->operator_name[i] = op[i];
+                i++;
+            }
         }
     }
 
@@ -705,11 +767,29 @@ void rz_probe_xiaomi(rz_xiaomi_t *x) {
     x->whetstone_power_active = x->smartpower_active = -1;
     x->confidence = RZ_CONF_ABSENT;
 
+    /* aml_conn_active / miui_wifi_active previously came from
+     * ds("activity") -> dumpsys activity, which lists running
+     * activity/process records, not registered services -- these two
+     * service names never appeared there regardless of whether the
+     * services were actually running (confirmed live 2026-08-08: both
+     * "found" via `service check`, both absent from
+     * `dumpsys activity services`). This was silently forcing
+     * xiaomi_reports_connected to 0 on every poll, contributing to the
+     * same XIAOMI_DIVERGENCE false-positive chain as the dead
+     * net.connectivity.status prop. Switched to the cheap, purpose-built
+     * `service check` result via rz_prebaked_get(); jx_policy_active and
+     * miuibooster_active still read from ds("activity") below since
+     * that's a separate, not-yet-investigated question. */
+    char *amlconn = rz_prebaked_get("amlconnsvc");
+    x->aml_conn_active = (amlconn && rz_has(amlconn, ": found")) ? 1 : 0;
+    if (amlconn) free(amlconn);
+    char *amlwifi = rz_prebaked_get("amlwifisvc");
+    x->miui_wifi_active = (amlwifi && rz_has(amlwifi, ": found")) ? 1 : 0;
+    if (amlwifi) free(amlwifi);
+
     char *svc = ds("activity");
     if (svc) {
         x->jx_policy_active   = rz_has(svc,"JXNetworkPolicyService") ? 1 : 0;
-        x->aml_conn_active    = rz_has(svc,"AmlConnectivityService")  ? 1 : 0;
-        x->miui_wifi_active   = rz_has(svc,"AmlMiuiWifiService")      ? 1 : 0;
         x->miuibooster_active = rz_has(svc,"MiuiBoosterService")      ? 1 : 0;
         free(svc);
     }
@@ -728,9 +808,23 @@ void rz_probe_xiaomi(rz_xiaomi_t *x) {
             strncpy(x->active_interface, tmp, sizeof(x->active_interface)-1);
         free(route);
     }
-    char *conn = rz_prebaked_get("net.connectivity.status");
-    x->aosp_reports_connected   = (conn && strcmp(conn,"1")==0) ? 1 : 0;
-    if (conn) free(conn);
+    /* "Active default network: N" -- ConnectivityManager's own ground
+     * truth (same value apps get from getActiveNetwork()). N == -1 means
+     * no default network; any other integer is a real network ID.
+     * Replaces the old net.connectivity.status prop check, which does
+     * not exist on this device/HyperOS version (confirmed empty via
+     * getprop, 2026-08-08) -- that dead prop left aosp_reports_connected
+     * permanently stuck at 0, firing a constant maximum-confidence
+     * XIAOMI_DIVERGENCE false positive on every poll where Xiaomi's own
+     * wifi service reported active. */
+    char *adn = rz_prebaked_get("activedefaultnetwork");
+    if (adn) {
+        char tmp[16];
+        x->aosp_reports_connected =
+            (rz_extract_field(adn, "Active default network", tmp, sizeof(tmp)) &&
+             strcmp(tmp, "-1") != 0) ? 1 : 0;
+        free(adn);
+    }
     x->xiaomi_reports_connected = (x->miui_wifi_active==1||x->aml_conn_active==1) ? 1 : 0;
 
     if (x->aosp_reports_connected != x->kernel_reports_connected ||
