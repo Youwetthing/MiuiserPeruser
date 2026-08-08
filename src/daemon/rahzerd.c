@@ -957,8 +957,8 @@ static void rz_establish_baseline(const rz_snapshot_t *snap) {
     strncpy(g_baseline_bssid, snap->wifi.bssid, sizeof(g_baseline_bssid)-1);
     g_baseline_dns_ms = snap->dns.latency_ms;
     g_baseline_established = 1;
-    fprintf(stderr, "[RAHZERD] Baseline established: bssid=%s dns=%dms\n",
-            g_baseline_bssid, g_baseline_dns_ms);
+    rzlog("INFO", "Baseline established: bssid=%s dns=%dms",
+          g_baseline_bssid, g_baseline_dns_ms);
 }
 
 /* Non-blocking exec with FD isolation — replaces system() */
