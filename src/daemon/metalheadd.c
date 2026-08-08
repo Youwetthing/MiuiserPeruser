@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 #define DAEMON_NAME      "metalheadd"
 #define DEFAULT_INTERVAL 30
@@ -88,6 +89,41 @@ static void splinterd_emit(const char *type, const char *payload)
     close(fd);
 }
 
+/* In-place mutator: strips characters that would break either the
+ * APRIL|daemon|type|payload pipe-framing or a downstream JSON re-wrap.
+ * Per-file local static -- copied verbatim from fugitoidd.c/shredderd.c/
+ * granitord.c, not shared via header (established fleet precedent). */
+static void sanitize_field(char *s) {
+    if (!s) return;
+    for (char *p = s; *p; p++) {
+        if (*p == '"' || *p == '\\' || *p == '|' || (unsigned char)*p < 0x20) {
+            *p = '_';
+        }
+    }
+}
+
+/* Forward declaration -- call site (line ~139) appears before the
+ * definition below in file order (same issue hit in shredderd.c /
+ * granitord.c's logging conversions). */
+static void slog(const char *level, const char *fmt, ...);
+
+/* Timestamped, tagged logger. Copied verbatim from shredderd.c/granitord.c's
+ * slog() -- per-file local static, not shared via header. Appends its own
+ * trailing newline; callers should not include one in fmt. */
+static void slog(const char *level, const char *fmt, ...)
+{
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+
+    va_list ap;
+    va_start(ap, fmt);
+    fprintf(stderr, "[%s][METAL/%s] ", ts, level);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    va_end(ap);
+}
+
 /* ── Type helpers ─────────────────────────────────────────────────────── */
 
 static const char *type_name(int id)
@@ -136,7 +172,7 @@ static char *fetch_sensorservice(void)
         SENSOR_DUMP_BUFSZ);
 
     if (!buf || buf[0] == '\0') {
-        printf("[METAL]  WARN: bexec_n() returned empty dump\n");
+        slog("WARN", "bexec_n() returned empty dump");
     }
     return buf;
 }
@@ -298,6 +334,7 @@ static void poll(int scan_num)
                 snprintf(ctx, sizeof(ctx),
                          "sensor=%.32s type=%.16s",
                          s->name, s->type_str);
+                sanitize_field(ctx);
                 gaveld_emit(DAEMON_NAME, "SENSITIVE_SENSOR_ACTIVE", 0.0, ctx);
                 splinterd_emit("SENSITIVE_SENSOR_ACTIVE", ctx);
                 score -= 10;
