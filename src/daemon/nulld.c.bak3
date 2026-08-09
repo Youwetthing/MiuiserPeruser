@@ -84,23 +84,10 @@ static const char *SUSPICIOUS_IDLE_PKGS[] = {
     NULL
 };
 
-static FILE *g_nulld_log_fp = NULL;
-
-static void nulldlog_init(void) {
-    const char *path = getenv("NULLD_LOG_PATH");
-    if (path && path[0]) {
-        g_nulld_log_fp = fopen(path, "a");
-    }
-}
-
 static void tlog(const char *lvl, const char *msg) {
     char ts[32]; time_t t = time(NULL);
     strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
     fprintf(stderr, "[%s][NULLD/%s] %s\n", ts, lvl, msg);
-    if (g_nulld_log_fp) {
-        fprintf(g_nulld_log_fp, "[%s][NULLD/%s] %s\n", ts, lvl, msg);
-        fflush(g_nulld_log_fp);
-    }
     fflush(stderr);
 }
 
@@ -351,7 +338,6 @@ int main(void) {
     signal(SIGTERM, handle_sig);
 
     bexec_init();
-    nulldlog_init();
 
     tlog("INFO", "nulld v1.1 -- idle transmission monitor online");
     tlog("INFO", "Watching what Xiaomi does while you sleep");
