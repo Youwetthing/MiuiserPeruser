@@ -37,6 +37,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 #define DAEMON_NAME         "bebopd"
 #define DEFAULT_INTERVAL    30
@@ -104,6 +105,39 @@ static void splinterd_emit(const char *type, const char *payload)
     close(fd);
 }
 
+/* -- Logging ---------------------------------------------------------- */
+
+static void beboplog(const char *level, const char *fmt, ...);
+
+static void beboplog(const char *level, const char *fmt, ...)
+{
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", localtime(&t));
+
+    va_list args;
+    va_start(args, fmt);
+    printf("[%s] [BEBOP/%s] ", ts, level);
+    vprintf(fmt, args);
+    printf("\n");
+    va_end(args);
+}
+
+/* -- Field sanitization ------------------------------------------------ */
+/* Verbatim copy from fugitoidd.c/shredderd.c/granitord.c. Neutralizes
+ * control chars, '"', '|', and '\' so device-sourced strings can't
+ * break JSON fields or the '|'-delimited APRIL/gaveld wire protocol. */
+
+static void sanitize_field(char *s)
+{
+    if (!s) return;
+    for (; *s; s++) {
+        unsigned char c = (unsigned char)*s;
+        if (c < 0x20 || c == '"' || c == '|' || c == '\\')
+            *s = '_';
+    }
+}
+
 /* ?? Parse wakelocks from dumpsys power ?????????????????????????????????? */
 
 /*
@@ -150,6 +184,16 @@ static int parse_wakelocks(const char *dump,
         wakelock_t *wl = &wls[count];
         memset(wl, 0, sizeof(*wl));
 
+        /* UID: check current line first -- live dumpsys power on this
+         * device puts "uid=" inline on the wakelock entry line itself.
+         * Must happen before strtok() mutates lbuf below. */
+        int uid_found = 0;
+        const char *uid_p = strstr(lbuf, "uid=");
+        if (uid_p) {
+            wl->uid = atoi(uid_p + 4);
+            uid_found = 1;
+        }
+
         /* Type: first token on line */
         char *tok = strtok(lbuf, " \t");
         if (!tok) continue;
@@ -158,8 +202,12 @@ static int parse_wakelocks(const char *dump,
         wl->is_full = (strstr(wl->type, "FULL") != NULL ||
                        strstr(wl->type, "PARTIAL") != NULL);
 
-        /* Tag: in single quotes */
-        char *tq = strchr(lbuf + strlen(tok) + 1, '\'');
+        /* Tag: in single quotes. Search from the end of the actual
+         * token (tok), not lbuf -- lbuf may have leading whitespace
+         * strtok() skipped past, and lbuf + strlen(tok) can land at or
+         * before the NUL strtok() just inserted after the token, which
+         * makes strchr() hit the terminator before reaching the quote. */
+        char *tq = strchr(tok + strlen(tok) + 1, '\'');
         if (tq) {
             tq++;
             size_t i = 0;
@@ -168,18 +216,22 @@ static int parse_wakelocks(const char *dump,
             wl->tag[i] = '\0';
         }
 
-        /* UID from next line (ACQ line) */
-        const char *acq_line = p;
-        const char *acq_nl   = strchr(p, '\n');
-        if (acq_nl) {
-            char acq[256];
-            size_t alen = (size_t)(acq_nl - acq_line);
-            if (alen >= sizeof(acq)) alen = sizeof(acq) - 1;
-            strncpy(acq, acq_line, alen);
-            acq[alen] = '\0';
+        /* UID fallback: older/other dumpsys formats may still put
+         * ACQ=/uid= on the line after the wakelock entry. Only used if
+         * the current-line check above found nothing. */
+        if (!uid_found) {
+            const char *acq_line = p;
+            const char *acq_nl   = strchr(p, '\n');
+            if (acq_nl) {
+                char acq[256];
+                size_t alen = (size_t)(acq_nl - acq_line);
+                if (alen >= sizeof(acq)) alen = sizeof(acq) - 1;
+                strncpy(acq, acq_line, alen);
+                acq[alen] = '\0';
 
-            const char *uid_p = strstr(acq, "uid=");
-            if (uid_p) wl->uid = atoi(uid_p + 4);
+                const char *uid_p2 = strstr(acq, "uid=");
+                if (uid_p2) wl->uid = atoi(uid_p2 + 4);
+            }
         }
 
         wl->is_system = (wl->uid <= SYSTEM_UID_MAX);
@@ -311,7 +363,7 @@ static void poll(int scan_num)
     time_t t = time(NULL);
     strftime(ts, sizeof(ts), "%H:%M:%S", localtime(&t));
 
-    printf("\n[BEBOP] ?? Wakelock & Power Scan #%d  %s ?????????????????\n",
+    beboplog("INFO", "\n?? Wakelock & Power Scan #%d  %s ?????????????????",
            scan_num, ts);
 
     int score = 100;
@@ -321,7 +373,7 @@ static void poll(int scan_num)
     char *dump = bexec("dumpsys power 2>/dev/null");
     char *bstats = bexec("dumpsys batterystats | grep -E Computed.drain | head -5");
     if (!dump) {
-        printf("[BEBOP]  dumpsys power unavailable\n");
+        beboplog("WARN", "dumpsys power unavailable");
         return;
     }
 
@@ -333,9 +385,9 @@ static void poll(int scan_num)
     bool saver_on    = parse_battery_saver(dump);
     float drain      = parse_drain_mah_h(bstats ? bstats : dump);
 
-    printf("[BEBOP]  Battery    : %d%%  low=%s  saver=%s\n",
+    beboplog("INFO", "Battery    : %d%%  low=%s  saver=%s",
            battery, battery_low ? "yes" : "no", saver_on ? "ON" : "off");
-    printf("[BEBOP]  Drain      : %.1f mAh/h (interactive)\n", drain);
+    beboplog("INFO", "Drain      : %.1f mAh/h (interactive)", drain);
 
     /* Battery critical */
     if (battery >= 0 && battery <= BATTERY_CRITICAL) {
@@ -345,7 +397,7 @@ static void poll(int scan_num)
         splinterd_emit("BATTERY_LEVEL_CRITICAL", ctx);
         score -= 15;
         sigs++;
-        printf("[BEBOP]  !  Battery critical: %d%%\n", battery);
+        beboplog("WARN", "Battery critical: %d%%", battery);
     }
 
     /* Battery low + saver off */
@@ -354,7 +406,7 @@ static void poll(int scan_num)
         splinterd_emit("BATTERY_SAVER_OFF_LOW", "saver=off");
         score -= 8;
         sigs++;
-        printf("[BEBOP]  !  Battery low but Battery Saver is OFF\n");
+        beboplog("WARN", "Battery low but Battery Saver is OFF");
     }
 
     /* High drain */
@@ -366,18 +418,18 @@ static void poll(int scan_num)
         splinterd_emit("WAKELOCK_DRAIN_HIGH", ctx);
         score -= 18;
         sigs++;
-        printf("[BEBOP]  !  High drain: %.1f mAh/h\n", drain);
+        beboplog("WARN", "High drain: %.1f mAh/h", drain);
     }
 
     /* ?? Wakelocks ?????????????????????????????????????????????????????? */
     wakelock_t wls[32];
     int nwls = parse_wakelocks(dump, wls, 32);
 
-    printf("[BEBOP]  Wakelocks  : %d active\n", nwls);
+    beboplog("INFO", "Wakelocks  : %d active", nwls);
     if (nwls > 0) {
-        printf("[BEBOP]  %-30s  %-8s  %-10s  %s\n",
+        beboplog("INFO", "%-30s  %-8s  %-10s  %s",
                "Tag", "Type", "UID", "System");
-        printf("[BEBOP]  ?????????????????????????????????????????????????\n");
+        beboplog("INFO", "?????????????????????????????????????????????????");
     }
 
     int full_nonsys = 0;
@@ -385,7 +437,9 @@ static void poll(int scan_num)
 
     for (int i = 0; i < nwls; i++) {
         wakelock_t *wl = &wls[i];
-        printf("[BEBOP]  %-30.30s  %-8.8s  uid=%-6d  %s\n",
+        sanitize_field(wl->tag);
+        sanitize_field(wl->type);
+        beboplog("INFO", "%-30.30s  %-8.8s  uid=%-6d  %s",
                wl->tag, wl->type, wl->uid,
                wl->is_system ? "system" : "APP");
 
@@ -398,7 +452,7 @@ static void poll(int scan_num)
             splinterd_emit("WAKELOCK_FULL_HELD", ctx);
             score -= 20;
             sigs++;
-            printf("[BEBOP]  !  Full wakelock by non-system: %s\n", wl->tag);
+            beboplog("WARN", "Full wakelock by non-system: %s", wl->tag);
         }
 
         /* Orphaned InCall wakelock */
@@ -413,7 +467,7 @@ static void poll(int scan_num)
         splinterd_emit("INCALL_WAKELOCK_ORPHAN", "tag=InCallWakeLockController");
         score -= 20;
         sigs++;
-        printf("[BEBOP]  !  InCall wakelock active -- call in progress or orphaned\n");
+        beboplog("WARN", "InCall wakelock active -- call in progress or orphaned");
     }
 
     /* General wakelock anomaly */
@@ -428,7 +482,7 @@ static void poll(int scan_num)
 
     /* ?? Doze ??????????????????????????????????????????????????????????? */
     int doze_intr = count_doze_interrupted(dump);
-    printf("[BEBOP]  Doze intr  : ~%d session(s)\n", doze_intr);
+    beboplog("INFO", "Doze intr  : ~%d session(s)", doze_intr);
     if (doze_intr > 2) {
         char ctx[32];
         snprintf(ctx, sizeof(ctx), "interruptions=%d", doze_intr);
@@ -436,7 +490,7 @@ static void poll(int scan_num)
         splinterd_emit("DOZE_INTERRUPTED", ctx);
         score -= 10;
         sigs++;
-        printf("[BEBOP]  !  Doze repeatedly interrupted\n");
+        beboplog("WARN", "Doze repeatedly interrupted");
     }
 
     free(dump);
@@ -448,7 +502,7 @@ static void poll(int scan_num)
                       : score >= 45 ? "DRAINING"
                       : "CRITICAL";
 
-    printf("[BEBOP]  Power score : %d/100  [%s]  signals=%d\n",
+    beboplog("INFO", "Power score : %d/100  [%s]  signals=%d",
            score, grade, sigs);
 
     write_results(score, scan_num, sigs, battery, drain, nwls, full_nonsys);
@@ -461,12 +515,12 @@ int main(void)
     bexec_init();
 
     if (!is_enabled()) {
-        printf("[BEBOP] disabled via syndicatectl -- exiting\n");
+        beboplog("INFO", "disabled via syndicatectl -- exiting");
         return 0;
     }
 
-    printf("[BEBOP] Wakelock & Power Drain Audit Daemon: ONLINE\n");
-    printf("[BEBOP] Drain threshold: %.0f mAh/h  Battery critical: %d%%\n",
+    beboplog("INFO", "Wakelock & Power Drain Audit Daemon: ONLINE");
+    beboplog("INFO", "Drain threshold: %.0f mAh/h  Battery critical: %d%%",
            DRAIN_WARN_MAH_H, BATTERY_CRITICAL);
 
     int interval  = get_interval();
@@ -475,7 +529,7 @@ int main(void)
 
     for (;;) {
         if (!is_enabled()) {
-            printf("[BEBOP] disabled -- stopping\n");
+            beboplog("INFO", "disabled -- stopping");
             break;
         }
 
@@ -486,11 +540,11 @@ int main(void)
         poll(scan_num);
 
         if (max_scans > 0 && scan_num >= max_scans) {
-            printf("[BEBOP] reached scan_count=%d -- exiting\n", max_scans);
+            beboplog("INFO", "reached scan_count=%d -- exiting", max_scans);
             break;
         }
 
-        printf("[BEBOP] Next scan in %ds\n", interval);
+        beboplog("INFO", "Next scan in %ds", interval);
         sleep(interval);
     }
 
