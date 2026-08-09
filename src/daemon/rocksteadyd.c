@@ -1,8 +1,8 @@
 /*
  * rocksteadyd.c -- CPU Load, Frequency & Cluster Balance Daemon
  *
- * Redmi 15C ? HyperOS OS2.0 ? MediaTek ? 8-core (cpu0-3 efficiency,
- * cpu4-7 performance) ? Android 15
+ * Redmi 15C ? HyperOS OS2.0 ? MediaTek ? 8-core, N-cluster (clusters
+ * detected dynamically via cpuinfo_max_freq) ? Android 15
  *
  * Every poll:
  *   - Read cur/max/min freq + governor per core from cpufreq sysfs
@@ -37,15 +37,19 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 #define DAEMON_NAME       "rocksteadyd"
 #define DEFAULT_INTERVAL  15
 #define MAX_CORES         16
-#define MAX_PROCS         256
+#define MAX_PROCS         1024  /* was 256 -- too low once real
+                                   /proc visibility is restored,
+                                   see proc_bexec patch */
 #define HOG_PCT           40    /* single process CPU% = hog */
 #define HOG_CRITICAL_PCT  70    /* single process CPU% = critical */
 #define THROTTLE_RATIO    0.75f /* cur < max * ratio = throttled */
 #define TOP_N             5     /* top processes to display */
+#define MAX_CLUSTERS      4     /* generous ceiling for tri/quad-gear SoCs */
 
 #ifndef MP_BASE_DIR
 #define MP_BASE_DIR "/data/data/com.termux/files/home/MiuiserPeruser"
@@ -90,22 +94,79 @@ static proc_t     g_prev_procs[MAX_PROCS];
 static int        g_prev_nprocs = 0;
 static bool       g_first = true;
 
+/* ?? Logging ???????????????????????????????????????????????????????????? */
+
+static FILE *g_rocky_log_fp = NULL;
+
+static void rockylog_init(void)
+{
+    const char *path = getenv("ROCKSTEADYD_LOG_PATH");
+    if (path && path[0]) {
+        g_rocky_log_fp = fopen(path, "a");
+    }
+}
+
+static void rockylog(const char *level, const char *fmt, ...)
+{
+    time_t t = time(NULL);
+    char ts[32];
+    strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
+
+    va_list ap1, ap2;
+    va_start(ap1, fmt);
+    va_copy(ap2, ap1);
+
+    fprintf(stderr, "[%s][ROCKSTEADYD/%s] ", ts, level);
+    vfprintf(stderr, fmt, ap1);
+    fprintf(stderr, "\n");
+    va_end(ap1);
+
+    if (g_rocky_log_fp) {
+        fprintf(g_rocky_log_fp, "[%s][ROCKSTEADYD/%s] ", ts, level);
+        vfprintf(g_rocky_log_fp, fmt, ap2);
+        fprintf(g_rocky_log_fp, "\n");
+        fflush(g_rocky_log_fp);
+    }
+    va_end(ap2);
+}
+
 /* ?? Config ????????????????????????????????????????????????????????????? */
 
 static int config_get_int(const char *key, int def)
 {
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd),
-             "jq -r '.%s.%s // %d' %s 2>/dev/null",
-             DAEMON_NAME, key, def, STATE_FILE);
-    FILE *f = popen(cmd, "r");
+    FILE *f = fopen(STATE_FILE, "r");
     if (!f) return def;
-    char buf[32] = {0};
-    int val = def;
-    if (fgets(buf, sizeof(buf), f) && buf[0] != 'n')
-        val = atoi(buf);
-    pclose(f);
-    return val;
+
+    char buf[4096];
+    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[n] = '\0';
+
+    /* Naive single-level lookup: find "rocksteadyd" section, then the
+     * key within it, bounded by the section's closing brace so a
+     * same-named key in a sibling daemon's config can't bleed in.
+     * Matches the existing fleet fopen/strstr convention -- not a
+     * general JSON parser. */
+    char section_key[64];
+    snprintf(section_key, sizeof(section_key), "\"%s\"", DAEMON_NAME);
+    char *section = strstr(buf, section_key);
+    if (!section) return def;
+
+    char *section_end = strchr(section, '}');
+
+    char field_key[64];
+    snprintf(field_key, sizeof(field_key), "\"%s\"", key);
+    char *field = strstr(section, field_key);
+    if (!field || (section_end && field > section_end)) return def;
+
+    field = strchr(field, ':');
+    if (!field) return def;
+    field++;
+    while (*field == ' ') field++;
+
+    if (strncmp(field, "null", 4) == 0) return def;
+
+    return atoi(field);
 }
 
 static int is_enabled(void)    { return config_get_int("enabled",    1); }
@@ -145,11 +206,10 @@ static long read_long_sysfs(const char *path)
 
 /* ?? Enumerate CPU cores ??????????????????????????????????????????????? */
 
-static int enumerate_cpus(cpu_core_t *cores, int max_cores)
+static int enumerate_cpus(cpu_core_t *cores, int max_cores, int *out_nclusters)
 {
     int count = 0;
     char path[256];
-    long max_seen = 0;
 
     for (int i = 0; i < max_cores; i++) {
         snprintf(path, sizeof(path),
@@ -184,33 +244,74 @@ static int enumerate_cpus(cpu_core_t *cores, int max_cores)
                         (float)c->cur_khz < (float)c->max_khz * THROTTLE_RATIO);
         c->at_max = (c->max_khz > 0 && c->cur_khz >= c->max_khz);
 
-        /* Track global max for cluster detection */
-        if (c->max_khz > max_seen) max_seen = c->max_khz;
-
         c->cluster = -1; /* assigned below */
         count++;
     }
 
-    /* Cluster detection: cores with lower max_khz = efficiency */
-    if (count > 1 && max_seen > 0) {
-        long threshold = (long)((float)max_seen * 0.85f);
-        for (int i = 0; i < count; i++) {
-            cores[i].cluster = (cores[i].max_khz < threshold) ? 0 : 1;
+    /* Cluster detection: group cores by distinct cpuinfo_max_freq,
+     * sorted ascending. Cluster index = rank (0 = lowest freq).
+     * Works for any cluster count, not just a fixed eff/perf split. */
+    long distinct_freqs[MAX_CLUSTERS];
+    int  n_distinct = 0;
+
+    for (int i = 0; i < count; i++) {
+        long f = cores[i].max_khz;
+        if (f <= 0) continue;
+
+        bool found = false;
+        for (int j = 0; j < n_distinct; j++) {
+            if (distinct_freqs[j] == f) { found = true; break; }
+        }
+        if (!found && n_distinct < MAX_CLUSTERS) {
+            distinct_freqs[n_distinct++] = f;
         }
     }
 
+    for (int i = 1; i < n_distinct; i++) {
+        long key = distinct_freqs[i];
+        int j = i - 1;
+        while (j >= 0 && distinct_freqs[j] > key) {
+            distinct_freqs[j + 1] = distinct_freqs[j];
+            j--;
+        }
+        distinct_freqs[j + 1] = key;
+    }
+
+    for (int i = 0; i < count; i++) {
+        if (cores[i].max_khz <= 0) continue;
+        for (int j = 0; j < n_distinct; j++) {
+            if (cores[i].max_khz == distinct_freqs[j]) {
+                cores[i].cluster = j;
+                break;
+            }
+        }
+        /* max_khz didn't match any tracked bucket (only possible if
+         * n_distinct hit MAX_CLUSTERS) -- leave cluster at -1, safe */
+    }
+
+    if (out_nclusters) *out_nclusters = n_distinct;
     return count;
 }
 
 /* ?? /proc/stat CPU total ??????????????????????????????????????????????? */
 
+#define PROC_STAT_BUF_SIZE (4 * 1024)
+
 static bool read_proc_stat(cpu_stat_t *st)
 {
-    FILE *f = fopen("/proc/stat", "r");
-    if (!f) return false;
-    char line[256];
+    /* Same hidepid-visibility class as read_proc_procs() -- plain
+     * Termux fopen() on /proc/stat can return blank/stale data under
+     * this device's hidepid=invisible mount. Route through bexec_n()
+     * for consistency with the rest of the /proc read path. */
+    char *data = bexec_n("cat /proc/stat 2>/dev/null", PROC_STAT_BUF_SIZE);
+    if (!data) return false;
+
     bool ok = false;
-    while (fgets(line, sizeof(line), f)) {
+    char *line = data;
+    while (line && *line) {
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = '\0';
+
         if (strncmp(line, "cpu ", 4) == 0) {
             sscanf(line + 4, "%llu %llu %llu %llu %llu %llu %llu",
                    &st->user, &st->nice, &st->system, &st->idle,
@@ -218,8 +319,11 @@ static bool read_proc_stat(cpu_stat_t *st)
             ok = true;
             break;
         }
+
+        line = nl ? nl + 1 : NULL;
     }
-    fclose(f);
+
+    free(data);
     return ok;
 }
 
@@ -237,31 +341,55 @@ static int compute_cpu_pct(const cpu_stat_t *prev, const cpu_stat_t *cur)
     return (int)(100ULL * (dtotal - didle) / dtotal);
 }
 
+/* ?? Field sanitization (wire-protocol safety) ??????????????????????????? */
+
+/* Process comm names can contain '|', which would corrupt the
+ * '|'-delimited APRIL protocol used by splinterd_emit(), or raw
+ * quote/control characters that would corrupt write_results()'s
+ * hand-rolled JSON if name is ever threaded through there. Same fix
+ * class as fugitoidd's fg_app/ANR/CRASH fields and bebopd's wl->tag.
+ * Copied as a local static per the fleet convention. */
+static void sanitize_field(char *buf, size_t bufsz)
+{
+    if (!buf) return;
+    for (size_t i = 0; i < bufsz && buf[i] != '\0'; i++) {
+        unsigned char c = (unsigned char)buf[i];
+        if (c == '|' || c == '"' || c == '\n' || c == '\r' || c < 0x20) {
+            buf[i] = '_';
+        }
+    }
+}
+
 /* ?? /proc/[pid]/stat reader ???????????????????????????????????????????? */
+
+/* Direct opendir("/proc") as plain Termux only sees processes visible
+ * under this device's hidepid=invisible mount (~6 of ~816 confirmed
+ * live) -- Termux lacks AID_READPROC/gid 3009, rish has it. Route
+ * through bexec_n() with a single batched rish call instead of
+ * per-PID fopen(); parsing logic below is unchanged from before. */
+
+#define PROC_BATCH_BUF_SIZE (512 * 1024)
 
 static int read_proc_procs(proc_t *procs, int max_procs)
 {
-    DIR *d = opendir("/proc");
-    if (!d) return 0;
+    static const char *cmd = "cat /proc/[0-9]*/stat 2>/dev/null";
+
+    char *proc_data = bexec_n(cmd, PROC_BATCH_BUF_SIZE);
+    if (!proc_data) {
+        return 0;
+    }
 
     int count = 0;
-    struct dirent *ent;
+    char *line = proc_data;
 
-    while ((ent = readdir(d)) != NULL && count < max_procs) {
-        /* Only numeric dirs */
-        if (ent->d_name[0] < '1' || ent->d_name[0] > '9') continue;
+    while (line && *line && count < max_procs) {
+        char *nl = strchr(line, '\n');
+        if (nl) *nl = '\0';
 
-        int pid = atoi(ent->d_name);
-        if (pid <= 0) continue;
+        if (line[0] == '\0') { line = nl ? nl + 1 : NULL; continue; }
 
-        char path[64];
-        snprintf(path, sizeof(path), "/proc/%d/stat", pid);
-        FILE *f = fopen(path, "r");
-        if (!f) continue;
-
-        char line[512];
-        if (!fgets(line, sizeof(line), f)) { fclose(f); continue; }
-        fclose(f);
+        int pid = atoi(line);
+        if (pid <= 0) { line = nl ? nl + 1 : NULL; continue; }
 
         /* Format: pid (name) state ppid ... utime stime ... */
         proc_t *p = &procs[count];
@@ -278,6 +406,7 @@ static int read_proc_procs(proc_t *procs, int max_procs)
             if (len >= sizeof(p->name)) len = sizeof(p->name) - 1;
             strncpy(p->name, nb + 1, len);
             p->name[len] = '\0';
+            sanitize_field(p->name, sizeof(p->name));
         }
 
         /* Fields after ')': state ppid pgrp sid ... utime(14) stime(15) */
@@ -291,8 +420,10 @@ static int read_proc_procs(proc_t *procs, int max_procs)
         }
 
         count++;
+        line = nl ? nl + 1 : NULL;
     }
-    closedir(d);
+
+    free(proc_data);
     return count;
 }
 
@@ -390,13 +521,15 @@ static void poll(int scan_num)
 
     /* ?? CPU cores ?????????????????????????????????????????????????????? */
     cpu_core_t cores[MAX_CORES];
-    int ncores = enumerate_cpus(cores, MAX_CORES);
+    int nclusters = 0;
+    int ncores = enumerate_cpus(cores, MAX_CORES, &nclusters);
 
     int throttled_count  = 0;
     int maxed_count      = 0;
     int perf_gov_count   = 0;
-    long eff_cur = 0, eff_max = 0, perf_cur = 0, perf_max = 0;
-    int  eff_n   = 0, perf_n  = 0;
+    long clus_cur[MAX_CLUSTERS] = {0};
+    long clus_max[MAX_CLUSTERS] = {0};
+    int  clus_n[MAX_CLUSTERS]   = {0};
 
     printf("[ROCKY]  %-5s  %-7s  %-7s  %-12s  %s\n",
            "Core", "CurMHz", "MaxMHz", "Governor", "State");
@@ -407,8 +540,11 @@ static void poll(int scan_num)
         const char *state = c->throttled ? "THROTTLED"
                           : c->at_max    ? "MAX"
                           : "OK";
-        const char *cl = c->cluster == 0 ? "[E]"
-                       : c->cluster == 1 ? "[P]" : "   ";
+        char cl[8];
+        if (c->cluster >= 0)
+            snprintf(cl, sizeof(cl), "[c%d]", c->cluster);
+        else
+            snprintf(cl, sizeof(cl), "    ");
 
         printf("[ROCKY]  cpu%-2d%s %-7ld  %-7ld  %-12s  %s\n",
                c->core, cl,
@@ -419,33 +555,57 @@ static void poll(int scan_num)
         if (c->at_max)    maxed_count++;
         if (strcmp(c->governor, "performance") == 0) perf_gov_count++;
 
-        /* Cluster utilisation */
-        if (c->cluster == 0) {
-            eff_cur += c->cur_khz; eff_max += c->max_khz; eff_n++;
-        } else if (c->cluster == 1) {
-            perf_cur += c->cur_khz; perf_max += c->max_khz; perf_n++;
+        if (c->cluster >= 0 && c->cluster < MAX_CLUSTERS) {
+            clus_cur[c->cluster] += c->cur_khz;
+            clus_max[c->cluster] += c->max_khz;
+            clus_n[c->cluster]++;
         }
     }
 
-    /* Cluster balance */
-    float eff_util  = (eff_n  > 0 && eff_max  > 0) ? 100.0f * (float)eff_cur  / (float)eff_max  : 0;
-    float perf_util = (perf_n > 0 && perf_max > 0) ? 100.0f * (float)perf_cur / (float)perf_max : 0;
+    /* Cluster balance -- generalized to N clusters */
+    if (nclusters > 1) {
+        float clus_util[MAX_CLUSTERS] = {0};
+        printf("[ROCKY]  Cluster util:");
+        for (int i = 0; i < nclusters; i++) {
+            clus_util[i] = (clus_n[i] > 0 && clus_max[i] > 0)
+                         ? 100.0f * (float)clus_cur[i] / (float)clus_max[i]
+                         : 0.0f;
+            printf("  c%d=%.0f%%", i, clus_util[i]);
+        }
+        printf("\n");
 
-    if (eff_n > 0 && perf_n > 0) {
-        printf("[ROCKY]  Efficiency cluster: %.0f%%  Performance cluster: %.0f%%\n",
-               eff_util, perf_util);
+        /* A lower-frequency cluster running hotter than a higher one
+         * it should be offloading to is a scheduler placement problem,
+         * regardless of how many clusters exist. Report the worst
+         * offending (lower, higher) pair, one firing per poll. */
+        int   worst_lo = -1, worst_hi = -1;
+        float worst_delta = 0.0f;
 
-        /* Efficiency running harder than performance = scheduler imbalance */
-        if (eff_util > perf_util + 20.0f) {
-            char ctx[80];
+        for (int lo = 0; lo < nclusters; lo++) {
+            if (clus_n[lo] == 0) continue;
+            for (int hi = lo + 1; hi < nclusters; hi++) {
+                if (clus_n[hi] == 0) continue;
+                float delta = clus_util[lo] - clus_util[hi];
+                if (delta > worst_delta) {
+                    worst_delta = delta;
+                    worst_lo = lo;
+                    worst_hi = hi;
+                }
+            }
+        }
+
+        if (worst_lo >= 0 && worst_delta > 20.0f) {
+            char ctx[96];
             snprintf(ctx, sizeof(ctx),
-                     "eff=%.0f%% perf=%.0f%% delta=%.0f%%",
-                     eff_util, perf_util, eff_util - perf_util);
-            gaveld_emit(DAEMON_NAME, "CPU_CLUSTER_IMBALANCE", eff_util - perf_util, ctx);
+                     "c%d=%.0f%% c%d=%.0f%% delta=%.0f%%",
+                     worst_lo, clus_util[worst_lo],
+                     worst_hi, clus_util[worst_hi], worst_delta);
+            gaveld_emit(DAEMON_NAME, "CPU_CLUSTER_IMBALANCE", worst_delta, ctx);
             splinterd_emit("CPU_CLUSTER_IMBALANCE", ctx);
             score -= 12;
             sigs++;
-            printf("[ROCKY]  !  Cluster imbalance -- efficiency overloaded\n");
+            rockylog("WARN", "Cluster imbalance -- c%d overloaded vs c%d",
+                     worst_lo, worst_hi);
         }
     }
 
@@ -457,7 +617,7 @@ static void poll(int scan_num)
         splinterd_emit("CPU_THROTTLING", ctx);
         score -= 8 * throttled_count;
         sigs++;
-        printf("[ROCKY]  !  %d/%d cores throttled\n", throttled_count, ncores);
+        rockylog("WARN", "%d/%d cores throttled", throttled_count, ncores);
     }
 
     /* All cores maxed */
@@ -468,7 +628,7 @@ static void poll(int scan_num)
         splinterd_emit("ALL_CORES_MAXED", ctx);
         score -= 15;
         sigs++;
-        printf("[ROCKY]  !  All cores at max frequency\n");
+        rockylog("WARN", "All cores at max frequency");
     }
 
     /* Performance governor */
@@ -479,8 +639,8 @@ static void poll(int scan_num)
         splinterd_emit("GOVERNOR_PERFORMANCE", ctx);
         score -= 8;
         sigs++;
-        printf("[ROCKY]  !  %d core(s) locked to performance governor\n",
-               perf_gov_count);
+        rockylog("WARN", "%d core(s) locked to performance governor",
+                 perf_gov_count);
     }
 
     /* ?? Per-process CPU ???????????????????????????????????????????????? */
@@ -519,7 +679,7 @@ static void poll(int scan_num)
                 splinterd_emit("CPU_HOG_CRITICAL", ctx);
                 score -= 25;
                 sigs++;
-                printf("[ROCKY]    !! CRITICAL HOG: %s\n", procs[i].name);
+                rockylog("WARN", "CRITICAL HOG: %s", procs[i].name);
             } else if (procs[i].cpu_pct >= HOG_PCT) {
                 char ctx[80];
                 snprintf(ctx, sizeof(ctx), "pid=%d name=%.24s pct=%d",
@@ -529,7 +689,7 @@ static void poll(int scan_num)
                 splinterd_emit("CPU_HOG", ctx);
                 score -= 15;
                 sigs++;
-                printf("[ROCKY]    !  HOG: %s\n", procs[i].name);
+                rockylog("WARN", "HOG: %s", procs[i].name);
             }
         }
     }
@@ -557,15 +717,16 @@ static void poll(int scan_num)
 int main(void)
 {
     bexec_init();
+    rockylog_init();
 
     if (!is_enabled()) {
-        printf("[ROCKY] disabled via syndicatectl -- exiting\n");
+        rockylog("INFO", "disabled via syndicatectl -- exiting");
         return 0;
     }
 
-    printf("[ROCKY] CPU Load, Frequency & Cluster Balance Daemon: ONLINE\n");
-    printf("[ROCKY] HOG threshold: %d%%  Critical: %d%%\n",
-           HOG_PCT, HOG_CRITICAL_PCT);
+    rockylog("INFO", "CPU Load, Frequency & Cluster Balance Daemon: ONLINE");
+    rockylog("INFO", "HOG threshold: %d%%  Critical: %d%%",
+             HOG_PCT, HOG_CRITICAL_PCT);
 
     int interval  = get_interval();
     int max_scans = get_max_scans();
@@ -573,7 +734,7 @@ int main(void)
 
     for (;;) {
         if (!is_enabled()) {
-            printf("[ROCKY] disabled -- stopping\n");
+            rockylog("INFO", "disabled -- stopping");
             break;
         }
 
@@ -584,7 +745,7 @@ int main(void)
         poll(scan_num);
 
         if (max_scans > 0 && scan_num >= max_scans) {
-            printf("[ROCKY] reached scan_count=%d -- exiting\n", max_scans);
+            rockylog("INFO", "reached scan_count=%d -- exiting", max_scans);
             break;
         }
 
@@ -592,5 +753,6 @@ int main(void)
         sleep(interval);
     }
 
+    if (g_rocky_log_fp) fclose(g_rocky_log_fp);
     return 0;
 }
