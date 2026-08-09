@@ -1,8 +1,8 @@
 /*
  * rocksteadyd.c -- CPU Load, Frequency & Cluster Balance Daemon
  *
- * Redmi 15C ? HyperOS OS2.0 ? MediaTek ? 8-core, N-cluster (clusters
- * detected dynamically via cpuinfo_max_freq) ? Android 15
+ * Redmi 15C ? HyperOS OS2.0 ? MediaTek ? 8-core (cpu0-3 efficiency,
+ * cpu4-7 performance) ? Android 15
  *
  * Every poll:
  *   - Read cur/max/min freq + governor per core from cpufreq sysfs
@@ -341,25 +341,6 @@ static int compute_cpu_pct(const cpu_stat_t *prev, const cpu_stat_t *cur)
     return (int)(100ULL * (dtotal - didle) / dtotal);
 }
 
-/* ?? Field sanitization (wire-protocol safety) ??????????????????????????? */
-
-/* Process comm names can contain '|', which would corrupt the
- * '|'-delimited APRIL protocol used by splinterd_emit(), or raw
- * quote/control characters that would corrupt write_results()'s
- * hand-rolled JSON if name is ever threaded through there. Same fix
- * class as fugitoidd's fg_app/ANR/CRASH fields and bebopd's wl->tag.
- * Copied as a local static per the fleet convention. */
-static void sanitize_field(char *buf, size_t bufsz)
-{
-    if (!buf) return;
-    for (size_t i = 0; i < bufsz && buf[i] != '\0'; i++) {
-        unsigned char c = (unsigned char)buf[i];
-        if (c == '|' || c == '"' || c == '\n' || c == '\r' || c < 0x20) {
-            buf[i] = '_';
-        }
-    }
-}
-
 /* ?? /proc/[pid]/stat reader ???????????????????????????????????????????? */
 
 /* Direct opendir("/proc") as plain Termux only sees processes visible
@@ -406,7 +387,6 @@ static int read_proc_procs(proc_t *procs, int max_procs)
             if (len >= sizeof(p->name)) len = sizeof(p->name) - 1;
             strncpy(p->name, nb + 1, len);
             p->name[len] = '\0';
-            sanitize_field(p->name, sizeof(p->name));
         }
 
         /* Fields after ')': state ppid pgrp sid ... utime(14) stime(15) */

@@ -1,8 +1,8 @@
 /*
  * rocksteadyd.c -- CPU Load, Frequency & Cluster Balance Daemon
  *
- * Redmi 15C ? HyperOS OS2.0 ? MediaTek ? 8-core, N-cluster (clusters
- * detected dynamically via cpuinfo_max_freq) ? Android 15
+ * Redmi 15C ? HyperOS OS2.0 ? MediaTek ? 8-core (cpu0-3 efficiency,
+ * cpu4-7 performance) ? Android 15
  *
  * Every poll:
  *   - Read cur/max/min freq + governor per core from cpufreq sysfs
@@ -42,9 +42,7 @@
 #define DAEMON_NAME       "rocksteadyd"
 #define DEFAULT_INTERVAL  15
 #define MAX_CORES         16
-#define MAX_PROCS         1024  /* was 256 -- too low once real
-                                   /proc visibility is restored,
-                                   see proc_bexec patch */
+#define MAX_PROCS         256
 #define HOG_PCT           40    /* single process CPU% = hog */
 #define HOG_CRITICAL_PCT  70    /* single process CPU% = critical */
 #define THROTTLE_RATIO    0.75f /* cur < max * ratio = throttled */
@@ -295,23 +293,13 @@ static int enumerate_cpus(cpu_core_t *cores, int max_cores, int *out_nclusters)
 
 /* ?? /proc/stat CPU total ??????????????????????????????????????????????? */
 
-#define PROC_STAT_BUF_SIZE (4 * 1024)
-
 static bool read_proc_stat(cpu_stat_t *st)
 {
-    /* Same hidepid-visibility class as read_proc_procs() -- plain
-     * Termux fopen() on /proc/stat can return blank/stale data under
-     * this device's hidepid=invisible mount. Route through bexec_n()
-     * for consistency with the rest of the /proc read path. */
-    char *data = bexec_n("cat /proc/stat 2>/dev/null", PROC_STAT_BUF_SIZE);
-    if (!data) return false;
-
+    FILE *f = fopen("/proc/stat", "r");
+    if (!f) return false;
+    char line[256];
     bool ok = false;
-    char *line = data;
-    while (line && *line) {
-        char *nl = strchr(line, '\n');
-        if (nl) *nl = '\0';
-
+    while (fgets(line, sizeof(line), f)) {
         if (strncmp(line, "cpu ", 4) == 0) {
             sscanf(line + 4, "%llu %llu %llu %llu %llu %llu %llu",
                    &st->user, &st->nice, &st->system, &st->idle,
@@ -319,11 +307,8 @@ static bool read_proc_stat(cpu_stat_t *st)
             ok = true;
             break;
         }
-
-        line = nl ? nl + 1 : NULL;
     }
-
-    free(data);
+    fclose(f);
     return ok;
 }
 
@@ -341,55 +326,31 @@ static int compute_cpu_pct(const cpu_stat_t *prev, const cpu_stat_t *cur)
     return (int)(100ULL * (dtotal - didle) / dtotal);
 }
 
-/* ?? Field sanitization (wire-protocol safety) ??????????????????????????? */
-
-/* Process comm names can contain '|', which would corrupt the
- * '|'-delimited APRIL protocol used by splinterd_emit(), or raw
- * quote/control characters that would corrupt write_results()'s
- * hand-rolled JSON if name is ever threaded through there. Same fix
- * class as fugitoidd's fg_app/ANR/CRASH fields and bebopd's wl->tag.
- * Copied as a local static per the fleet convention. */
-static void sanitize_field(char *buf, size_t bufsz)
-{
-    if (!buf) return;
-    for (size_t i = 0; i < bufsz && buf[i] != '\0'; i++) {
-        unsigned char c = (unsigned char)buf[i];
-        if (c == '|' || c == '"' || c == '\n' || c == '\r' || c < 0x20) {
-            buf[i] = '_';
-        }
-    }
-}
-
 /* ?? /proc/[pid]/stat reader ???????????????????????????????????????????? */
-
-/* Direct opendir("/proc") as plain Termux only sees processes visible
- * under this device's hidepid=invisible mount (~6 of ~816 confirmed
- * live) -- Termux lacks AID_READPROC/gid 3009, rish has it. Route
- * through bexec_n() with a single batched rish call instead of
- * per-PID fopen(); parsing logic below is unchanged from before. */
-
-#define PROC_BATCH_BUF_SIZE (512 * 1024)
 
 static int read_proc_procs(proc_t *procs, int max_procs)
 {
-    static const char *cmd = "cat /proc/[0-9]*/stat 2>/dev/null";
-
-    char *proc_data = bexec_n(cmd, PROC_BATCH_BUF_SIZE);
-    if (!proc_data) {
-        return 0;
-    }
+    DIR *d = opendir("/proc");
+    if (!d) return 0;
 
     int count = 0;
-    char *line = proc_data;
+    struct dirent *ent;
 
-    while (line && *line && count < max_procs) {
-        char *nl = strchr(line, '\n');
-        if (nl) *nl = '\0';
+    while ((ent = readdir(d)) != NULL && count < max_procs) {
+        /* Only numeric dirs */
+        if (ent->d_name[0] < '1' || ent->d_name[0] > '9') continue;
 
-        if (line[0] == '\0') { line = nl ? nl + 1 : NULL; continue; }
+        int pid = atoi(ent->d_name);
+        if (pid <= 0) continue;
 
-        int pid = atoi(line);
-        if (pid <= 0) { line = nl ? nl + 1 : NULL; continue; }
+        char path[64];
+        snprintf(path, sizeof(path), "/proc/%d/stat", pid);
+        FILE *f = fopen(path, "r");
+        if (!f) continue;
+
+        char line[512];
+        if (!fgets(line, sizeof(line), f)) { fclose(f); continue; }
+        fclose(f);
 
         /* Format: pid (name) state ppid ... utime stime ... */
         proc_t *p = &procs[count];
@@ -406,7 +367,6 @@ static int read_proc_procs(proc_t *procs, int max_procs)
             if (len >= sizeof(p->name)) len = sizeof(p->name) - 1;
             strncpy(p->name, nb + 1, len);
             p->name[len] = '\0';
-            sanitize_field(p->name, sizeof(p->name));
         }
 
         /* Fields after ')': state ppid pgrp sid ... utime(14) stime(15) */
@@ -420,10 +380,8 @@ static int read_proc_procs(proc_t *procs, int max_procs)
         }
 
         count++;
-        line = nl ? nl + 1 : NULL;
     }
-
-    free(proc_data);
+    closedir(d);
     return count;
 }
 
