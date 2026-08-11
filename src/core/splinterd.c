@@ -27,7 +27,7 @@
 #include "core_paths.h"
 
 #define MP_PIPES_DIR      TURTLE_HOME "/pipes"
-#define SPLINTER_SOCKET   MP_PIPES_DIR "/splinter.sock"
+#define SPLINTER_SOCKET   MP_PIPES_DIR "/splinterd.sock"
 #define MP_PIDS_DIR       TURTLE_HOME "/pipes/pids"
 
 #define LISTEN_BACKLOG       8
