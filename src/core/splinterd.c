@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <time.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -122,12 +123,29 @@ static void handle_sig(int sig)
     if (g_srv_fd >= 0) shutdown(g_srv_fd, SHUT_RDWR);
 }
 
-static void write_pid(void)
+static int g_lock_fd = -1;
+
+static int acquire_singleton_lock(void)
 {
-    FILE *f = fopen(MP_PIDS_DIR "/splinterd.pid", "w");
-    if (!f) return;
-    fprintf(f, "%d\n", (int)getpid());
-    fclose(f);
+    g_lock_fd = open(MP_PIDS_DIR "/splinterd.pid", O_CREAT | O_RDWR, 0644);
+    if (g_lock_fd < 0) {
+        splinter_log("ERROR", "cannot open pidfile for locking: %s",
+                     MP_PIDS_DIR "/splinterd.pid");
+        return -1;
+    }
+    if (flock(g_lock_fd, LOCK_EX | LOCK_NB) < 0) {
+        splinter_log("ERROR", "another splinterd instance is already running (lock held on %s)",
+                     MP_PIDS_DIR "/splinterd.pid");
+        close(g_lock_fd);
+        g_lock_fd = -1;
+        return -1;
+    }
+    char buf[32];
+    int n = snprintf(buf, sizeof(buf), "%d\n", (int)getpid());
+    if (ftruncate(g_lock_fd, 0) < 0) { /* best-effort clear stale content */ }
+    lseek(g_lock_fd, 0, SEEK_SET);
+    write(g_lock_fd, buf, (size_t)n);
+    return 0;
 }
 
 /* ── Protocol ─────────────────────────────────────────────────────────── */
@@ -295,7 +313,9 @@ int main(int argc, char *argv[])
     signal(SIGTERM, handle_sig);
     signal(SIGPIPE, SIG_IGN);
 
-    write_pid();
+    if (acquire_singleton_lock() < 0) {
+        return 1;
+    }
 
     splinter_log("INFO", "starting on %s", SPLINTER_SOCKET);
     g_srv_fd = create_server_socket(SPLINTER_SOCKET);
@@ -315,6 +335,10 @@ int main(int argc, char *argv[])
     splinter_log("INFO", "shutting down");
     close(g_srv_fd);
     unlink(SPLINTER_SOCKET);
+    if (g_lock_fd >= 0) {
+        flock(g_lock_fd, LOCK_UN);
+        close(g_lock_fd);
+    }
     unlink(MP_PIDS_DIR "/splinterd.pid");
 
     if (g_log_fp) fclose(g_log_fp);
