@@ -21,6 +21,8 @@
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/file.h>
+#include <fcntl.h>
+#include <fcntl.h>
 #include <time.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -121,6 +123,21 @@ static void handle_sig(int sig)
     (void)sig;
     g_running = 0;
     if (g_srv_fd >= 0) shutdown(g_srv_fd, SHUT_RDWR);
+}
+
+/* Async-signal-safe fatal handler: write() only, no fprintf/dprintf/fsync/malloc. */
+static void handle_fatal(int sig)
+{
+    char buf[64];
+    int n = 0;
+    const char *prefix = "SPLINTERD|FATAL|signal=";
+    while (prefix[n]) { buf[n] = prefix[n]; n++; }
+    if (sig >= 100) buf[n++] = '0' + (sig / 100);
+    if (sig >= 10)  buf[n++] = '0' + ((sig / 10) % 10);
+    buf[n++] = '0' + (sig % 10);
+    buf[n++] = '\n';
+    write(STDERR_FILENO, buf, (size_t)n);
+    _exit(128 + sig);
 }
 
 static int g_lock_fd = -1;
@@ -312,6 +329,11 @@ int main(int argc, char *argv[])
     signal(SIGINT,  handle_sig);
     signal(SIGTERM, handle_sig);
     signal(SIGPIPE, SIG_IGN);
+    signal(SIGSEGV, handle_fatal);
+    signal(SIGBUS,  handle_fatal);
+    signal(SIGILL,  handle_fatal);
+    signal(SIGABRT, handle_fatal);
+    signal(SIGFPE,  handle_fatal);
 
     if (acquire_singleton_lock() < 0) {
         return 1;
