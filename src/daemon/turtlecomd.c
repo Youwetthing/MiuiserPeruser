@@ -65,6 +65,7 @@ static int acquire_singleton_lock(void) {
 static void handle_shutdown(int sig) {
     (void)sig;
     g_tc_running = 0;
+    if (g_serv_fd >= 0) shutdown(g_serv_fd, SHUT_RDWR);
 }
 
 int main(void) {

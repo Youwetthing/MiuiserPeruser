@@ -16,6 +16,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <signal.h>
+#include <poll.h>
+#include <sys/time.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -213,11 +215,31 @@ static void forward_to_sub(const splinter_sub_t *sub, const splinter_event_t *ev
     strncpy(addr.sun_path, sub->sock_path, sizeof(addr.sun_path) - 1);
 
     if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        if (errno != EINPROGRESS && errno != ENOENT)
+        if (errno == EINPROGRESS) {
+            struct pollfd pfd = { .fd = fd, .events = POLLOUT };
+            int pr = poll(&pfd, 1, 100); /* 100ms */
+            if (pr <= 0 || !(pfd.revents & POLLOUT)) {
+                splinter_log("WARN", "connect timeout sub=%s", sub->name);
+                close(fd);
+                return;
+            }
+            int soerr = 0;
+            socklen_t slen = sizeof(soerr);
+            if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &soerr, &slen) < 0 || soerr != 0) {
+                splinter_log("WARN", "connect failed sub=%s: %s",
+                             sub->name, strerror(soerr));
+                close(fd);
+                return;
+            }
+        } else if (errno != ENOENT) {
             splinter_log("WARN", "connect failed sub=%s: %s",
                          sub->name, strerror(errno));
-        close(fd);
-        return;
+            close(fd);
+            return;
+        } else {
+            close(fd);
+            return;
+        }
     }
 
     char wire[RECV_BUF_SIZE];
@@ -258,7 +280,11 @@ static void handle_connection(int client_fd)
     char c;
     ssize_t n;
 
-    while (idx < sizeof(buf) - 1) {
+    
+
+    struct timeval tv = { .tv_sec = 2, .tv_usec = 0 };
+    setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+while (idx < sizeof(buf) - 1) {
         n = recv(client_fd, &c, 1, 0);
         if (n <= 0) break;
         if (c == '\n') break;
