@@ -133,3 +133,6 @@ data/*_baseline.json
 Registry/daemon_state.json
 bin/mode
 data/syndicate_config.json
+Registry/sewer.db
+Registry/sewer.db-wal
+Registry/sewer.db-shm

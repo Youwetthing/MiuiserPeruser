@@ -1,13 +1,12 @@
 /*
- * splinterd.c — Splinter conductor daemon
+ * splinterd.c — Splinter sink daemon
  *
  * Listens on SPLINTER_SOCKET. Daemons connect and emit APRIL events.
- * Dispatches to subscribers based on event type interest lists.
+ * Records inbound emissions to sewer.db. Does NOT re-dispatch to other
+ * daemons — that was v3-era conductor behavior that no longer applies.
  *
- * Wire format (inbound + outbound):
+ * Wire format (inbound only):
  *   APRIL|<source>|<type>|<payload>\n
- *
- * Subscriber sockets defined below. Add new daemons to g_subscribers.
  */
 
 #include <stdio.h>
@@ -23,17 +22,17 @@
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/file.h>
-#include <fcntl.h>
-#include <fcntl.h>
 #include <time.h>
 #include <stdarg.h>
 #include <stdbool.h>
 
 #include "core_paths.h"
+#include "sewer_db.h"
 
 #define MP_PIPES_DIR      TURTLE_HOME "/pipes"
 #define SPLINTER_SOCKET   MP_PIPES_DIR "/splinterd.sock"
 #define MP_PIDS_DIR       TURTLE_HOME "/pipes/pids"
+#define SEWER_DB_PATH     TURTLE_HOME "/Registry/sewer.db"
 
 #define LISTEN_BACKLOG       8
 #define RECV_BUF_SIZE        1284
@@ -50,43 +49,6 @@ typedef struct {
     char payload[SPLINTER_MAX_PAYLOAD];
 } splinter_event_t;
 
-/* ── Subscriber table ─────────────────────────────────────────────────── *
- *
- * interests: list of event types this subscriber wants, or "*" for all.
- * sock_path: the UNIX socket splinterd connects to when forwarding.
- *            Daemons own their own listen sockets; splinterd is the client.
- *
- * Add new daemons here. Keep sock_path in sync with ipc_globals.h.
- * ──────────────────────────────────────────────────────────────────────── */
-
-typedef struct {
-    const char *name;
-    const char *sock_path;
-    const char *interests[8];
-    int         enabled;
-} splinter_sub_t;
-
-static splinter_sub_t g_subscribers[] = {
-    {
-        .name      = "krangd",
-        .sock_path = KRANG_SOCKET,
-        .interests = { "sysstate", "anomaly", "connectivity_anomaly", NULL },
-        .enabled   = 1,
-    },
-    {
-        .name      = "rahzerd",
-        .sock_path = MP_PIPES_DIR "/rahzerd.sock",
-        .interests = { "wakelock", "alarm", NULL },
-        .enabled   = 1,
-    },
-    {
-        .name      = "footclan",
-        .sock_path = MP_PIPES_DIR "/footclan.sock",
-        .interests = { "*", NULL },
-        .enabled   = 1,
-    },
-    { NULL, NULL, { NULL }, 0 }
-};
 /* ── Globals ──────────────────────────────────────────────────────────── */
 
 static int  g_debug   = 0;
@@ -199,76 +161,15 @@ static int parse_event(const char *line, splinter_event_t *out)
     return 1;
 }
 
-/* ── Dispatch ─────────────────────────────────────────────────────────── */
-
-static void forward_to_sub(const splinter_sub_t *sub, const splinter_event_t *ev)
-{
-    if (!sub->enabled) return;
-
-    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (fd < 0) return;
-    fcntl(fd, F_SETFL, O_NONBLOCK);
-
-    struct sockaddr_un addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, sub->sock_path, sizeof(addr.sun_path) - 1);
-
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        if (errno == EINPROGRESS) {
-            struct pollfd pfd = { .fd = fd, .events = POLLOUT };
-            int pr = poll(&pfd, 1, 100); /* 100ms */
-            if (pr <= 0 || !(pfd.revents & POLLOUT)) {
-                splinter_log("WARN", "connect timeout sub=%s", sub->name);
-                close(fd);
-                return;
-            }
-            int soerr = 0;
-            socklen_t slen = sizeof(soerr);
-            if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &soerr, &slen) < 0 || soerr != 0) {
-                splinter_log("WARN", "connect failed sub=%s: %s",
-                             sub->name, strerror(soerr));
-                close(fd);
-                return;
-            }
-        } else if (errno != ENOENT) {
-            splinter_log("WARN", "connect failed sub=%s: %s",
-                         sub->name, strerror(errno));
-            close(fd);
-            return;
-        } else {
-            close(fd);
-            return;
-        }
-    }
-
-    char wire[RECV_BUF_SIZE];
-    int wlen = snprintf(wire, sizeof(wire), "%s|%s|%s|%s\n",
-                        SPLINTER_PREFIX, ev->source, ev->type, ev->payload);
-    if (write(fd, wire, (size_t)wlen) < 0)
-        splinter_log("WARN", "write failed sub=%s", sub->name);
-
-    close(fd);
-}
+/* ── Record (was: Dispatch) ──────────────────────────────────────────── *
+ * splinterd is a sink now, not a conductor. No forwarding to other
+ * daemons — just record the emission to sewer.db. Payload is never
+ * passed to sewer_db (data-minimization; see GDPR/sewer_db_policy.md).
+ * ──────────────────────────────────────────────────────────────────── */
 
 static void dispatch_event(const splinter_event_t *ev)
 {
-    int routed = 0;
-    for (int i = 0; g_subscribers[i].name != NULL; i++) {
-        splinter_sub_t *sub = &g_subscribers[i];
-        if (!sub->enabled) continue;
-        for (int j = 0; j < 8 && sub->interests[j] != NULL; j++) {
-            if (strcmp(sub->interests[j], "*") == 0 ||
-                strcmp(sub->interests[j], ev->type) == 0) {
-                forward_to_sub(sub, ev);
-                routed++;
-                break;
-            }
-        }
-    }
-    if (routed == 0)
-        splinter_log("INFO", "unrouted event src=%s type=%s",
-                     ev->source, ev->type);
+    sewer_db_record_emit(ev->source, ev->type, NULL);
 }
 
 /* ── Connection handler ───────────────────────────────────────────────── */
@@ -280,11 +181,9 @@ static void handle_connection(int client_fd)
     char c;
     ssize_t n;
 
-    
-
     struct timeval tv = { .tv_sec = 2, .tv_usec = 0 };
     setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-while (idx < sizeof(buf) - 1) {
+    while (idx < sizeof(buf) - 1) {
         n = recv(client_fd, &c, 1, 0);
         if (n <= 0) break;
         if (c == '\n') break;
@@ -365,6 +264,11 @@ int main(int argc, char *argv[])
         return 1;
     }
 
+    if (sewer_db_init(SEWER_DB_PATH) < 0) {
+        splinter_log("ERROR", "failed to open sewer.db at %s — continuing, log-only mode",
+                     SEWER_DB_PATH);
+    }
+
     splinter_log("INFO", "starting on %s", SPLINTER_SOCKET);
     g_srv_fd = create_server_socket(SPLINTER_SOCKET);
     if (g_srv_fd < 0) return 1;
@@ -383,6 +287,7 @@ int main(int argc, char *argv[])
     splinter_log("INFO", "shutting down");
     close(g_srv_fd);
     unlink(SPLINTER_SOCKET);
+    sewer_db_close();
     if (g_lock_fd >= 0) {
         flock(g_lock_fd, LOCK_UN);
         close(g_lock_fd);
