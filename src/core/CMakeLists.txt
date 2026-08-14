@@ -26,8 +26,9 @@ add_library(sensei_core STATIC
     ${CMAKE_SOURCE_DIR}/src/gaveld/mitre_map.c
 )
 
-add_executable(splinterd splinterd.c)
+add_executable(splinterd splinterd.c sewer_db.c)
 target_include_directories(splinterd PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(splinterd PRIVATE sensei_core)
 set_target_properties(splinterd PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 
 target_include_directories(sensei_core PUBLIC
