@@ -250,7 +250,8 @@ static void load_probe_data(void) {
 
     static const char *cmd_modules =
         "echo ==SUSPMOD==; cat /proc/modules 2>/dev/null | awk '{print $1}' | grep -iE 'frida|hook|inject|rootkit|backdoor' | head -1;"
-        "echo ==LSMOD==; lsmod 2>/dev/null;";
+        "echo ==LSMOD==; lsmod 2>/dev/null;"
+        "echo ==MODCOUNT==; cat /proc/modules 2>/dev/null | wc -l;";
 
     static const char *cmd_kernel =
         "echo ==PROCVERSION==; cat /proc/version 2>/dev/null;"
@@ -1037,18 +1038,15 @@ static void poll_integrity(void) {
         score -= 10;
     }
 
-    /* Standalone -- conditional retry with 2s backoff doesn't fold into
-     * the batch. See v2.3 changelog. */
-    int nmod = 0;
-    for (int retry = 0; retry < 3; retry++) {
-        char *mods = rish_read("cat /proc/modules 2>/dev/null | wc -l", buf, sizeof(buf));
-        if (mods && strlen(mods) > 0) {
-            nmod = atoi(mods);
-            if (nmod > 0) break;
-        }
-        slog("WARN", "Module count empty (attempt %d/3)", retry + 1);
-        if (retry < 2) sleep(2);
-    }
+    /* Folded into the batched MODULES chunk as of the MODCOUNT patch --
+     * was a standalone rish_read() with a 3-retry/2s-backoff loop that
+     * failed 3/3 fast under intermittent load while the batched MODULES
+     * chunk (same poll cycle) succeeded. Root cause: per-call rish/binder
+     * startup overhead amortized across a batch but not absorbed by a
+     * single standalone call. */
+    char modcount_buf[32];
+    char *modcount = probe_copy("MODCOUNT", modcount_buf, sizeof(modcount_buf));
+    int nmod = (modcount && strlen(modcount) > 0) ? atoi(modcount) : 0;
     if (nmod <= 0) {
         slog("ERROR", "FATAL: module count unreadable, skipping poll");
         return;
