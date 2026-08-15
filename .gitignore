@@ -136,3 +136,4 @@ data/syndicate_config.json
 Registry/sewer.db
 Registry/sewer.db-wal
 Registry/sewer.db-shm
+bin/
