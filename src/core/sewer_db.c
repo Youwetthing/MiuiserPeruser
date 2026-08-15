@@ -22,10 +22,11 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 #define ROLLUP_CAP          500   /* rows in emit_transitions before we roll up + notify */
 #define GAP_THRESHOLD_SEC   1800  /* 30 min silence before a re-appearance counts as "resumed" */
-#define RISH_PATH           "/data/data/com.termux/files/home/.shizuku/rish"
+#define RISH_PATH           "/data/data/com.termux/files/home/rish"
 
 static sqlite3 *g_db = NULL;
 
@@ -53,16 +54,40 @@ void sewer_db_close(void)
 
 /* fork+execl, not system()/popen() — same reasoning as run_via_pty() elsewhere
  * in the fleet: avoid shell interpolation of daemon-sourced strings. */
+/* Single-quote a string for safe embedding in a shell command line.
+ * Escapes embedded single quotes via the standard '\'' technique.
+ * summary is our own generated text, but it's built from wire-sourced
+ * daemon/event-type names, so treat it as untrusted for quoting purposes. */
+static void shell_quote(const char *in, char *out, size_t outsize)
+{
+    size_t o = 0;
+    if (o < outsize - 1) out[o++] = '\'';
+    for (const char *p = in; *p && o < outsize - 5; p++) {
+        if (*p == '\'') {
+            out[o++] = '\''; out[o++] = '\\'; out[o++] = '\''; out[o++] = '\'';
+        } else {
+            out[o++] = *p;
+        }
+    }
+    if (o < outsize - 1) out[o++] = '\'';
+    out[o] = '\0';
+}
+
 static void fire_notification(const char *summary)
 {
     pid_t pid = fork();
     if (pid < 0) return;
     if (pid == 0) {
+        char quoted[1536];
+        shell_quote(summary, quoted, sizeof(quoted));
+
         char cmdbuf[2048];
         snprintf(cmdbuf, sizeof(cmdbuf),
                  "cmd notification post -S bigtext -t 'sewer.db rollup' sewer_rollup %s",
-                 summary);
+                 quoted);
         execl(RISH_PATH, "rish", "-c", cmdbuf, (char *)NULL);
+        /* execl only returns on failure; log it so this isn't silent again */
+        fprintf(stderr, "[SEWER_DB/ERROR] execl(%s) failed: %s\n", RISH_PATH, strerror(errno));
         _exit(127);
     }
     /* parent: no waitpid() — don't block splinterd's accept loop on this */
