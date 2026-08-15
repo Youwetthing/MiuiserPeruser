@@ -1,0 +1,14 @@
+# MiuiserPeruser ShellCheck config
+# Suppress info-level noise for intentional patterns
+
+# Color vars in printf — safe, no user input
+disable=SC2059
+
+# External source files not in scan scope
+disable=SC1091
+
+# Unused variables (intentional for future use / export)
+disable=SC2034
+
+# read without -r (intentional for interactive prompts)
+disable=SC2162
