@@ -168,6 +168,45 @@ static void tlog(const char *lvl, const char *msg) {
     fflush(stderr);
 }
 
+/* In-place mutator: strips JSON-breaking chars from device-sourced strings
+ * before embedding them in a %s snprintf field. Per-file local static,
+ * matching the established fleet convention. */
+static void sanitize_field(char *s) {
+    if (!s) return;
+    for (char *p = s; *p; p++) {
+        if (*p == '"' || *p == '\\' || *p == '|' || (unsigned char)*p < 0x20) {
+            *p = '_';
+        }
+    }
+}
+
+static void sanitize_report_strings(tigerclaw_report_t *rpt) {
+    sanitize_field(rpt->codename);
+    sanitize_field(rpt->board);
+    sanitize_field(rpt->hardware);
+    sanitize_field(rpt->hyperos);
+    sanitize_field(rpt->sec_patch);
+    sanitize_field(rpt->bootloader);
+    sanitize_field(rpt->miui.selinux_mode);
+    sanitize_field(rpt->miui.verified_boot);
+
+    for (int i = 0; i < rpt->cert_count; i++) {
+        sanitize_field(rpt->certs[i].fingerprint);
+        sanitize_field(rpt->certs[i].subject);
+    }
+    for (int i = 0; i < rpt->admin_count; i++) {
+        sanitize_field(rpt->admins[i].package);
+        sanitize_field(rpt->admins[i].admin_class);
+    }
+    for (int i = 0; i < rpt->miui.kill_policy_count; i++)
+        sanitize_field(rpt->miui.kill_targets[i]);
+    for (int i = 0; i < rpt->anomaly_count; i++) {
+        sanitize_field(rpt->anomalies[i].type);
+        sanitize_field(rpt->anomalies[i].code);
+        sanitize_field(rpt->anomalies[i].detail);
+    }
+}
+
 static void add_anomaly(tigerclaw_report_t *rpt, const char *type,
                         const char *code, const char *detail) {
     if (rpt->anomaly_count >= MAX_ANOMALIES) return;
@@ -1131,6 +1170,7 @@ int main(void) {
                             (t1.tv_nsec - t0.tv_nsec) / 1000000);
 
         /* ── Emit ───────────────────────────────────────────────────── */
+        sanitize_report_strings(&rpt);
         write_json(&rpt);
 
         char logmsg[256];
