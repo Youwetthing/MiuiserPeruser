@@ -110,7 +110,7 @@ SENSEI_STATUS april_enum_memory_regions(uint32_t pid, SENSEI_MEMORY_REGION **reg
         char dev[16] = {0};
         unsigned long inode;
         char mapped_path[SENSEI_MAX_PATH] = {0};
-        int fields = sscanf(line, "%llx-%llx %4s %llx %15s %lu %1023[^\n]",
+        int fields = sscanf(line, "%llx-%llx %4s %llx %15s %lu %511[^\n]",
                             &start, &end, perms, &offset, dev, &inode, mapped_path);
         if (fields < 6) {
             free(region);
