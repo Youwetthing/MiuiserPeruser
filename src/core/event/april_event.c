@@ -59,7 +59,7 @@ SENSEI_STATUS april_event_queue_push(SENSEI_EVENT_QUEUE *queue,
     memcpy(copy, detection, sizeof(SENSEI_DETECTION));
     copy->next = NULL;
 
-    SENSEI_DETECTION_LIST *q = &queue->queues[idx];
+    SENSEI_PRIORITY_QUEUE *q = &queue->queues[idx];
     if (!q->head) {
         q->head = q->tail = copy;
     } else {
