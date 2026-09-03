@@ -25,6 +25,10 @@ foreach(DAEMON bebopd burned fugitoidd granitord krangd leatherheadd metalheadd 
     set_target_properties(${DAEMON} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
 endforeach()
 
+# krangd keeps its /proc/net/tcp6 parser and UID resolver independently
+# testable; include both modules in the production daemon target.
+target_sources(krangd PRIVATE krangd_net.c krangd_uid.c)
+
 # shredderd needs OpenSSL for SHA256
 target_link_libraries(shredderd PRIVATE crypto)
 target_link_libraries(granitord PRIVATE crypto)
