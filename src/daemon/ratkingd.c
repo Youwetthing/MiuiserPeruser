@@ -124,6 +124,24 @@ static void ratkinglog(const char *level, const char *fmt, ...) {
     }
 }
 
+/* ── Splinterd event sink ───────────────────────────────────────────────── */
+static void splinterd_emit(const char *type, const char *payload)
+{
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return;
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SPLINTER_SOCKET, sizeof(addr.sun_path) - 1);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+        char buf[512];
+        int n = snprintf(buf, sizeof(buf),
+                         "APRIL|" DAEMON_NAME "|%s|%s\n", type, payload);
+        if (n > 0) write(fd, buf, (size_t)n);
+    }
+    close(fd);
+}
+
 /* JSON-escape a free-text string (process names from /proc, cgroup content)
  * before splicing into hand-built JSON -- none of that text is trustworthy
  * input, and an embedded quote/backslash/newline would silently corrupt the
@@ -612,10 +630,22 @@ static void poll_procs(void) {
     int millet_degraded = check_millet_health(millet_json, sizeof(millet_json));
     int self_unprotected = check_self_protection(selfprot_json, sizeof(selfprot_json));
 
-    if (pm_storm) gaveld_emit(DAEMON_NAME, "PM_KILL_STORM", 0.85, pm_json);
-    if (periodic_rearmed) gaveld_emit(DAEMON_NAME, "PERIODIC_REARM_NEEDED", 0.7, periodic_json);
-    if (millet_degraded) gaveld_emit(DAEMON_NAME, "MILLET_DEGRADED", 0.75, millet_json);
-    if (self_unprotected) gaveld_emit(DAEMON_NAME, "SELF_UNPROTECTED", 0.8, selfprot_json);
+    if (pm_storm) {
+        gaveld_emit(DAEMON_NAME, "PM_KILL_STORM", 0.85, pm_json);
+        splinterd_emit("PM_KILL_STORM", pm_json);
+    }
+    if (periodic_rearmed) {
+        gaveld_emit(DAEMON_NAME, "PERIODIC_REARM_NEEDED", 0.7, periodic_json);
+        splinterd_emit("PERIODIC_REARM_NEEDED", periodic_json);
+    }
+    if (millet_degraded) {
+        gaveld_emit(DAEMON_NAME, "MILLET_DEGRADED", 0.75, millet_json);
+        splinterd_emit("MILLET_DEGRADED", millet_json);
+    }
+    if (self_unprotected) {
+        gaveld_emit(DAEMON_NAME, "SELF_UNPROTECTED", 0.8, selfprot_json);
+        splinterd_emit("SELF_UNPROTECTED", selfprot_json);
+    }
 
     /* Save for next round */
     memcpy(g_prev, g_procs, (size_t)g_nprocs * sizeof(proc_t));
@@ -742,6 +772,7 @@ static void poll_procs(void) {
         pressure_json[sizeof(pressure_json) - 1] = 0;
 
         gaveld_emit(DAEMON_NAME, "MEM_PRESSURE", 0.0, pressure_json);
+        splinterd_emit("MEM_PRESSURE", pressure_json);
     }
 
     /* APRIL events */
@@ -749,17 +780,20 @@ static void poll_procs(void) {
         char ev[256];
         snprintf(ev, sizeof(ev), "zombie_count=%d", zombie_count);
         gaveld_emit(DAEMON_NAME, "ZOMBIE_DETECTED", 0.0, ev);
+        splinterd_emit("ZOMBIE_DETECTED", ev);
     }
     if (sorted_cpu[0].cpu_pct >= hog_pct) {
         char ev[256];
         snprintf(ev, sizeof(ev), "pid=%d name=%s cpu_pct=%d temp=%d",
                  sorted_cpu[0].pid, sorted_cpu[0].name, sorted_cpu[0].cpu_pct, temp);
         gaveld_emit(DAEMON_NAME, "CPU_HOG", 0.0, ev);
+        splinterd_emit("CPU_HOG", ev);
     }
     if (flash_count > 0) {
         char ev[256];
         snprintf(ev, sizeof(ev), "flash_count=%d", flash_count);
         gaveld_emit(DAEMON_NAME, "FLASH_PROCESS", 0.0, ev);
+        splinterd_emit("FLASH_PROCESS", ev);
     }
 
     /* Console report */
