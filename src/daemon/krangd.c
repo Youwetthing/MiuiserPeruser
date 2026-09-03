@@ -15,11 +15,32 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <unistd.h>
 
 #define DAEMON_NAME "krangd"
 #define DEFAULT_POLL_SEC 30
 #define MAX_CONNECTIONS 256
+
+static void splinterd_emit(const char *type, const char *payload)
+{
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return;
+    struct sockaddr_un address;
+    memset(&address, 0, sizeof(address));
+    address.sun_family = AF_UNIX;
+    strncpy(address.sun_path, SPLINTER_SOCKET,
+            sizeof(address.sun_path) - 1);
+    if (connect(fd, (struct sockaddr *)&address, sizeof(address)) == 0) {
+        char message[512];
+        int length = snprintf(message, sizeof(message),
+                               "APRIL|" DAEMON_NAME "|%s|%s\n",
+                               type, payload);
+        if (length > 0) write(fd, message, (size_t)length);
+    }
+    close(fd);
+}
 
 static int poll_seconds(void)
 {
@@ -66,6 +87,12 @@ static void poll_connections(void)
         if (package_status != PARSE_FOUND)
             snprintf(package, sizeof(package), "uid-%d", connections[i].uid);
 
+        char payload[384];
+        snprintf(payload, sizeof(payload),
+                 "package=%s uid=%d remote=%s:%u state=%02X",
+                 package, connections[i].uid, connections[i].remote_address,
+                 connections[i].remote_port, connections[i].state);
+        splinterd_emit("TCP6_ANOMALY", payload);
         daemon_log_info(
             "candidate package=%s uid=%d remote=%s:%u state=%02X",
             package, connections[i].uid, connections[i].remote_address,
