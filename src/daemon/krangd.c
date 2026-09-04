@@ -109,12 +109,10 @@ int main(void)
     bexec_init();
     daemon_log_info("krangd online; poll_sec=%d", interval);
 
-    while (g_running) {
+    for (;;) {
         poll_connections();
-        for (int i = 0; i < interval && g_running; i++)
-            sleep(1);
+        sleep(interval);
     }
-
     daemon_log_info("krangd shutdown");
     daemon_core_shutdown();
     return 0;
