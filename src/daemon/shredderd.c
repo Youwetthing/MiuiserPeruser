@@ -736,6 +736,7 @@ static void check_module_surface(char *json, size_t json_size, int nmod,
         while (line) {
             char name[64] = "";
             sscanf(line, "%63s", name);
+                sanitize_field(name);
             if (strlen(name) > 0) {
                 if (strcmp(name, "sample_module") == 0) sample_module_found = 1;
 
@@ -801,6 +802,8 @@ static void check_kernel_build(char *json, size_t json_size) {
         }
     }
 
+    sanitize_field(kernel_ver); sanitize_field(clang_ver); sanitize_field(build_info);
+
     snprintf(json, json_size,
         "{\"kernel_version\":\"%.63s\",\"clang_version\":\"%.31s\","
         "\"build_info\":\"%.63s\",\"lto\":%s,\"bolt\":%s,\"pgo\":%s,\"mlgo\":%s}",
@@ -833,6 +836,8 @@ static void check_build_integrity(char *json, size_t json_size, int *out_inconsi
 
     *out_inconsistent = !consistent;
 
+    sanitize_field(tags_copy); sanitize_field(type_copy); sanitize_field(fp_copy);
+
     snprintf(json, json_size,
         "{\"tags\":\"%.63s\",\"type\":\"%.31s\",\"fingerprint\":\"%.255s\","
         "\"consistent\":%s,\"production_build\":%s}",
@@ -849,6 +854,7 @@ static void check_adb_state(char *json, size_t json_size) {
     char *adbd = probe_copy("ADBD", buf, sizeof(buf));
     char buf2[128];
     char *usbcfg = probe_copy("USBCFG", buf2, sizeof(buf2));
+    if (usbcfg) sanitize_field(usbcfg);
 
     snprintf(json, json_size,
         "{\"adbd_running\":%s,\"usb_config\":\"%.63s\","
