@@ -45,6 +45,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #include <signal.h>
 #include <time.h>
 #include <stdint.h>
@@ -207,6 +209,23 @@ static void sanitize_report_strings(tigerclaw_report_t *rpt) {
     }
 }
 
+static void splinterd_emit(const char *type, const char *payload)
+{
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return;
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SPLINTER_SOCKET, sizeof(addr.sun_path) - 1);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+        char buf[512];
+        int n = snprintf(buf, sizeof(buf),
+                         "APRIL|tigerclawd|%s|%s\n", type, payload);
+        if (n > 0) write(fd, buf, (size_t)n);
+    }
+    close(fd);
+}
+
 static void add_anomaly(tigerclaw_report_t *rpt, const char *type,
                         const char *code, const char *detail) {
     if (rpt->anomaly_count >= MAX_ANOMALIES) return;
@@ -216,6 +235,7 @@ static void add_anomaly(tigerclaw_report_t *rpt, const char *type,
     strncpy(a->detail, detail, sizeof(a->detail) - 1);
     tlog(type, detail);
     gaveld_emit("tigerclawd", code, 1.0, detail);
+    splinterd_emit(code, detail);
 }
 
 static void clear_anomalies(tigerclaw_report_t *rpt) {
