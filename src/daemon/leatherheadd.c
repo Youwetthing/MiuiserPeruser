@@ -388,9 +388,11 @@ static void write_results(int score, int scan_num, int sigs,
                ts, scan_num, sigs, score, grade, throttled_cores, ncores);
 
     for (int i = 0; i < ntemps; i++) {
+        char name_esc[64];
+        json_escape(temps[i].name, name_esc, sizeof(name_esc));
         fprintf(f, "    {\"name\":\"%s\",\"type\":%d,"
                    "\"cached\":%.1f,\"hal\":%.1f,\"delta\":%.1f}%s\n",
-                temps[i].name, temps[i].type,
+                name_esc, temps[i].type,
                 temps[i].cached, temps[i].hal, temps[i].delta,
                 i < ntemps - 1 ? "," : "");
     }
