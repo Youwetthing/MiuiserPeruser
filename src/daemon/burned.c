@@ -427,6 +427,35 @@ static int pprop_fires(const pprop_t *p)
     return p->negate ? !contains : contains;
 }
 
+/* JSON string escaping (same class of bug fixed via json_escape() in
+ * fugitoidd.c and metalheadd.c this arc). */
+static void json_escape(const char *in, char *out, size_t out_size) {
+    if (!in || out_size == 0) { if (out_size) out[0] = '\0'; return; }
+    size_t j = 0;
+    for (size_t i = 0; in[i] != '\0' && j + 1 < out_size; i++) {
+        unsigned char c = (unsigned char)in[i];
+        if (c == '"' || c == '\\') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\';
+            out[j++] = (char)c;
+        } else if (c == '\n') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\'; out[j++] = 'n';
+        } else if (c == '\r') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\'; out[j++] = 'r';
+        } else if (c == '\t') {
+            if (j + 2 >= out_size) break;
+            out[j++] = '\\'; out[j++] = 't';
+        } else if (c < 0x20) {
+            continue;  /* drop other control chars */
+        } else {
+            out[j++] = (char)c;
+        }
+    }
+    out[j] = '\0';
+}
+
 /* ── Results ──────────────────────────────────────────────────────────── */
 
 static void write_results(int n_invasive, int n_privacy, int n_change,
@@ -442,6 +471,11 @@ static void write_results(int n_invasive, int n_privacy, int n_change,
     char ts[32];
     strftime(ts, sizeof(ts), "%Y-%m-%dT%H:%M:%S", localtime(&t));
 
+    char region_esc[64], inv_esc[512], priv_esc[512];
+    json_escape(g_region, region_esc, sizeof(region_esc));
+    json_escape(inv_list, inv_esc, sizeof(inv_esc));
+    json_escape(priv_list, priv_esc, sizeof(priv_esc));
+
     fprintf(f,
         "{\n"
         "  \"daemon\": \"" DAEMON_NAME "\",\n"
@@ -454,34 +488,46 @@ static void write_results(int n_invasive, int n_privacy, int n_change,
         "  \"invasive_list\": \"%s\",\n"
         "  \"privacy_list\": \"%s\",\n"
         "  \"binary_props\": [\n",
-        ts, scan_num, g_region, n_invasive, n_privacy, n_change,
-        inv_list, priv_list);
+        ts, scan_num, region_esc, n_invasive, n_privacy, n_change,
+        inv_esc, priv_esc);
 
     for (int i = 0; i < g_nbprops; i++) {
         const bprop_t *p = &g_bprops[i];
         int fired = (p->invasive_if_1 ==  1 && prop_is_true(p->cur)) ||
                     (p->invasive_if_1 == -1 && prop_is_false(p->cur));
+        char key_esc[128], label_esc[128], val_esc[512];
+        json_escape(p->key, key_esc, sizeof(key_esc));
+        json_escape(p->label, label_esc, sizeof(label_esc));
+        json_escape(p->cur, val_esc, sizeof(val_esc));
         fprintf(f,
             "    {\"key\":\"%s\",\"label\":\"%s\",\"value\":\"%s\",\"fired\":%s}%s\n",
-            p->key, p->label, p->cur, fired ? "true" : "false",
+            key_esc, label_esc, val_esc, fired ? "true" : "false",
             i < g_nbprops - 1 ? "," : "");
     }
     fprintf(f, "  ],\n  \"privacy_props\": [\n");
     for (int i = 0; i < g_npprops; i++) {
         const pprop_t *p = &g_pprops[i];
         int fired = pprop_fires(p);
+        char key_esc[128], label_esc[128], val_esc[512];
+        json_escape(p->key, key_esc, sizeof(key_esc));
+        json_escape(p->label, label_esc, sizeof(label_esc));
+        json_escape(p->cur, val_esc, sizeof(val_esc));
         fprintf(f,
             "    {\"key\":\"%s\",\"label\":\"%s\",\"value\":\"%s\",\"fired\":%s}%s\n",
-            p->key, p->label, p->cur, fired ? "true" : "false",
+            key_esc, label_esc, val_esc, fired ? "true" : "false",
             i < g_npprops - 1 ? "," : "");
     }
     fprintf(f, "  ],\n  \"partner_props\": [\n");
     for (int i = 0; i < g_ndbprops; i++) {
         db_pprop_t *p = &g_dbprops[i];
         int fired = db_pprop_fires(p);
+        char sig_esc[128], key_esc[128], val_esc[512];
+        json_escape(p->signal, sig_esc, sizeof(sig_esc));
+        json_escape(p->key, key_esc, sizeof(key_esc));
+        json_escape(p->cur, val_esc, sizeof(val_esc));
         fprintf(f,
             "    {\"signal\":\"%s\",\"key\":\"%s\",\"value\":\"%s\",\"priority\":%d,\"fired\":%s}%s\n",
-            p->signal, p->key, p->cur, p->priority,
+            sig_esc, key_esc, val_esc, p->priority,
             fired ? "true" : "false",
             i < g_ndbprops - 1 ? "," : "");
     }
