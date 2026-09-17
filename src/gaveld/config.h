@@ -6,7 +6,11 @@
 #define GAVELD_NAME             "gaveld"
 
 /* ── Base path ───────────────────────────────────────────────────────────── */
+/* Overridable at compile time (-DBASE_DIR=...) so the unit tests can point
+   the pipe/db/log/state paths at a scratch directory. */
+#ifndef BASE_DIR
 #define BASE_DIR                "/data/data/com.termux/files/home/MiuiserPeruser"
+#endif
 
 /* ── Pipes / sockets ─────────────────────────────────────────────────────── */
 #define INGEST_PIPE             BASE_DIR "/pipes/ingest.pipe"

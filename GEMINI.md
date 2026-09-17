@@ -26,6 +26,18 @@ The primary build mechanism is the `Build_All.sh` script, which manually orchest
 
 *Note: While a `Makefile` and `CMakeLists.txt` exist, `Build_All.sh` is the definitive build script used for structural reinforcement and IPC linkage.*
 
+## Tests
+
+Host-runnable unit tests live in `tests/` (see `tests/README.md`):
+
+```sh
+./tests/run_tests.sh              # build + run
+./tests/run_tests.sh --coverage   # + gcov line coverage per module
+```
+
+They cover the gaveld judicial pipeline and run against a scratch `BASE_DIR`,
+so no device state is touched.
+
 ## Conventions
 
 - **IPC**: Communication follows the "Splinter" protocol.
