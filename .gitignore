@@ -137,3 +137,12 @@ Registry/sewer.db
 Registry/sewer.db-wal
 Registry/sewer.db-shm
 bin/
+data/tmp/
+data/.peruse_completed
+data/.ram_slammer_active
+data/*.lock
+data/.*.lock
+data/activities_found.txt
+data/gdpr_export.txt
+data/last_scan.json
+syndicate_footclan.db
