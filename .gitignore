@@ -151,3 +151,14 @@ data/activities_found.txt
 data/gdpr_export.txt
 data/last_scan.json
 syndicate_footclan.db
+Superhero_Mode/superhero
+foot_ipcshadowd
+foot_portwatchd
+foot_resurrectord
+src/storaged
+src/thermald
+src/daemon/bebopd
+src/daemon/krangd
+src/daemon/leatherheadd
+src/daemon/rocksteadyd
+src/daemon/turtlecomd
