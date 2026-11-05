@@ -146,3 +146,8 @@ data/activities_found.txt
 data/gdpr_export.txt
 data/last_scan.json
 syndicate_footclan.db
+data/tmp/
+data/activities_found.txt
+data/gdpr_export.txt
+data/last_scan.json
+syndicate_footclan.db
