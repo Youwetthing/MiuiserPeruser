@@ -15,7 +15,7 @@ set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-script="$ROOT/scripts/start_footclan.sh"
+script="$ROOT/start_fleet.sh"
 LOG="$ROOT/logs/start.log"
 
 mkdir -p "$ROOT/logs"

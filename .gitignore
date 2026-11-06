@@ -162,3 +162,4 @@ src/daemon/krangd
 src/daemon/leatherheadd
 src/daemon/rocksteadyd
 src/daemon/turtlecomd
+data/.trained
