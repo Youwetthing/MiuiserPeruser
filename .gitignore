@@ -200,3 +200,4 @@ resources/mobile-attack.json
 /src/daemon/rocksteadyd
 /src/daemon/turtlecomd
 *.bak*
+data/daemonhunter_brain.txt
