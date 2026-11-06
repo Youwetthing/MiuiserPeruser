@@ -202,3 +202,4 @@ resources/mobile-attack.json
 *.bak*
 data/daemonhunter_brain.txt
 src/core/platform/rish_pipe_stub.c
+*.lock
