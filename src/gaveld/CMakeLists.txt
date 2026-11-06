@@ -19,7 +19,6 @@ add_executable(gaveld
     tier.c
     weights.c
     mitre_map.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../core/sqlite/sqlite3.c
 )
 
 target_compile_options(gaveld PRIVATE
@@ -28,9 +27,6 @@ target_compile_options(gaveld PRIVATE
     -Wno-unused-parameter
     -std=c11
     -O2
-    -DSQLITE_THREADSAFE=2
-    -DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1
-    -DSQLITE_OMIT_LOAD_EXTENSION
 )
 
 target_include_directories(gaveld PRIVATE
@@ -44,3 +40,5 @@ target_link_libraries(gaveld PRIVATE pthread)
 set_target_properties(gaveld PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
 )
+
+target_link_libraries(gaveld PRIVATE sqlite3_vendored)

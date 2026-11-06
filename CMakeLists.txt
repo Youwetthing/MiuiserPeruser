@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.10)
 project(MiuiserPeruser C)
 
 # add_subdirectory(src/syndicate)  # stale/divergent prototype tree, not built
+add_library(sqlite3_vendored STATIC ${CMAKE_SOURCE_DIR}/src/core/sqlite/sqlite3.c)
+target_compile_definitions(sqlite3_vendored PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION SQLITE_DEFAULT_WAL_SYNCHRONOUS=1)
+target_compile_options(sqlite3_vendored PRIVATE -O2 -w)
+target_include_directories(sqlite3_vendored PUBLIC ${CMAKE_SOURCE_DIR}/src/core/sqlite)
 add_subdirectory(src/daemon)
 add_subdirectory(src/core)
 add_subdirectory(src/superhero)

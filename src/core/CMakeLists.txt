@@ -5,7 +5,6 @@ add_library(sensei_core STATIC
     fugitoid_log_impl.c
     log_safe.c
     resource_snapshot.c
-    sqlite/sqlite3.c
     detection/casey_hook.c
     detection/casey_input.c
     detection/casey_kernel.c
@@ -44,3 +43,5 @@ target_include_directories(sensei_core PUBLIC
     ${CMAKE_SOURCE_DIR}/include/backends
     ${CMAKE_SOURCE_DIR}/src/gaveld
 )
+
+target_link_libraries(sensei_core PUBLIC sqlite3_vendored)
