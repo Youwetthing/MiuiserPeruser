@@ -201,3 +201,4 @@ resources/mobile-attack.json
 /src/daemon/turtlecomd
 *.bak*
 data/daemonhunter_brain.txt
+src/core/platform/rish_pipe_stub.c
