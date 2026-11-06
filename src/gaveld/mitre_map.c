@@ -4,7 +4,7 @@
  *
  * Technique data sourced from MITRE ATT&CK Mobile v16
  * https://attack.mitre.org/matrices/mobile/
- * Resources: mobile-attack.json (STIX 2.1)
+ * Source data: MITRE ATT&CK Mobile v16 STIX bundle (mitre/cti), not bundled
  */
 
 #include "mitre_map.h"
