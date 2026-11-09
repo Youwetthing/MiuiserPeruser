@@ -400,7 +400,7 @@ system_actions() {
                 if pgrep -f "syndicate_app.py" >/dev/null; then
                     echo "Web dashboard already running."
                 else
-                    python syndicate_app.py &
+                    python "$(dirname "$0")/syndicate_app.py" &
                     echo "Started Python dashboard on http://127.0.0.1:5000"
                 fi
                 sleep 1

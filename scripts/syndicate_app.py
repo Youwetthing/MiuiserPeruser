@@ -76,15 +76,8 @@ def status():
 
 @app.route('/logs')
 def logs():
-    try:
-        return subprocess.check_output(['tail', '-n', '30', 'logs/*.log'], text=True, shell=True)
-    except:
-        return "No logs yet"
-
-@app.route('/toggle-granitor')
-def toggle_granitor():
-    subprocess.run(["sqlite3", "logs/syndicate_footclan.db", "UPDATE heartbeats SET status_flag = (status_flag + 1) % 2 WHERE daemon_name='granitor_killing_enabled';"])
-    return "Toggled"
+    out = subprocess.getoutput('tail -q -n 30 logs/*.log 2>/dev/null')
+    return '<pre>' + (out or 'No logs yet') + '</pre>'
 
 @app.route('/scan')
 def scan():
@@ -98,11 +91,11 @@ def gdpr():
         f.write(f"Generated: {time.ctime()}\n\n")
         f.write("=== RUNNING PROCESSES ===\n")
         f.write(subprocess.getoutput("ps aux | grep -E 'rocksteadyd|krangd|...|sysportd|powerhouse|flip_switch'"))
-        f.write("\n\n=== HEARTBEATS ===\n")
-        f.write(subprocess.getoutput("sqlite3 logs/syndicate_footclan.db 'SELECT * FROM heartbeats;'"))
         f.write("\n\n=== RECENT LOGS ===\n")
         f.write(subprocess.getoutput("tail -n 100 logs/*.log"))
     return "GDPR export ready. Download gdpr_export.txt from your files."
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    import os as _os
+    _os.chdir(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+    app.run(host='127.0.0.1', port=5000, debug=False)
