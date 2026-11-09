@@ -14,7 +14,6 @@ _rotate_log() {
 #  MiuiserPeruser Dashboard — Unified Command Center
 # -------------------------------------------------------------------
 #  Monitor daemons, run scans, access tools, view logs, and more.
-#  Web UI: http://127.0.0.1:5000 (when Python dashboard is running)
 # -------------------------------------------------------------------
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'
@@ -165,7 +164,6 @@ main_menu() {
     echo "  ${GREEN}7${NC}) 🚪 Exit"
     echo ""
     echo -e "${CYAN}─────────────────────────────────────────${NC}"
-    echo -e "🌐 Web Dashboard: ${WHITE}http://127.0.0.1:5000${NC} (if running)"
     echo ""
     echo -n "Choice: "
 }
@@ -385,7 +383,6 @@ system_actions() {
         echo "  ${GREEN}3${NC}) 📦 Backup configs"
         echo "  ${GREEN}4${NC}) 🔌 Reconnect ADB"
         echo "  ${GREEN}5${NC}) 🐚 Launch ADB Shell"
-        echo "  ${GREEN}6${NC}) 🌐 Start Python Web Dashboard"
         echo "  ${YELLOW}b${NC}) Back"
         echo ""
         echo -n "Choice: "
