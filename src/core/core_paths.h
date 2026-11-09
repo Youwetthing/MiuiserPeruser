@@ -16,7 +16,6 @@
 #define COURT_CLOSED      STATE_DIR "/court.events.closed"
 
 /* Core lock */
-#define TURTLE_LOCK       CORE_DIR  "/turtlepower.lock"
 
 /* IPC */
 #define KRANG_SOCKET      TMP_DIR   "/krang.sock"

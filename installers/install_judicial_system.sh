@@ -27,7 +27,7 @@ mkdir -p "$STATE/criminal_record" \
 [ -f "$STATE/cases.state" ]      || touch "$STATE/cases.state"
 
 # CRITICAL: turtlepower won't start without this
-[ -f "$STATE/turtlepower.lock" ] || echo "LOCK_STATE=ACTIVE" > "$STATE/turtlepower.lock"
+[ -f "$BASE/src/core/turtlepower.lock" ] || cp "$BASE/installers/templates/turtlepower.lock.default" "$BASE/src/core/turtlepower.lock"
 
 echo "✔ State initialised"
 
