@@ -396,15 +396,6 @@ system_actions() {
             3) mkdir -p backups; tar -czf "backups/backup_$(date +%Y%m%d_%H%M%S).tar.gz" data/*.conf data/*.db 2>/dev/null; echo "Backup created."; sleep 1 ;;
             4) adb reconnect; read -p "Press Enter..." ;;
             5) adb shell ;;
-            6) 
-                if pgrep -f "syndicate_app.py" >/dev/null; then
-                    echo "Web dashboard already running."
-                else
-                    python "$(dirname "$0")/syndicate_app.py" &
-                    echo "Started Python dashboard on http://127.0.0.1:5000"
-                fi
-                sleep 1
-                ;;
             b|B) break ;;
             *) echo "Invalid"; sleep 1 ;;
         esac
