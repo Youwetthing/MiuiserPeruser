@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-BASE="$HOME/MiuiserPeruser"
+BASE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PIPES="$BASE/pipes"
 
 mkdir -p "$PIPES"
