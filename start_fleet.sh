@@ -10,6 +10,7 @@ mkdir -p "$LOG_DIR" "$BASE/pipes/pids"
 termux-wake-lock
 
 echo "Stopping old daemons..."
+for pid in $(ps -eo pid,args | awk '/watchdog\.sh/ && !/awk/ {print $1}'); do kill "$pid" 2>/dev/null; done
 for name in $FLEET; do
     for pid in $(ps -eo pid,args | awk -v n="$name" '{b=$2; sub(".*/","",b); if (b==n) print $1}'); do
         kill "$pid" 2>/dev/null
@@ -37,3 +38,6 @@ for name in $FLEET; do
         echo "DOWN $name"
     fi
 done
+
+setsid nohup bash "$BASE/scripts/watchdog.sh" >/dev/null 2>&1 &
+echo "watchdog started"
