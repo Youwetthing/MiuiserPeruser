@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+termux-wake-lock 2>/dev/null
 # start_fleet.sh - launch the syndicate fleet from bin/
 BASE="$(cd "$(dirname "$0")" && pwd)"
 BIN="$BASE/bin"

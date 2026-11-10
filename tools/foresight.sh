@@ -73,9 +73,9 @@ show_last_scan() {
     local ts fg crashes anrs ooms signals
     ts=$(jq -r '.timestamp // "?"' "$RESULTS" 2>/dev/null)
     fg=$(jq -r '.foreground_app // "unknown"' "$RESULTS" 2>/dev/null)
-    crashes=$(jq -r '.crash_count // 0' "$RESULTS" 2>/dev/null)
+    crashes=$(jq -r '.crashes // 0' "$RESULTS" 2>/dev/null)
     anrs=$(jq -r '.anr_count // 0' "$RESULTS" 2>/dev/null)
-    ooms=$(jq -r '.oom_count // 0' "$RESULTS" 2>/dev/null)
+    ooms=$(jq -r '.oom_events // 0' "$RESULTS" 2>/dev/null)
     signals=$(jq -r '.signals_fired // 0' "$RESULTS" 2>/dev/null)
 
     printf "  ${GREY}Scanned  :${RESET} ${DARK}%s${RESET}\n" "$ts"
