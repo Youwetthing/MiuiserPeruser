@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <sys/stat.h>
 
 static sqlite3         *g_db    = NULL;
 static pthread_mutex_t  g_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -28,6 +29,12 @@ static int db_exec(const char *sql) {
 /* ── Open / close ────────────────────────────────────────────────────────── */
 
 int db_open(void) {
+    {
+        char dir[512];
+        snprintf(dir, sizeof(dir), "%s", DB_PATH);
+        char *slash = strrchr(dir, '/');
+        if (slash) { *slash = '\0'; mkdir(dir, 0700); }
+    }
     if (sqlite3_open(DB_PATH, &g_db) != SQLITE_OK) {
         glog("ERROR", "sqlite3_open(%s): %s", DB_PATH, sqlite3_errmsg(g_db));
         return -1;
