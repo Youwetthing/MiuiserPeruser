@@ -206,7 +206,7 @@ section_tools() {
             6) "$TOOLS/bell_tower.sh" ;;
             7) "$TOOLS/freq_like_me.sh" ;;
             8) "$TOOLS/multi_sensory_room.sh" ;;
-            9) "$TOOLS/ram_slammer_v2.sh" ;;
+            9) "$TOOLS/ram_slammer_v2.2.sh" ;;
             b|B) break ;;
         esac
     done
