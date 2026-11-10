@@ -155,20 +155,10 @@ typedef struct {
 
 /* ?? Config ????????????????????????????????????????????????????????????? */
 
+#include "cfg_json.h"
 static int config_get_int(const char *key, int def)
 {
-    char cmd[512];
-    snprintf(cmd, sizeof(cmd),
-             "jq -r '.%s.%s // %d' %s 2>/dev/null",
-             DAEMON_NAME, key, def, STATE_FILE);
-    FILE *f = popen(cmd, "r");
-    if (!f) return def;
-    char buf[32] = {0};
-    int val = def;
-    if (fgets(buf, sizeof(buf), f) && buf[0] != 'n')
-        val = atoi(buf);
-    pclose(f);
-    return val;
+    return cfg_json_int(STATE_FILE, DAEMON_NAME, key, def);
 }
 
 static int is_enabled(void)    { return config_get_int("enabled",    1); }
