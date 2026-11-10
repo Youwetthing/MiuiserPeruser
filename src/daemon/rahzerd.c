@@ -227,12 +227,12 @@ rz_backend_t rz_detect_backend(void) {
 
     const char *no_rish = getenv("RAHZERD_NO_RISH");
     if (!no_rish || strcmp(no_rish, "1") != 0) {
-        char *t = rz_run("RISH_APPLICATION_ID=com.termux /data/data/com.termux/files/home/Rish/rish -c 'echo rish_ok' 2>/dev/null");
+        char *t = rz_run("RISH_APPLICATION_ID=com.termux /data/data/com.termux/files/home/rish -c 'echo rish_ok' 2>/dev/null");
         if (t && strstr(t, "rish_ok")) { free(t);
             rzlog("INFO", "backend=rish"); return RZ_BACKEND_RISH; }
         free(t);
     }
-    char *d = rz_run("RISH_APPLICATION_ID=com.termux /data/data/com.termux/files/home/Rish/rish -c 'dumpsys wifi 2>/dev/null'");
+    char *d = rz_run("RISH_APPLICATION_ID=com.termux /data/data/com.termux/files/home/rish -c 'dumpsys wifi 2>/dev/null'");
     if (d && strlen(d) > 32) { free(d);
         rzlog("INFO", "backend=dumpsys"); return RZ_BACKEND_DUMPSYS; }
     free(d);

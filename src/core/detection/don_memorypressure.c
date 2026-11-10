@@ -15,7 +15,7 @@ static char *rish_cmd(const char *cmd) {
     char full[2048];
     snprintf(full, sizeof(full),
         "RISH_APPLICATION_ID=com.termux "
-        "/data/data/com.termux/files/home/Rish/rish -c '%s' 2>/dev/null", cmd);
+        "/data/data/com.termux/files/home/rish -c '%s' 2>/dev/null", cmd);
     FILE *fp = popen(full, "r");
     if (!fp) return NULL;
     size_t sz = 8192; char *out = malloc(sz);

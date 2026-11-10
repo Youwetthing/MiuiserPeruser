@@ -45,8 +45,8 @@ fi
 #  Helper: run shell command via Shizuku/ADB
 # ------------------------------------------------------------
 run_shell() {
-    if [[ -x "$HOME/.shizuku/rish" ]]; then
-        "$HOME/.shizuku/rish" -c "$*" 2>/dev/null
+    if [[ -x "$HOME/rish" ]]; then
+        "$HOME/rish" -c "$*" 2>/dev/null
     elif command -v adb >/dev/null 2>&1; then
         adb shell "$@" 2>/dev/null
     else

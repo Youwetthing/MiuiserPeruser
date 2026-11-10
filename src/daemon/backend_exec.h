@@ -2,7 +2,7 @@
  * backend_exec.h — Privileged shell execution backend
  *
  * Probe order at bexec_init():
- *   1. rish  (~/Rish/rish — Shizuku shell, Android 14+ compatible)
+ *   1. rish  (~/rish — Shizuku shell, Android 14+ compatible)
  *   2. ADB   (adb -s 127.0.0.1:5555 shell — loopback transport)
  *   3. direct (no privilege — fallback only)
  */

@@ -14,17 +14,17 @@ _rotate_log() {
 echo "🔧 Setting up Shizuku rish for MiuiserPeruser..."
 
 # Check if rish already exists
-if [[ -f "$HOME/.shizuku/rish" ]]; then
-    echo "✅ rish already installed at ~/.shizuku/rish"
+if [[ -f "$HOME/rish" ]]; then
+    echo "✅ rish already installed at ~/rish"
 else
     echo "❓ Where is your rish file located?"
     echo "   (You should have exported it from the Shizuku app)"
     read -p "Path to rish: " rish_path
     if [[ -f "$rish_path" ]]; then
         mkdir -p ~/.shizuku
-        cp "$rish_path" ~/.shizuku/rish
-        chmod +x ~/.shizuku/rish
-        echo "✅ rish installed to ~/.shizuku/rish"
+        cp "$rish_path" ~/rish
+        chmod +x ~/rish
+        echo "✅ rish installed to ~/rish"
     else
         echo "⚠️ rish not found at '$rish_path'."
         echo "   Please export rish from Shizuku first, then run this script again."
@@ -44,7 +44,7 @@ fi
 # Test connection
 echo ""
 echo "📡 Testing Shizuku connection..."
-if ~/.shizuku/rish -c "getprop ro.product.model" 2>/dev/null | grep -q .; then
+if ~/rish -c "getprop ro.product.model" 2>/dev/null | grep -q .; then
     echo "✅ Shizuku is ready!"
 else
     echo "❌ Shizuku not running or not authorized."

@@ -15,7 +15,7 @@ LOG_DIR="${BASE_DIR}/log_cabin/telemetry"
 readonly LOCK_DIR
 LOCK_DIR="${HOME}/.StalkerSlayer.lock"
 readonly RISH_PATH
-RISH_PATH="${HOME}/Rish/rish"
+RISH_PATH="${HOME}/rish"
 readonly KILLER_PID_FILE
 KILLER_PID_FILE="${BASE_DIR}/.killer.pid"
 

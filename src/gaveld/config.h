@@ -84,7 +84,7 @@
 #define RECID_NONE              1.00
 
 /* ── Enforce ─────────────────────────────────────────────────────────────── */
-#define RISH_PATH               BASE_DIR "/rish"
+#define RISH_PATH               "/data/data/com.termux/files/home/rish"
 #define ENFORCE_CMD_KILL        "am force-stop %s"
 #define ENFORCE_CMD_DISABLE     "pm disable-user --user 0 %s"
 #define ENFORCE_CMD_RESTRICT    "am kill %s"

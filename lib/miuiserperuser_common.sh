@@ -11,8 +11,8 @@ run_shell() {
     fi
 
     # 2. rish (fallback)
-    if [ -x "$HOME/.shizuku/rish" ] && "$HOME/.shizuku/rish" -c "echo ready" 2>/dev/null | grep -q ready; then
-        "$HOME/.shizuku/rish" -c "$*" 2>/dev/null
+    if [ -x "$HOME/rish" ] && "$HOME/rish" -c "echo ready" 2>/dev/null | grep -q ready; then
+        "$HOME/rish" -c "$*" 2>/dev/null
         return 0
     fi
 

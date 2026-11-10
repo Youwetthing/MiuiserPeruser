@@ -28,7 +28,7 @@ RESET='\033[0m'
 COLS=$(tput cols 2>/dev/null || echo 60)
 W=$(( COLS - 2 )); [ "$W" -gt 76 ] && W=76
 
-RISH_BIN="${RISH_PATH:-${HOME}/Rish/rish}"
+RISH_BIN="${RISH_PATH:-${HOME}/rish}"
 rsh() {
     [ ! -x "$RISH_BIN" ] && { echo "RISH_MISSING" >&2; return 1; }
     "$RISH_BIN" -c "$*" 2>/dev/null

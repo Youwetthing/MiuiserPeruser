@@ -31,7 +31,7 @@ declare -A TEE_TARGETS=(
     [android.hardware.biometrics.fingerprint-service.odm]="Fingerprint HAL"
 )
 
-RISH="$HOME/Rish/rish"
+RISH="$HOME/rish"
 
 _rish() {
     RISH_APPLICATION_ID=com.termux "$RISH" -c "$1" 2>/dev/null

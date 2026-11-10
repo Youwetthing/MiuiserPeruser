@@ -8,7 +8,7 @@ extern void april_log(const char* level, const char* format, ...);
 static int rish_alive(void) {
     FILE *fp = popen(
         "RISH_APPLICATION_ID=com.termux "
-        "/data/data/com.termux/files/home/Rish/rish -c 'echo alive' 2>/dev/null",
+        "/data/data/com.termux/files/home/rish -c 'echo alive' 2>/dev/null",
         "r");
     if (!fp) return 0;
     char buf[16] = {0};
