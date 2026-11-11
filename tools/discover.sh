@@ -28,15 +28,7 @@ mkdir -p "$TMP_DIR"
 # ------------------------------------------------------------
 #  Shell Dispatcher
 # ------------------------------------------------------------
-run_shell() {
-    if [[ -x "$HOME/rish" ]]; then
-        "$HOME/rish" -c "$*" 2>/dev/null
-    elif command -v adb >/dev/null 2>&1; then
-        adb shell "$@" 2>/dev/null
-    else
-        return 1
-    fi
-}
+run_shell() { privileged "$*"; }
 
 # ------------------------------------------------------------
 #  Connection Test
@@ -50,10 +42,8 @@ echo ""
 
 echo -e "${C_CYAN}📡 Connecting to device...${RESET}"
 
-if [[ -x "$HOME/rish" ]] && "$HOME/rish" -c "getprop ro.product.model" 2>/dev/null | grep -q .; then
-    echo -e "${C_GREEN}   ✅ Connected via Shizuku rish${RESET}"
-elif adb shell getprop ro.product.model 2>/dev/null | grep -q .; then
-    echo -e "${C_GREEN}   ✅ Connected via ADB${RESET}"
+if privileged "getprop ro.product.model" 2>/dev/null | grep -q .; then
+    echo -e "${C_GREEN}   ✅ Connected via $(backend_name)${RESET}"
 else
     echo -e "${C_RED}   ❌ No connection.${RESET}"
     exit 1
@@ -188,7 +178,7 @@ done
 # ------------------------------------------------------------
 #  Action Menu
 # ------------------------------------------------------------
-echo -e "${C_CYAN}──────────────────────────────────────────────────────────────────────────────${NC}"
+echo -e "${C_CYAN}──────────────────────────────────────────────────────────────────────────────${RESET}"
 echo "What would you like to do?"
 echo "  [1] Add ALL suspicious/critical packages to Destroyer brain"
 echo "  [2] Add SELECTED packages to Destroyer brain"

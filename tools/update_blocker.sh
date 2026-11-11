@@ -17,15 +17,7 @@ C_GRAY='\033[38;5;245m'
 # ------------------------------------------------------------
 #  Shell Dispatcher
 # ------------------------------------------------------------
-run_shell() {
-    if [[ -x "$HOME/rish" ]]; then
-        "$HOME/rish" -c "$*" 2>/dev/null
-    elif command -v adb >/dev/null 2>&1; then
-        adb shell "$@" 2>/dev/null
-    else
-        return 1
-    fi
-}
+run_shell() { privileged "$*"; }
 
 # ------------------------------------------------------------
 #  OTA-related packages and services
@@ -176,10 +168,8 @@ echo -e "${C_BLUE}╚═══════════════════�
 echo ""
 
 echo -e "${C_CYAN}📡 Connecting...${RESET}"
-if command -v adb >/dev/null 2>&1 && adb shell echo ready 2>/dev/null | grep -q ready; then
-    echo -e "${C_GREEN}   ✅ Connected via ADB${RESET}"
-elif [[ -x "$HOME/rish" ]] && "$HOME/rish" -c "echo ready" 2>/dev/null | grep -q ready; then
-    echo -e "${C_GREEN}   ✅ Connected via Shizuku rish${RESET}"
+if privileged "echo ready" 2>/dev/null | grep -q ready; then
+    echo -e "${C_GREEN}   ✅ Connected via $(backend_name)${RESET}"
 else
     echo -e "${C_RED}   ❌ No connection — ensure ADB or Shizuku is running${RESET}"
     exit 1

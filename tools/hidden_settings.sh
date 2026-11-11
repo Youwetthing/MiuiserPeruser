@@ -19,15 +19,7 @@ source "$(dirname "$0")/lib/tool_backend.sh"
 
 
 export PATH="$PATH:$HOME/.shizuku:$PREFIX/bin"
-source lib/miuiserperuser_common.sh 2>/dev/null || {
-    run_shell() {
-        if [[ -x "$HOME/rish" ]]; then
-            "$HOME/rish" -c "$*" 2>/dev/null
-        elif command -v adb >/dev/null 2>&1; then
-            adb shell "$@" 2>/dev/null
-        fi
-    }
-}
+run_shell() { privileged "$*"; }
 
 # Colors
 BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
@@ -212,10 +204,8 @@ echo -e "${C_BLUE}║${RESET} ${BOLD}${C_WHITE}🔓 HIDDEN SETTINGS EXPLORER${RE
 echo -e "${C_BLUE}╚══════════════════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
 echo -e "${C_CYAN}📡 Connecting...${RESET}"
-if command -v adb >/dev/null 2>&1 && adb shell echo ready 2>/dev/null | grep -q ready; then
-    echo -e "${C_GREEN}   ✅ Connected via ADB${RESET}"
-elif [[ -x "$HOME/rish" ]] && "$HOME/rish" -c "echo ready" 2>/dev/null | grep -q ready; then
-    echo -e "${C_GREEN}   ✅ Connected via Shizuku rish${RESET}"
+if privileged "echo ready" 2>/dev/null | grep -q ready; then
+    echo -e "${C_GREEN}   ✅ Connected via $(backend_name)${RESET}"
 else
     echo -e "${C_RED}   ❌ No connection — ensure ADB or Shizuku is running${RESET}"
     exit 1
