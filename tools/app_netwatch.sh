@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(dirname "$0")/lib/tool_backend.sh"
 # app_netwatch.sh — Per-App Network Connection Monitor
 # Maps active connections to packages via UID
 # Leith, Patras & Liu (TCD & Univ. Edinburgh, 2021)
@@ -9,7 +10,7 @@ ADB="/data/data/com.termux/files/home/.cargo/bin/adb_cli"
 CYN='\033[96m'; YEL='\033[93m'; RED='\033[91m'
 WHT='\033[97m'; DIM='\033[2m'; BOLD='\033[1m'; RST='\033[0m'
 
-adb_run() { $ADB tcp 127.0.0.1:5555 shell "$1" 2>/dev/null; }
+adb_run() { privileged "$1" 2>/dev/null; }
 
 # Known suspicious destinations
 flag_ip() {

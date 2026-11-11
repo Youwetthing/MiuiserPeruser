@@ -27,17 +27,10 @@ RESET='\033[0m'
 
 # ── Backend — rish first, adb fallback ───────────────────────────────────────
 RISH="$HOME/rish"
-ADB="adb -s 127.0.0.1:5555"
 
-run_cmd() {
-    if "$RISH" -c "echo ok" 2>/dev/null | grep -q ok; then
-        "$RISH" -c "$*" 2>/dev/null
-    else
-        $ADB shell "$*" 2>/dev/null
-    fi
-}
+run_cmd() { privileged "$*" 2>/dev/null; }
 
-read_file() { adb -s 127.0.0.1:5555 shell "cat $1" 2>/dev/null; }
+read_file() { privileged "cat $1" 2>/dev/null; }
 
 # ── Frequency bar ─────────────────────────────────────────────────────────────
 freq_bar() {

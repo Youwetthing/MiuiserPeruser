@@ -22,13 +22,7 @@ WHITE='\033[38;5;255m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
-rish_cmd() {
-    if "$RISH" -c "echo ok" 2>/dev/null | grep -q ok; then
-        "$RISH" -c "$*" 2>/dev/null
-    else
-        adb -s 127.0.0.1:5555 shell "$*" 2>/dev/null
-    fi
-}
+rish_cmd() { privileged "$*" 2>/dev/null; }
 
 # ── Heat colour by temperature ────────────────────────────────────────────────
 heat_color() {

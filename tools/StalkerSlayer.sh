@@ -496,9 +496,9 @@ ADB="/data/data/com.termux/files/home/.cargo/bin/adb_cli"
 
 dns_status() {
     local mode
-    mode=$($ADB tcp 127.0.0.1:5555 shell "settings get global private_dns_mode" 2>/dev/null | tr -d '\r')
+    mode=$(privileged "settings get global private_dns_mode" 2>/dev/null | tr -d '\r')
     local host
-    host=$($ADB tcp 127.0.0.1:5555 shell "settings get global private_dns_specifier" 2>/dev/null | tr -d '\r')
+    host=$(privileged "settings get global private_dns_specifier" 2>/dev/null | tr -d '\r')
     echo "  DNS mode: $mode"
     echo "  DNS host: $host"
     if echo "$host" | grep -q "adguard"; then
@@ -510,8 +510,8 @@ dns_status() {
 
 dns_block_enable() {
     echo "  Enabling AdGuard DNS blocking..."
-    $ADB tcp 127.0.0.1:5555 shell "settings put global private_dns_mode hostname" 2>/dev/null
-    $ADB tcp 127.0.0.1:5555 shell "settings put global private_dns_specifier dns.adguard.com" 2>/dev/null
+    privileged "settings put global private_dns_mode hostname" 2>/dev/null
+    privileged "settings put global private_dns_specifier dns.adguard.com" 2>/dev/null
     echo "  Blocking domains include:"
     echo "    analytics.miui.com"
     echo "    data.mistat.xiaomi.com"
@@ -523,8 +523,8 @@ dns_block_enable() {
 
 dns_block_disable() {
     echo "  Disabling DNS blocking..."
-    $ADB tcp 127.0.0.1:5555 shell "settings put global private_dns_mode opportunistic" 2>/dev/null
-    $ADB tcp 127.0.0.1:5555 shell "settings delete global private_dns_specifier" 2>/dev/null
+    privileged "settings put global private_dns_mode opportunistic" 2>/dev/null
+    privileged "settings delete global private_dns_specifier" 2>/dev/null
     echo "  Done — DNS restored to automatic"
 }
 

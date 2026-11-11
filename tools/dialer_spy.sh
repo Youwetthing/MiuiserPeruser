@@ -1,4 +1,5 @@
 #!/data/data/com.termux/files/usr/bin/bash
+source "$(dirname "$0")/lib/tool_backend.sh"
 # dialer_spy.sh — Call Event Telemetry Monitor
 # Watches for call state changes and timestamps them
 # Based on Leith et al. (TCD/Edinburgh 2021) finding that
@@ -15,7 +16,7 @@ BOLD='\033[1m'; RST='\033[0m'
 
 mkdir -p "$BASE/logs"
 
-adb_run() { $ADB tcp 127.0.0.1:5555 shell "$1" 2>/dev/null; }
+adb_run() { privileged "$1" 2>/dev/null; }
 
 get_call_state() {
     adb_run "dumpsys telephony.registry 2>/dev/null | grep 'mCallState=' | head -1" \
