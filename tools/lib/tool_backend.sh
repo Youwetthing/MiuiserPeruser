@@ -19,18 +19,18 @@ _adb_ok() { timeout 10 adb -s "$1" shell 'echo ok' 2>/dev/null | tr -d '\r' | gr
 _probe_adb() {
     command -v adb >/dev/null 2>&1 || return 1
     local s p
-    s=$(timeout 10 adb devices 2>/dev/null | tr -d '\r' | awk 'NR>1 && $2=="device"{print $1; exit}')
+    s=$(timeout 10 adb devices 2>/dev/null | tr -d '\r' | awk 'NR>1 && $2=="device"{print $1; exit}') || true
     if [ -n "$s" ] && _adb_ok "$s"; then _serial="$s"; return 0; fi
     local cache="$TB_ROOT/pipes/state/.tb_adb_serial" c
-    c=$(cat "$cache" 2>/dev/null)
+    c=$(cat "$cache" 2>/dev/null || true)
     if [ -n "$c" ]; then
-        timeout 6 adb connect "$c" >/dev/null 2>&1
+        timeout 6 adb connect "$c" >/dev/null 2>&1 || true
         _adb_ok "$c" && { _serial="$c"; return 0; }
     fi
     [ -x "$PORTSCAN" ] || return 1
     for p in $(timeout 30 "$PORTSCAN" "$TB_PORT_LO" "$TB_PORT_HI" 127.0.0.1 -a 2>/dev/null | head -5); do
-        timeout 6 adb connect "127.0.0.1:$p" >/dev/null 2>&1
-        if _adb_ok "127.0.0.1:$p"; then _serial="127.0.0.1:$p"; echo "$_serial" > "$cache" 2>/dev/null; return 0; fi
+        timeout 6 adb connect "127.0.0.1:$p" >/dev/null 2>&1 || true
+        if _adb_ok "127.0.0.1:$p"; then _serial="127.0.0.1:$p"; { echo "$_serial" > "$cache"; } 2>/dev/null || true; return 0; fi
     done
     return 1
 }

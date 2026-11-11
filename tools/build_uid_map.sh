@@ -1,16 +1,8 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 # Source the common library for run_shell
-source lib/miuiserperuser_common.sh 2>/dev/null || {
-    # Fallback if library missing
-    run_shell() {
-        if [[ -x "$HOME/rish" ]]; then
-            "$HOME/rish" -c "$*" 2>/dev/null
-        elif command -v adb >/dev/null 2>&1; then
-            adb shell "$@" 2>/dev/null
-        fi
-    }
-}
+source "$(dirname "$0")/lib/tool_backend.sh"
+run_shell() { privileged "$*"; }
 
 MAP_FILE="data/uid_package_map.txt"
 mkdir -p data
