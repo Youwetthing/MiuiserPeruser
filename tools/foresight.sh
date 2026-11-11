@@ -9,7 +9,7 @@ source "$(dirname "$0")/lib/tool_backend.sh"
 
 BASE="$HOME/MiuiserPeruser"
 RESULTS="$BASE/Registry/daemon_results/fugitoidd.json"
-ADB="adb -s 127.0.0.1:5555"
+ADB=""   # unused: run_cmd now goes through tool_backend
 
 # ── Brat palette ──────────────────────────────────────────────────────────────
 BRAT='\033[38;5;154m'      # brat green — acidic lime
@@ -26,7 +26,7 @@ BOLD='\033[1m'
 RESET='\033[0m'
 
 COLS=$(tput cols 2>/dev/null || echo 64)
-run_cmd() { $ADB shell "$*" 2>/dev/null; }
+run_cmd() { privileged "$*" 2>/dev/null; }
 
 # ── Brat dividers ─────────────────────────────────────────────────────────────
 brat_rule() {

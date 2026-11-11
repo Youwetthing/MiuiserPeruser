@@ -9,7 +9,7 @@ source "$(dirname "$0")/lib/tool_backend.sh"
 
 BASE="$HOME/MiuiserPeruser"
 RESULTS="$BASE/Registry/daemon_results/metalheadd.json"
-ADB="adb -s 127.0.0.1:5555"
+ADB=""   # unused: run_cmd now goes through tool_backend
 
 # ── Neon palette ──────────────────────────────────────────────────────────────
 N_PINK='\033[38;5;198m'
@@ -38,7 +38,7 @@ fetch_dump() {
 }
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
-run_cmd() { adb -s 127.0.0.1:5555 shell "$*" 2>/dev/null; }
+run_cmd() { privileged "$*" 2>/dev/null; }
 
 divider() { echo -e "${1}$(printf '%*s' "$COLS" '' | tr ' ' "${2:--}")${RESET}"; }
 
