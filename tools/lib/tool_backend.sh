@@ -43,8 +43,8 @@ _probe_backend() {
             adb) _probe_adb && { _backend=adb; return 0; } ;;
             rish)
                 [ -x "$RISH" ] || continue
-                for i in 1 2; do
-                    timeout 15 "$RISH" -c 'echo ok' 2>/dev/null | grep -q '^ok' && { _backend=rish; return 0; }
+                for i in 1; do
+                    timeout 12 "$RISH" -c 'echo ok' 2>/dev/null | grep -q '^ok' && { _backend=rish; return 0; }
                 done ;;
             adb_cli)
                 [ -x "$ADB_CLI" ] || continue
