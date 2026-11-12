@@ -37,8 +37,29 @@ revoke_dangerous_perms() {
     done
 }
 
+TIER_FILE="$(cd "$(dirname "$0")/.." && pwd)/data/peruse_apps.tsv"
+
+# tier_of <pkg>: prints never|caution|kill, empty if the package is not listed.
+tier_of() {
+    awk -F'\t' -v p="$1" 'NR>1 && $1==p {print $2; exit}' "$TIER_FILE" 2>/dev/null
+}
+
+# tier_guard <pkg>: refuse any action on a 'never' package. Fails closed.
+tier_guard() {
+    if [[ ! -r "$TIER_FILE" ]]; then
+        echo "REFUSED: tier file missing ($TIER_FILE)" >&2
+        return 1
+    fi
+    if [[ "$(tier_of "$1")" == "never" ]]; then
+        echo "REFUSED: $1 is tier 'never' (system-critical)" >&2
+        return 1
+    fi
+    return 0
+}
+
 deep_starve_pkg() {
     local pkg="$1"; local base_pkg="${pkg%%:*}"
+    tier_guard "$base_pkg" || return 1
     run_shell "pm suspend $base_pkg" 2>/dev/null
     run_shell "pm disable-user --user 0 $base_pkg" 2>/dev/null
     run_shell "am force-stop $pkg" 2>/dev/null
@@ -374,7 +395,7 @@ interactive_teacher() {
         # Execute the action
         case "$action" in
             kill)         run_shell "am force-stop $pkg" 2>/dev/null ;;
-            starve)       run_shell "pm disable-user --user 0 $pkg" 2>/dev/null ;;
+            starve)       tier_guard "$pkg" && run_shell "pm disable-user --user 0 $pkg" 2>/dev/null ;;
             restrict)     revoke_dangerous_perms "$pkg" ;;
             deep_starve)  deep_starve_pkg "$pkg" ;;
             uninstall)    run_shell "pm uninstall --user 0 $pkg" 2>/dev/null ;;
