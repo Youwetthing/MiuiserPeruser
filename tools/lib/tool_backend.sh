@@ -71,3 +71,9 @@ privileged() {
 read_file() { cat "$1" 2>/dev/null || privileged "cat $1"; }
 
 [ -n "${TB_NO_PROBE:-}" ] || _probe_backend
+
+# Judicial-era logging hooks were removed with the bash pipeline; keep as no-ops
+# so tools that still call them don't error. Define only if not already set.
+declare -F db_log_tool_start >/dev/null || db_log_tool_start() { :; }
+declare -F db_log_tool_end   >/dev/null || db_log_tool_end()   { :; }
+declare -F db_log_action     >/dev/null || db_log_action()     { :; }
