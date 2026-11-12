@@ -1,102 +1,102 @@
 pkg	tier	status	note
-com.alibaba.aliexpresshd	kill	provisional	
-com.amazon.mShop.android.shopping	kill	provisional	
-com.android.apps.tag	caution	provisional	
-com.android.backupconfirm	caution	provisional	
-com.android.bips	kill	provisional	
-com.android.bluetoothmidiservice	never	provisional	
-com.android.bookmarkprovider	kill	provisional	
-com.android.calllogbackup	caution	provisional	
-com.android.companiondevicemanager	never	provisional	
-com.android.cts.ctsshim	never	provisional	
-com.android.cts.priv.ctsshim	never	provisional	
-com.android.dreams.basic	kill	provisional	
-com.android.dynsystem	never	provisional	
-com.android.egg	kill	provisional	
-com.android.emergency	never	provisional	
-com.android.internal.systemui.navbar.gestural	never	provisional	
-com.android.keychain	never	provisional	
-com.android.localtransport	never	provisional	
-com.android.managedprovisioning	never	provisional	
-com.android.mms.service	never	provisional	
-com.android.musicfx	caution	provisional	
-com.android.nfc	never	provisional	
-com.android.ons	never	provisional	
-com.android.printspooler	kill	provisional	
-com.android.providers.blockednumber	never	provisional	
-com.android.providers.partnerbookmarks	never	provisional	
-com.android.providers.userdictionary	never	provisional	
-com.android.provision	never	provisional	
-com.android.proxyhandler	never	provisional	
-com.android.se	never	provisional	
-com.android.sharedstoragebackup	caution	provisional	
-com.android.smspush	never	provisional	
-com.android.soundpicker	caution	provisional	
-com.android.systemui.gesture.line.overlay	caution	provisional	
-com.android.theme.font.notoserifsource	caution	provisional	
-com.android.thememanager	never	provisional	
-com.android.traceur	kill	provisional	
-com.android.updater	caution	provisional	
-com.android.wallpaperbackup	caution	provisional	
-com.android.wallpapercropper	caution	provisional	
-com.fingerprints.sensortesttool	never	provisional	
-com.goodix.gftest	never	provisional	
-com.google.android.apps.docs	kill	provisional	
-com.google.android.apps.maps	caution	provisional	
-com.google.android.apps.messaging	never	provisional	
-com.google.android.apps.photos	caution	provisional	
-com.google.android.apps.restore	kill	provisional	
-com.google.android.apps.setupwizard.searchselector	caution	provisional	
-com.google.android.apps.walletnfcrel	caution	provisional	NFC tap-to-pay (Google Wallet); removing loses contactless payment
-com.google.android.calendar	caution	provisional	
-com.google.android.configupdater	never	provisional	
-com.google.android.contacts	never	provisional	
-com.google.android.dialer	never	provisional	
-com.google.android.ext.shared	never	provisional	
-com.google.android.gm	caution	provisional	
-com.google.android.gms.location.history	kill	provisional	
-com.google.android.googlequicksearchbox	caution	provisional	
-com.google.android.ims	never	provisional	
-com.google.android.inputmethod.latin	never	provisional	
-com.google.android.marvin.talkback	caution	provisional	
-com.google.android.overlay.gmsconfig.common	never	provisional	
-com.google.android.overlay.gmsconfig.geotz	never	provisional	
-com.google.android.overlay.gmsconfig.gsa	never	provisional	
-com.google.android.overlay.modules.permissioncontroller	never	provisional	
-com.google.android.overlay.modules.permissioncontroller.forframework	never	provisional	
-com.google.android.setupwizard	never	provisional	
-com.google.android.tts	caution	provisional	
-com.google.ar.lens	kill	provisional	
-com.google.mainline.telemetry	kill	provisional	
-com.mi.android.globalFileexplorer	caution	provisional	
-com.milink.service	caution	provisional	
-com.miui.accessibility	never	provisional	
-com.miui.backup	caution	provisional	
-com.miui.calculator	caution	provisional	
-com.miui.cloudbackup	caution	provisional	
-com.miui.cloudservice	caution	provisional	
-com.miui.core.internal.services	never	provisional	
-com.miui.global.packageinstaller	caution	provisional	
-com.miui.mediaeditor	caution	provisional	
-com.miui.micloudsync	caution	provisional	
-com.miui.mishare.connectivity	kill	provisional	
-com.miui.misound	caution	provisional	
-com.miui.notification	never	provisional	
-com.miui.phone.carriers.overlay.h3g	never	provisional	
-com.miui.phrase	caution	provisional	
-com.miui.rom	never	provisional	
-com.miui.securityadd	never	provisional	
-com.miui.securitycore	never	provisional	
-com.miui.system	never	provisional	
-com.miui.systemui.carriers.overlay	never	provisional	
-com.miui.vsimcore	never	provisional	
-com.miui.wallpaper.overlay	never	provisional	
-com.miui.wallpaper.overlay.customize	never	provisional	
-com.spotify.music	kill	provisional	
-com.tencent.soter.soterserver	caution	provisional	
-com.wdstechnology.android.kryten	caution	provisional	
-com.xiaomi.aiasst.vision	caution	provisional	
-com.xiaomi.mi_connect_service	caution	provisional	Mi Connect cross-device service
-com.xiaomi.micloud.sdk	caution	provisional	
-com.xiaomi.midrop	kill	provisional	
-com.xiaomi.scanner	caution	provisional	
+com.alibaba.aliexpresshd	kill	described	AliExpress shopping app. Lose: the app.
+com.amazon.mShop.android.shopping	kill	described	Amazon Shopping app. Lose: the app.
+com.android.apps.tag	caution	described	NFC tag reader (Tags). Lose: reading NFC tags.
+com.android.backupconfirm	caution	described	Confirmation dialogs for backup and restore.
+com.android.bips	kill	described	Built-in print service. Lose: printing to network printers.
+com.android.bluetoothmidiservice	never	described	Bluetooth MIDI support. Lose: Bluetooth MIDI instruments.
+com.android.bookmarkprovider	kill	described	Legacy browser bookmark provider. Lose: bookmark access for some browsers.
+com.android.calllogbackup	caution	described	Backs up the call log.
+com.android.companiondevicemanager	never	described	Pairs companion devices such as watches and bands. Lose: companion pairing.
+com.android.cts.ctsshim	never	inferred	Google compatibility-test shim package; not user-facing.
+com.android.cts.priv.ctsshim	never	inferred	Privileged variant of the compatibility-test shim; not user-facing.
+com.android.dreams.basic	kill	described	Basic screensaver (Daydream). Lose: the screensaver.
+com.android.dynsystem	never	described	Dynamic System Updates installer (GSI testing). Lose: DSU only.
+com.android.egg	kill	described	Android version Easter egg. Lose: nothing.
+com.android.emergency	never	described	Emergency info and contacts on the lock screen. Lose: emergency info.
+com.android.internal.systemui.navbar.gestural	never	described	Overlay that provides gesture navigation. Lose: gesture nav; overlays are a bootloop risk.
+com.android.keychain	never	described	Certificate and credential storage. Lose: installed certificates, VPN and Wi-Fi credentials.
+com.android.localtransport	never	described	Local backup transport used by the backup system.
+com.android.managedprovisioning	never	described	Work-profile and device provisioning.
+com.android.mms.service	never	described	Sends and receives MMS. Lose: picture messages.
+com.android.musicfx	caution	described	Audio effects and equalizer.
+com.android.nfc	never	described	NFC service. Lose: NFC and tap-to-pay.
+com.android.ons	never	inferred	Opportunistic network selection for multi-SIM and data switching.
+com.android.printspooler	kill	described	Print spooler. Lose: printing.
+com.android.providers.blockednumber	never	described	Stores the blocked-number list. Lose: call and SMS blocking.
+com.android.providers.partnerbookmarks	never	described	Preloaded carrier/partner browser bookmarks.
+com.android.providers.userdictionary	never	described	Stores the keyboard user dictionary. Lose: learned words.
+com.android.provision	never	described	First-run setup provisioning.
+com.android.proxyhandler	never	described	Applies the system HTTP proxy setting. Lose: proxy support.
+com.android.se	never	described	Secure Element service used by NFC payments.
+com.android.sharedstoragebackup	caution	described	Backup of shared storage.
+com.android.smspush	never	described	Handles WAP push and SMS push messages.
+com.android.soundpicker	caution	described	Ringtone and sound picker. Lose: choosing ringtones; Settings can break.
+com.android.systemui.gesture.line.overlay	caution	inferred	Overlay for the gesture-navigation line. Overlays are a bootloop risk.
+com.android.theme.font.notoserifsource	caution	described	Noto Serif font theme overlay.
+com.android.thememanager	never	inferred	MIUI Themes app. Lose: theme changes; other parts of the system may depend on it.
+com.android.traceur	kill	described	System Tracing tool for developers. Lose: nothing in normal use.
+com.android.updater	caution	described	System OTA updater. Lose: OTA updates (Update Blocker also manages this).
+com.android.wallpaperbackup	caution	described	Wallpaper backup.
+com.android.wallpapercropper	caution	described	Wallpaper crop screen. Lose: setting wallpapers may fail.
+com.fingerprints.sensortesttool	never	inferred	Fingerprint sensor factory test tool; probably not part of unlocking.
+com.goodix.gftest	never	inferred	Goodix fingerprint sensor test tool; probably not part of unlocking.
+com.google.android.apps.docs	kill	described	Google Drive app. Lose: the app (web access still works).
+com.google.android.apps.maps	caution	described	Google Maps. Lose: the app.
+com.google.android.apps.messaging	never	described	Google Messages (SMS/RCS). Lose: texting if it is your default SMS app.
+com.google.android.apps.photos	caution	described	Google Photos. Lose: its backup and gallery if you rely on it.
+com.google.android.apps.restore	kill	inferred	Restore/transfer data from an old phone, mostly used at setup.
+com.google.android.apps.setupwizard.searchselector	caution	inferred	Search-engine chooser shown during setup.
+com.google.android.apps.walletnfcrel	caution	described	Google Wallet tap-to-pay. Lose: contactless payment.
+com.google.android.calendar	caution	described	Google Calendar. Lose: the app.
+com.google.android.configupdater	never	described	Updates Google config data such as certificates and settings.
+com.google.android.contacts	never	described	Google Contacts. Lose: the contacts app if it is your default.
+com.google.android.dialer	never	described	Google Phone app. Lose: the calling UI if it is your default dialer.
+com.google.android.ext.shared	never	described	Shared Google Android extension libraries.
+com.google.android.gm	caution	described	Gmail app. Lose: the app.
+com.google.android.gms.location.history	kill	inferred	Google Location History (Timeline) component. Lose: Timeline.
+com.google.android.googlequicksearchbox	caution	described	Google app: search, Assistant and feed. Lose: those.
+com.google.android.ims	never	described	IMS service for VoLTE, Wi-Fi calling and RCS. Lose: those features.
+com.google.android.inputmethod.latin	never	described	Gboard keyboard. Lose: typing if it is your only keyboard.
+com.google.android.marvin.talkback	caution	described	TalkBack screen reader (Accessibility Suite). Lose: accessibility services.
+com.google.android.overlay.gmsconfig.common	never	inferred	Resource overlay configuring Google Play services.
+com.google.android.overlay.gmsconfig.geotz	never	inferred	Resource overlay for Google Play services time-zone config.
+com.google.android.overlay.gmsconfig.gsa	never	inferred	Resource overlay for the Google app.
+com.google.android.overlay.modules.permissioncontroller	never	inferred	Resource overlay for the Permission Controller module.
+com.google.android.overlay.modules.permissioncontroller.forframework	never	inferred	Framework overlay for the Permission Controller module.
+com.google.android.setupwizard	never	described	Google setup wizard (first-run and restore flow).
+com.google.android.tts	caution	described	Google Text-to-Speech. Lose: spoken navigation in Maps and TalkBack voice.
+com.google.ar.lens	kill	described	Google Lens. Lose: Lens image search.
+com.google.mainline.telemetry	kill	inferred	Google mainline-module telemetry. My understanding: nothing user-facing is lost.
+com.mi.android.globalFileexplorer	caution	described	Mi File Manager. Lose: the app.
+com.milink.service	caution	inferred	Mi Link cross-device connectivity and casting.
+com.miui.accessibility	never	inferred	MIUI accessibility components.
+com.miui.backup	caution	described	MIUI local Backup app.
+com.miui.calculator	caution	described	Calculator. Lose: the app.
+com.miui.cloudbackup	caution	described	Mi Cloud backup; backs data up to Xiaomi servers. Old PKG_INFO rated it Critical.
+com.miui.cloudservice	caution	described	Mi Cloud sync; syncs data to Xiaomi servers. Old PKG_INFO rated it Critical.
+com.miui.core.internal.services	never	inferred	MIUI core internal services; other MIUI apps likely depend on it.
+com.miui.global.packageinstaller	caution	described	MIUI package installer. Lose: installing APKs unless another installer exists.
+com.miui.mediaeditor	caution	inferred	MIUI media/photo editor used by Gallery.
+com.miui.micloudsync	caution	described	Mi Cloud sync service; syncs data to Xiaomi servers.
+com.miui.mishare.connectivity	kill	described	Mi Share file sharing. Lose: Mi Share.
+com.miui.misound	caution	inferred	MIUI sound/audio enhancement component.
+com.miui.notification	never	inferred	MIUI notification components.
+com.miui.phone.carriers.overlay.h3g	never	inferred	Carrier resource overlay (H3G, an Italian carrier).
+com.miui.phrase	caution	inferred	MIUI quick-phrases feature for the keyboard.
+com.miui.rom	never	described	MIUI ROM framework. Your old PKG_INFO note says disabling it bootloops.
+com.miui.securityadd	never	inferred	Additional MIUI security components.
+com.miui.securitycore	never	inferred	MIUI security core components.
+com.miui.system	never	described	MIUI system framework components (from the old PKG_INFO).
+com.miui.systemui.carriers.overlay	never	inferred	Carrier overlay for SystemUI.
+com.miui.vsimcore	never	inferred	Virtual SIM core (travel data feature).
+com.miui.wallpaper.overlay	never	inferred	Wallpaper resource overlay.
+com.miui.wallpaper.overlay.customize	never	inferred	Wallpaper customization overlay.
+com.spotify.music	kill	described	Spotify. Lose: the app.
+com.tencent.soter.soterserver	caution	inferred	Tencent SOTER biometric-payment component; only needed for apps like WeChat Pay.
+com.wdstechnology.android.kryten	caution	inferred	Unknown. Possibly a carrier device-management/provisioning client. Check before touching.
+com.xiaomi.aiasst.vision	caution	inferred	Xiaomi AI assistant vision feature (screen content recognition). Not sure.
+com.xiaomi.mi_connect_service	caution	inferred	Mi Connect cross-device service.
+com.xiaomi.micloud.sdk	caution	inferred	Mi Cloud SDK service used by Xiaomi apps.
+com.xiaomi.midrop	kill	described	Mi Drop / ShareMe file transfer. Lose: that sharing method.
+com.xiaomi.scanner	caution	described	Xiaomi Scanner: QR and document scanning.

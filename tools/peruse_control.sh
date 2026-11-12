@@ -50,8 +50,14 @@ tier_guard() {
         echo "REFUSED: tier file missing ($TIER_FILE)" >&2
         return 1
     fi
-    if [[ "$(tier_of "$1")" == "never" ]]; then
-        echo "REFUSED: $1 is tier 'never' (system-critical)" >&2
+    local base="${1%%:*}" rating
+    if [[ "$(tier_of "$base")" == "never" ]]; then
+        echo "REFUSED: $base is tier 'never' (system-critical)" >&2
+        return 1
+    fi
+    rating="${PKG_INFO[$base]##*|}"
+    if [[ "$rating" == "Critical" ]]; then
+        echo "REFUSED: $base is rated Critical" >&2
         return 1
     fi
     return 0
@@ -130,12 +136,25 @@ PKG_INFO["com.miui.tsmclient"]="TSM / payment service|Caution"
 
 # SAFE TO DISABLE / UNINSTALL
 PKG_INFO["com.miui.contentextension"]="Content extension service|Safe"
-PKG_INFO["com.miui.screenrecorder"]="Screen recorder (duplicate entry)|Safe"
-PKG_INFO["com.miui.videodetail"]="Video detail (duplicate)|Safe"
 
 # ------------------------------------------------------------
 #  Helper: fetch installed packages and build list
 # ------------------------------------------------------------
+# Merge data/peruse_apps.tsv into PKG_INFO (hand-written entries above win).
+load_tier_file() {
+    [[ -r "$TIER_FILE" ]] || return 0
+    local pkg tier status note rating
+    while IFS=$'\t' read -r pkg tier status note; do
+        [[ "$pkg" == "pkg" || -z "$pkg" ]] && continue
+        [[ -n "${PKG_INFO[$pkg]+x}" ]] && continue
+        case "$tier" in never) rating=Critical ;; kill) rating=Safe ;; *) rating=Caution ;; esac
+        note="${note//|/ }"; note="${note:-No description available}"
+        [[ "$status" != "described" ]] && note="$note [$status]"
+        PKG_INFO["$pkg"]="$note|$rating"
+    done < "$TIER_FILE"
+}
+load_tier_file
+
 get_installed_pkg_list() {
     local -n result=$1
     result=()
