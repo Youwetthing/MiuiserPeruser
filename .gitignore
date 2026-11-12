@@ -206,3 +206,4 @@ src/core/platform/rish_pipe_stub.c
 src/core/platform/rish_pipe_stub.c
 *.db
 *.db.sha256
+data/peruse_undo.tsv

@@ -6,6 +6,9 @@
 #  Learn before you burn. Completion required to unlock RAM Slammer.
 # -------------------------------------------------------------------
 
+_PC_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$_PC_DIR/.." || exit 1
+
 # Fallback logging (if library missing)
 db_log_tool_start() { :; }
 db_log_tool_end() { :; }
@@ -13,6 +16,7 @@ db_log_action() { :; }
 
 source lib/miuiserperuser_common.sh 2>/dev/null || true
 db_log_tool_start "PeruseControl"
+source "$(cd "$(dirname "$0")" && pwd)/lib/peruse_safety.sh"
 
 BRAIN="data/daemonhunter_brain.txt"
 COMPLETION_MARKER="data/.peruse_completed"
@@ -26,7 +30,7 @@ GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; BLUE='\033[0;34m'; CY
 # ------------------------------------------------------------
 #  Shell dispatcher
 # ------------------------------------------------------------
-source "$(dirname "$0")/lib/tool_backend.sh"
+source "$_PC_DIR/lib/tool_backend.sh"
 run_shell() { privileged "$*"; }
 
 is_system_app() { run_shell "pm list packages -s" 2>/dev/null | grep -q "$1"; }
@@ -80,9 +84,9 @@ confirm_action() {
     local pkg="$1"; local action="$2"; local risk="$3"
     echo -e "${RED}⚠️  WARNING: You are about to ${action} ${pkg}${NC}"
     echo -e "${RED}   Risk level: ${risk}${NC}"
-    echo -n "Type 'yes' to confirm, anything else to cancel: "
-    read -r confirm
-    [[ "$confirm" == "yes" ]] && return 0 || return 1
+    echo -n "Proceed? [y/N] "
+    read -r -n 1 confirm; echo
+    [[ "$confirm" == [yY] ]]
 }
 
 # ------------------------------------------------------------
@@ -487,14 +491,14 @@ while true; do
     echo -e "${CYAN}==============================================================================${NC}"
     echo ""
     echo "1) 📖 Interactive Teacher (Required for RAM Slammer)"
-    echo "2) 🧹 Debloat Safety Net (coming soon)"
+    echo "2) 🧹 Debloat Safety Net (undo + recovery card)"
     echo "3) 🔄 Reset training progress (hall pass)"
     echo "q) Quit"
     echo ""
     read -r -p "Choice: " choice
     case $choice in
         1) interactive_teacher ;;
-        2) echo "Debloat Safety Net — under construction"; sleep 2 ;;
+        2) safety_menu ;;
         3) reset_training ;;
         q|Q) break ;;
         *) echo "Invalid"; sleep 1 ;;
