@@ -396,9 +396,9 @@ interactive_teacher() {
         case "$action" in
             kill)         run_shell "am force-stop $pkg" 2>/dev/null ;;
             starve)       tier_guard "$pkg" && run_shell "pm disable-user --user 0 $pkg" 2>/dev/null ;;
-            restrict)     revoke_dangerous_perms "$pkg" ;;
+            restrict)     tier_guard "$pkg" && revoke_dangerous_perms "$pkg" ;;
             deep_starve)  deep_starve_pkg "$pkg" ;;
-            uninstall)    run_shell "pm uninstall --user 0 $pkg" 2>/dev/null ;;
+            uninstall)    tier_guard "$pkg" && run_shell "pm uninstall --user 0 $pkg" 2>/dev/null ;;
             ignore)       ;;
         esac
 
