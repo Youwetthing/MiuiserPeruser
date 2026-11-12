@@ -14,18 +14,22 @@ guard_pkg() {
 do_action() {  # do_action <disable|uninstall|suspend> <pkg>
   local act="$1" pkg="${2%%:*}" cmd undo
   guard_pkg "$pkg" || return 1
+  if declare -F backend_name >/dev/null && [ "$(backend_name)" = direct ]; then
+    echo "⛔ no privileged backend (is adb/Shizuku up?)"; return 1
+  fi
   case "$act" in
-    disable)   cmd="pm disable-user --user 0 $pkg"; undo="pm enable --user 0 $pkg" ;;
+    disable)   echo "⛔ HyperOS blocks disable-user on system apps; use uninstall (undoable)."; return 1 ;;
     uninstall) cmd="pm uninstall -k --user 0 $pkg"; undo="cmd package install-existing --user 0 $pkg" ;;
     suspend)   cmd="pm suspend --user 0 $pkg";      undo="pm unsuspend --user 0 $pkg" ;;
     *) echo "unknown action: $act"; return 1 ;;
   esac
-  mkdir -p "$(dirname "$UNDO_LOG")"
-  printf '%s\t%s\t%s\t%s\n' "$(date +%s)" "$pkg" "$act" "$undo" >> "$UNDO_LOG"; chmod 600 "$UNDO_LOG"
-  if privileged "$cmd" </dev/null 2>&1 | grep -qiE 'success|new state|suspended state'; then
+  local out; out=$(privileged "$cmd" </dev/null 2>&1)
+  if grep -qiE 'success|new state|suspended state' <<<"$out"; then
+    mkdir -p "$(dirname "$UNDO_LOG")"
+    printf '%s\t%s\t%s\t%s\n' "$(date +%s)" "$pkg" "$act" "$undo" >> "$UNDO_LOG"; chmod 600 "$UNDO_LOG"
     echo "✅ $act $pkg (undo logged)"
   else
-    echo "⚠️  $act $pkg: system gave no confirmation"; return 1
+    echo "⚠️  $act $pkg failed: ${out:-no output}" | head -3; return 1
   fi
 }
 

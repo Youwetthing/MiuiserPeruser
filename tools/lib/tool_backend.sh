@@ -5,7 +5,7 @@
 # Override: TB_ORDER="rish adb"   TB_NO_PROBE=1 to probe lazily.
 export RISH_APPLICATION_ID=com.termux
 TB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-TB_ORDER="${TB_ORDER:-adb rish adb_cli}"
+TB_ORDER="${TB_ORDER:-adb adb_cli rish}"
 TB_PORT_LO="${TB_PORT_LO:-30000}"
 TB_PORT_HI="${TB_PORT_HI:-45000}"
 ADB_CLI="$HOME/.cargo/bin/adb_cli"
@@ -48,7 +48,7 @@ _probe_backend() {
                 done ;;
             adb_cli)
                 [ -x "$ADB_CLI" ] || continue
-                timeout 15 "$ADB_CLI" local shell 'echo ok' 2>/dev/null | grep -q '^ok' && { _backend=adb_cli; return 0; } ;;
+                timeout 15 "$ADB_CLI" tcp 127.0.0.1:5555 shell 'echo ok' 2>/dev/null | grep -q '^ok' && { _backend=adb_cli; return 0; } ;;
         esac
     done
     _backend=direct
@@ -61,7 +61,7 @@ privileged() {
     case "$_backend" in
         adb)     timeout 30 adb -s "$_serial" shell "$*" 2>/dev/null | tr -d '\r' ;;
         rish)    timeout 30 "$RISH" -c "$*" 2>/dev/null | sed '/^Waiting for Shizuku/d' ;;
-        adb_cli) timeout 30 "$ADB_CLI" local shell "$*" 2>/dev/null ;;
+        adb_cli) timeout 30 "$ADB_CLI" tcp 127.0.0.1:5555 shell "$*" 2>/dev/null ;;
         *)
             echo "[tool_backend] WARN: no privileged backend, running unprivileged: $*" >&2
             sh -c "$*" 2>/dev/null ;;
