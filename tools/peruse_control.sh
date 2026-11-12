@@ -217,9 +217,9 @@ interactive_teacher() {
         echo -e "${GREEN}✅ Training already completed!${NC}"
         echo ""
         echo -e "What would you like to do?"
-        echo "  ${CYAN}1${NC}) Review packages (view-only, no actions)"
-        echo "  ${YELLOW}2${NC}) Reset and retake training (clear completion)"
-        echo "  ${RED}3${NC}) Cancel and return to menu"
+        echo -e "  ${CYAN}1${NC}) Review packages (view-only, no actions)"
+        echo -e "  ${YELLOW}2${NC}) Reset and retake training (clear completion)"
+        echo -e "  ${RED}3${NC}) Cancel and return to menu"
         echo ""
         read -r -p "Choice [1-3]: " hall_pass_choice
         case $hall_pass_choice in
